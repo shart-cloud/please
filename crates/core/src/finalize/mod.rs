@@ -19,44 +19,58 @@
 //! cannot grant construction rights to a sibling, so a module that must be the sole producer has to be
 //! the module the types are defined in (research P3, and [`types`] documents it at length).
 //!
-//! # What is still passed in rather than derived
+//! # The score is derived here, not accepted here (T058, T060)
 //!
-//! [`finalize`] takes `score` and `risk` as arguments. It should not: the evidence it already holds is
-//! everything the score is computed from, and taking them as arguments means `engine.rs` keeps a parallel
-//! collection of `(severity, class)` pairs alongside the accumulator, which is precisely the
-//! two-collections shape FR-124 exists to remove. T058 and T060 close that in Phase 5, with the tests
-//! that go red first. Phase 2 is behaviour-preserving and stops here on purpose.
+//! [`finalize`] takes no score. It aggregates one from the evidence it was handed, and bands it with the
+//! table the caller supplied.
+//!
+//! Until T058 the score arrived as an argument, which meant the caller had to hold its own collection of
+//! `(severity, class)` pairs alongside the accumulator in order to compute it. `Engine::scan` in 001 held six
+//! overlapping collections and the score's correctness was the agreement between the first and the last,
+//! maintained by a comment. With one accumulator and no way for a caller to read it, aggregating over
+//! everything found is the only thing expressible — the bug class goes away rather than the instance
+//! (FR-124).
+//!
+//! Note which of the two is still an input. The **band table** is data a deployment retunes without a
+//! rebuild, so it is supplied. The **score** is a function of the evidence, so it is not. 001 accepted both
+//! and then silently overwrote them for non-`RiskFound` outcomes, so a call site reading `score: 42` produced
+//! a verdict saying 0 — the adjustment FR-127 objects to. There is now nothing to overwrite.
 
 pub mod evidence;
 pub mod plan;
 pub mod score;
 pub mod types;
 
+use crate::ruleset::Bands;
 use crate::sanitize::sanitize_str;
 use evidence::{CoverageGap, Evidence, Observation};
 use plan::Bounds;
+use score::aggregate;
 use types::{
-    EngineId, IncompleteCause, Incompleteness, Outcome, Reason, RiskLevel, RulesetId, TargetRef,
-    Verdict,
+    DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, Reason, RiskLevel,
+    RulesetId, TargetRef, Verdict,
 };
 
-/// Everything a verdict needs that is not evidence: who scanned, what with, and how it scored.
+/// Everything a verdict needs that is **not** evidence: who scanned, what with, and the band table.
 ///
-/// A struct rather than six positional parameters, for the reason 001 gave for `VerdictParts` and which
-/// still holds: adjacent same-typed fields are easy to transpose, and a transposed `score`/`severity`
-/// pair is a silent scoring bug rather than a compile error.
+/// A struct rather than three positional parameters, for the reason 001 gave for `VerdictParts` and which
+/// still holds: adjacent same-typed fields are easy to transpose, and two `String`-shaped identities next to
+/// each other are easy to swap silently.
 ///
-/// This is **not** `VerdictParts` under a new name, and the difference is the whole of FR-120. The parts
-/// struct carried the reasons and the coverage gaps — the evidence itself — so any caller who could build
-/// one was deciding what the verdict said. This carries only attribution and the score, and the evidence
-/// arrives separately through an accumulator the caller cannot read. `score` and `risk` are here for one
-/// phase longer; see the module documentation.
+/// This is not `VerdictParts` under a new name, and the difference is the whole of FR-120. The parts struct
+/// carried the reasons and the coverage gaps — the evidence itself — so anyone able to build one was deciding
+/// what the verdict said. This carries none of it. The evidence arrives separately, through an accumulator
+/// the caller cannot read.
+///
+/// Nor is there a `score` field, and that absence is FR-127: a score is a function of the evidence, so
+/// supplying one would mean the caller had already computed it from a collection of its own.
 #[derive(Debug, Clone)]
 pub struct Attribution {
-    pub score: u8,
-    pub risk: RiskLevel,
     pub target: TargetRef,
     pub ruleset: RulesetId,
+    /// Score-to-risk boundaries. Supplied rather than derived because they are **calibration** — data a
+    /// deployment retunes without a rebuild — whereas the score is arithmetic over the evidence.
+    pub bands: Bands,
 }
 
 /// Turn evidence into a verdict. **The only producer** (FR-120).
@@ -73,9 +87,22 @@ pub struct Attribution {
 /// Step 3 after step 2 is not incidental. The order is by byte offset rather than by severity, so
 /// truncating an unordered list would keep whichever reasons the rule iteration order happened to produce
 /// (SC-011) — and truncating *before* aggregating the score would let a dropped high-severity finding
-/// understate the score (FR-001b). The score is aggregated over the evidence, upstream of all of this.
+/// understate the score (FR-001b). Which is why the score is taken in step 0, from the observations, before
+/// anything here has had the chance to drop one.
 pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) -> Verdict {
     let (observations, mut gaps) = evidence.into_parts();
+
+    // ── Score, before anything can be dropped ───────────────────────────────────────────────────
+    //
+    // First, deliberately. Aggregating here rather than after truncation is FR-001b, and doing it from the
+    // observations rather than from a value handed in is FR-124: there is one collection, so there is nothing
+    // for a second one to disagree with.
+    let severities: Vec<(u8, DetectionClass)> = observations
+        .iter()
+        .map(|observation| (observation.severity, observation.class))
+        .collect();
+    let score = aggregate(&severities);
+    let risk = attribution.bands.band(score);
 
     // ── Observations become reasons ─────────────────────────────────────────────────────────────
     let mut reasons: Vec<Reason> = Vec::with_capacity(observations.len());
@@ -114,7 +141,14 @@ pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) ->
         .map(CoverageGap::into_incompleteness)
         .collect();
 
-    assemble(reasons, reasons_truncated, incomplete, attribution)
+    assemble(
+        reasons,
+        reasons_truncated,
+        incomplete,
+        score,
+        risk,
+        attribution,
+    )
 }
 
 /// A verdict for an input too large to analyse (FR-017).
@@ -161,11 +195,17 @@ fn gap_only(gap: CoverageGap, target: TargetRef, ruleset: RulesetId) -> Verdict 
         Vec::new(),
         false,
         vec![gap.into_incompleteness()],
+        // No findings, so nothing for a score to summarise. Passed explicitly rather than defaulted so this
+        // reads as a fact about the verdict rather than as a field nobody filled in.
+        0,
+        RiskLevel::None,
         Attribution {
-            score: 0,
-            risk: RiskLevel::None,
             target,
             ruleset,
+            // Never consulted: banding zero under any ascending table gives `None`. Supplied because the
+            // struct requires it, and `Bands::default()` is the honest choice — a scan that examined nothing
+            // has no deployment-specific calibration to report.
+            bands: Bands::default(),
         },
     )
 }
@@ -230,13 +270,14 @@ fn assemble(
     reasons: Vec<Reason>,
     reasons_truncated: bool,
     incomplete: Vec<Incompleteness>,
+    score: u8,
+    risk: RiskLevel,
     attribution: Attribution,
 ) -> Verdict {
     let Attribution {
-        score,
-        risk,
         target,
         ruleset,
+        bands: _,
     } = attribution;
 
     let outcome = if !reasons.is_empty() {
@@ -247,10 +288,16 @@ fn assemble(
         Outcome::Clean
     };
 
-    // A verdict with no reasons has nothing for a score to summarise, so any score handed in is
-    // discarded rather than reported. Trusting the caller here would let a scoring bug surface as a
-    // confusing "clean, score 42" verdict instead of as a failing test. T060 removes the need for this
-    // by deriving the score here instead of accepting one.
+    // A verdict with no reasons has nothing for a score to summarise.
+    //
+    // Note that this is no longer a *correction*. The score was aggregated from the observations, and a
+    // verdict with no reasons is a verdict whose observations were empty or were all dropped by the class
+    // filter — either way `aggregate` over nothing is 0 already. Kept as an explicit branch because the
+    // second case is real: an `Inconclusive` verdict can carry observations that the class filter removed,
+    // and reporting a score for findings nobody is being shown would be incoherent.
+    //
+    // 001 wrote this same match over a score the CALLER supplied, which made it a silent adjustment: the
+    // call site said 42 and the verdict said 0 (FR-127).
     let (score, risk) = match outcome {
         Outcome::Clean | Outcome::Inconclusive => (0, RiskLevel::None),
         Outcome::RiskFound => (score, risk),

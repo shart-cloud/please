@@ -148,6 +148,27 @@ PHASE 4 (T044-T054) — 290 -> 301 tests. No test lost. One test's assertion was
 
   DELETED — none.
 
+PHASE 5 (T055-T063) — 301 -> 311 tests. No test lost.
+
+  ADDED — 10 tests
+      tests/seams.rs                                                   5   (T057)
+        Source-inspection tests. Some guarantees are about HOW MANY PLACES a decision is made, and no
+        runtime test can see that. `nothing_outside_finalization_aggregates_a_score` was red before
+        T058 and is the mechanical statement of FR-124.
+      finalization.rs::the_score_reflects_every_observation_when_the_report_is_truncated_to_one (T056)
+      finalization.rs::a_score_cannot_be_supplied_by_a_caller_at_all       (T060)
+      finalization.rs::risk_is_the_band_the_score_falls_into_under_the_supplied_table (T060)
+      finalization.rs::a_saturated_rule_and_a_truncated_excerpt_and_a_found_payload_at_once (T055)
+      finalization.rs::a_gap_recorded_after_the_last_observation_is_still_reported (T055)
+
+  REWRITTEN IN PLACE, same name — 1 test
+      finalization.rs::clean_implies_nothing_found_and_nothing_missed      (T060)
+        Its `score` input became a `severity` input. The score used to be a parameter of `finalize` and
+        is now derived from the observations, so the strategy varies severity instead — a fixed severity
+        would have left the derivation half-unexercised.
+
+  DELETED — none.
+
 (T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
 
 Verbatim listing

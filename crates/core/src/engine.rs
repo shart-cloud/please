@@ -16,8 +16,7 @@ use crate::decode;
 use crate::detect::{self, pattern::PatternSet};
 use crate::finalize::evidence::{Evidence, Observation};
 use crate::finalize::plan::ScanPlan;
-use crate::finalize::score::aggregate;
-use crate::finalize::types::{DetectionClass, RulesetId, TargetRef, Verdict};
+use crate::finalize::types::{RulesetId, TargetRef, Verdict};
 use crate::finalize::{self, Attribution};
 use crate::policy::ScanPolicy;
 use crate::prefilter::Prefilter;
@@ -191,106 +190,26 @@ impl Engine {
         // inconclusive.
         let expansion = decode::expand(input, bounds.max_decode_depth, &mut evidence);
 
-        // ── Prefilter ───────────────────────────────────────────────────────────────────────────
+        // ── Match ───────────────────────────────────────────────────────────────────────────────
         //
-        // One linear pass to learn which rules are worth compiling. Text matching no literal — nearly all
-        // text — leaves this loop having compiled nothing.
-        let rules = plan.rules();
-        let candidates = self.prefilter.candidates(input);
-
-        // ── Patterns ────────────────────────────────────────────────────────────────────────────
-        let mut hits: Vec<Observation> = Vec::new();
-
-        for index in candidates {
-            let rule = &rules[index];
-
-            // No class check here. There used to be one, and its twin below is what made class selection
-            // wrong (T051, FR-133) — the filter is applied once, to the class each observation carries, at
-            // the single funnel where observations are recorded.
-            //
-            // Saturation and uncompilable patterns are recorded by the matcher itself (T022), so there is
-            // no longer an `Err` here for this loop to interpret.
-            for span in self.patterns.matches(
-                index,
-                rule,
-                input,
-                bounds.max_matches_per_rule,
-                &mut evidence,
-            ) {
-                let (matched, _) = sanitize_bytes(
-                    &input[span.start..span.end],
-                    bounds.max_excerpt_bytes as usize,
-                );
-                hits.push(Observation {
-                    rule_id: rule.id.clone(),
-                    class: rule.class,
-                    span,
-                    matched,
-                    severity: rule.severity,
-                    description: rule.description.clone(),
-                    chain: Vec::new(),
-                });
-            }
-        }
-
-        // ── Rules against decoded content ───────────────────────────────────────────────────────
-        //
-        // Collected separately because these are deliberately EXEMPT from quoting suppression. Suppression
-        // exists to excuse text that is quoting a payload rather than issuing one — but someone who
-        // base-64'd an instruction was not illustrating it. The obfuscation is itself the evidence of
-        // intent, and "it appeared after the words 'for example'" is not exculpatory for content that had
-        // to be decoded before it could be read.
-        //
-        // This also removes a whole class of trivial evasion: wrapping an encoded payload in a code fence.
-        //
-        // Each recovered text is matched against the same rules. An observation reports the span of the
-        // *encoded* region in the original input — bytes the caller actually holds — and carries the
-        // transform chain, so the reader sees both where it was and how it was hidden.
-        let mut decoded_hits: Vec<Observation> = Vec::new();
-        for candidate in &expansion.candidates {
-            let bytes = candidate.text.as_bytes();
-            for index in self.prefilter.candidates(bytes) {
-                let rule = &rules[index];
-                let spans = self.patterns.matches(
-                    index,
-                    rule,
-                    bytes,
-                    bounds.max_matches_per_rule,
-                    &mut evidence,
-                );
-                if spans.is_empty() {
-                    continue;
-                }
-                // One observation per rule per candidate, not one per match. A payload repeated inside a
-                // decoded blob is still one concealed payload, and reporting each occurrence would let a
-                // single encoded region fill the reason budget.
-                let (excerpt, _) = crate::sanitize::sanitize_str(
-                    &candidate.text,
-                    bounds.max_excerpt_bytes as usize,
-                );
-                decoded_hits.push(Observation {
-                    rule_id: rule.id.clone(),
-                    // The class the RULE declares (T050, FR-131). 001 wrote `DetectionClass::Encoding`
-                    // here, which is the US2 defect in one line: the observation was gated on `rule.class`
-                    // a few lines up and then arrived carrying a different class, so it had to satisfy two
-                    // filters and no single selection satisfied both. How it arrived is in `chain`.
-                    class: rule.class,
-                    span: candidate.origin,
-                    matched: excerpt,
-                    severity: rule.severity,
-                    description: format!("{} Recovered by decoding.", rule.description),
-                    chain: candidate.chain.clone(),
-                });
-            }
-        }
+        // Two matching passes, each extracted below so this function reads as the sequence of stages it is
+        // rather than as the stages themselves (T061).
+        let direct = self.match_rules(&plan, input, input, &mut evidence);
+        let decoded = self.match_decoded(&plan, &expansion, &mut evidence);
 
         // ── Suppression ─────────────────────────────────────────────────────────────────────────
         //
-        // Rule-driven observations only. A documentation example of an override phrase is prose; a
-        // document that actually contains invisible characters is smuggling them regardless of the
-        // surrounding text.
+        // Rule-driven observations from the original input only. A documentation example of an override
+        // phrase is prose; a document that actually contains invisible characters is smuggling them
+        // regardless of the surrounding text.
+        //
+        // Decoded observations are deliberately EXEMPT. Suppression excuses text that is quoting a payload
+        // rather than issuing one, and someone who base-64'd an instruction was not illustrating it — the
+        // obfuscation is itself the evidence of intent. It also removes a whole class of trivial evasion:
+        // wrapping an encoded payload in a code fence.
+        let rules = plan.rules();
         let (mut kept, suppressed) = if plan.suppress_in_quotes() {
-            detect::apply_suppression(hits, &quoting, |rule_id| {
+            detect::apply_suppression(direct, &quoting, |rule_id| {
                 rules
                     .iter()
                     .find(|r| r.id == rule_id)
@@ -298,7 +217,7 @@ impl Engine {
                     .unwrap_or(false)
             })
         } else {
-            (hits, Vec::new())
+            (direct, Vec::new())
         };
 
         // Suppressed observations are dropped rather than retained. That is the state US4 changes: FR-128
@@ -307,12 +226,12 @@ impl Engine {
         // T067 replace this discard.
         let _ = suppressed;
 
-        // ── Structural and decoded detectors ────────────────────────────────────────────────────
+        // ── Structural detectors ────────────────────────────────────────────────────────────────
         //
-        // Added after suppression because none of these are suppressed. Concealment and confusables detect
-        // a mechanism rather than a phrase, and decoded content carries its own evidence of intent.
+        // Added after suppression because none of these are suppressed. Concealment and confusables detect a
+        // mechanism rather than a phrase, and a mechanism is present or it is not.
         kept.extend(detect::structural::scan(input));
-        kept.extend(decoded_hits);
+        kept.extend(decoded);
 
         // ── The class filter, applied once ──────────────────────────────────────────────────────
         //
@@ -333,35 +252,127 @@ impl Engine {
         // gates that must agree.
         kept.retain(|observation| plan.admits(observation.class));
 
-        // ── Score, then hand over ───────────────────────────────────────────────────────────────
+        // ── Hand over ───────────────────────────────────────────────────────────────────────────
         //
-        // The score is aggregated over EVERY observation, before finalization orders and truncates the
-        // reasons (FR-001b): reasons are ordered by byte offset rather than by severity, so truncating
-        // first could discard the highest-severity finding and understate the score.
-        //
-        // This is the parallel collection FR-124 exists to remove. It survives Phase 2 because deriving
-        // the score inside finalization is T058's job and has a test that must go red first — but note
-        // that it is now derived from the same `kept` list that becomes the observations, in one pass,
-        // rather than from a separately-accumulated `all_hits` as in 001.
-        let severities: Vec<(u8, DetectionClass)> =
-            kept.iter().map(|hit| (hit.severity, hit.class)).collect();
-        let score = aggregate(&severities);
-        let risk = self.bands.band(score);
-
-        for hit in kept {
-            evidence.observe(hit);
+        // No score is computed here (T058). Finalization derives it from the accumulator, which is what
+        // removes the second collection whose agreement with the first the score used to depend on.
+        for observation in kept {
+            evidence.observe(observation);
         }
 
         finalize::finalize(
             evidence,
             bounds,
             Attribution {
-                score,
-                risk,
                 target,
                 ruleset: self.id.clone(),
+                bands: self.bands,
             },
         )
+    }
+
+    /// Match every candidate rule against `haystack`, reporting spans relative to `origin_of`.
+    ///
+    /// `haystack` and the span basis are the same slice for the direct pass; the decoded pass calls the
+    /// sibling below instead, because a decoded match reports the span of the *encoded* region rather than a
+    /// position inside recovered text.
+    fn match_rules(
+        &self,
+        plan: &ScanPlan<'_>,
+        haystack: &[u8],
+        excerpt_source: &[u8],
+        evidence: &mut Evidence,
+    ) -> Vec<Observation> {
+        let bounds = plan.bounds();
+        let rules = plan.rules();
+        let mut observations = Vec::new();
+
+        // One linear prefilter pass to learn which rules are worth compiling. Text matching no literal —
+        // nearly all text — leaves this loop having compiled nothing.
+        for index in self.prefilter.candidates(haystack) {
+            let rule = &rules[index];
+
+            // No class check here. There used to be one, and its twin in the decoded pass is what made class
+            // selection wrong (T051, FR-133).
+            //
+            // Saturation and uncompilable patterns are recorded by the matcher itself (T022), so there is no
+            // `Err` here for this loop to interpret.
+            for span in
+                self.patterns
+                    .matches(index, rule, haystack, bounds.max_matches_per_rule, evidence)
+            {
+                let (matched, _) = sanitize_bytes(
+                    &excerpt_source[span.start..span.end],
+                    bounds.max_excerpt_bytes as usize,
+                );
+                observations.push(Observation {
+                    rule_id: rule.id.clone(),
+                    class: rule.class,
+                    span,
+                    matched,
+                    severity: rule.severity,
+                    description: rule.description.clone(),
+                    chain: Vec::new(),
+                });
+            }
+        }
+
+        observations
+    }
+
+    /// Match every candidate rule against each recovered text.
+    ///
+    /// An observation reports the span of the *encoded* region in the original input — bytes the caller
+    /// actually holds — and carries the transform chain, so the reader sees both where it was and how it was
+    /// hidden.
+    fn match_decoded(
+        &self,
+        plan: &ScanPlan<'_>,
+        expansion: &decode::Expansion,
+        evidence: &mut Evidence,
+    ) -> Vec<Observation> {
+        let bounds = plan.bounds();
+        let rules = plan.rules();
+        let mut observations = Vec::new();
+
+        for candidate in &expansion.candidates {
+            let bytes = candidate.text.as_bytes();
+            for index in self.prefilter.candidates(bytes) {
+                let rule = &rules[index];
+                let spans = self.patterns.matches(
+                    index,
+                    rule,
+                    bytes,
+                    bounds.max_matches_per_rule,
+                    evidence,
+                );
+                if spans.is_empty() {
+                    continue;
+                }
+                // One observation per rule per candidate, not one per match. A payload repeated inside a
+                // decoded blob is still one concealed payload, and reporting each occurrence would let a
+                // single encoded region fill the reason budget.
+                let (excerpt, _) = crate::sanitize::sanitize_str(
+                    &candidate.text,
+                    bounds.max_excerpt_bytes as usize,
+                );
+                observations.push(Observation {
+                    rule_id: rule.id.clone(),
+                    // The class the RULE declares (T050, FR-131). 001 wrote `DetectionClass::Encoding` here,
+                    // which is the US2 defect in one line: the observation was gated on `rule.class` and then
+                    // arrived carrying a different class, so it had to satisfy two filters and no single
+                    // selection satisfied both. How it arrived is in `chain`.
+                    class: rule.class,
+                    span: candidate.origin,
+                    matched: excerpt,
+                    severity: rule.severity,
+                    description: format!("{} Recovered by decoding.", rule.description),
+                    chain: candidate.chain.clone(),
+                });
+            }
+        }
+
+        observations
     }
 
     /// The resource limits this engine enforces when compiling patterns.

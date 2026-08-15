@@ -16,6 +16,21 @@
 //! phrase is ordinary prose; a document that *actually contains* invisible characters is smuggling them
 //! whether or not the surrounding text looks like an example, so concealment inside a code fence is still
 //! concealment.
+//!
+//! # This module is dispatch, and produces observations only (FR-121)
+//!
+//! What is here: the submodules, the structural dispatch, and quoting suppression. What is deliberately
+//! **not** here, having left with T017 and T050:
+//!
+//!  * building a [`Reason`](crate::Reason) — `Hit::into_reason` used to sanitise the excerpt and decide what
+//!    a finding says, which put that decision in the module that found it;
+//!  * deciding a coverage gap — the matcher records its own, in the shared vocabulary, at the point it hits
+//!    a bound;
+//!  * assigning any class other than the one its source declares.
+//!
+//! None of those are absent by convention. `Reason`'s fields are private and its constructor is visible only
+//! to `crate::finalize`, so a detector cannot build one — `tests/compile_fail/` asserts it, and
+//! `tests/seams.rs` asserts that only one place in the crate can.
 
 pub mod concealment;
 pub mod confusable;

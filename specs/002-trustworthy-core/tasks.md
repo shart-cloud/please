@@ -151,18 +151,18 @@ and assert the resulting verdict, with no engine, no rules, and no input.
 
 ### Tests for User Story 3
 
-- [ ] T055 [US3] Write failing tests over constructed evidence covering combinations a real scan cannot easily produce: a saturated rule *and* a truncated excerpt *and* a found payload, in `crates/core/tests/finalization.rs`
-- [ ] T056 [P] [US3] Write failing test asserting the score reflects every observation when the report is truncated to one, in `crates/core/tests/finalization.rs` (FR-124, SC-109)
-- [ ] T057 [P] [US3] Write failing test enumerating verdict producers and reason-ordering definitions, asserting exactly one of each, in `crates/core/tests/seams.rs` (SC-107)
+- [x] T055 [US3] Write failing tests over constructed evidence covering combinations a real scan cannot easily produce: a saturated rule *and* a truncated excerpt *and* a found payload, in `crates/core/tests/finalization.rs`
+- [x] T056 [P] [US3] Write failing test asserting the score reflects every observation when the report is truncated to one, in `crates/core/tests/finalization.rs` (FR-124, SC-109)
+- [x] T057 [P] [US3] Write failing test enumerating verdict producers and reason-ordering definitions, asserting exactly one of each, in `crates/core/tests/seams.rs` (SC-107)
 
 ### Implementation for User Story 3
 
-- [ ] T058 [US3] Derive the score from the `Evidence` accumulator and delete the parallel hit collection from `crates/core/src/engine.rs` (FR-124 — the two-collections bug class disappears)
-- [ ] T059 [US3] Delete the duplicate reason sort from `crates/core/src/engine.rs`, leaving the single definition in `crates/core/src/finalize/mod.rs` (FR-125)
-- [ ] T060 [US3] Make score-and-risk derivation a property of finalization rather than a silent adjustment of caller-supplied values, in `crates/core/src/finalize/mod.rs` (FR-127)
-- [ ] T061 [US3] Reduce `Engine::scan` to orchestration — build the plan, run detectors, hand evidence to finalization — in `crates/core/src/engine.rs`
-- [ ] T062 [US3] Reduce `crates/core/src/detect/mod.rs` to dispatch, producing observations only (FR-121)
-- [ ] T063 [US3] **Verify** the seal in `crates/core/src/finalize/types.rs` still holds after Phases 3–5, and that each compile-fail case in `crates/core/tests/compile_fail/` still fails with the diagnostic its `.stderr` pins. *Amended*: the sealing itself landed in Phase 2 at T008, because T017–T023 are what remove the last construction sites outside finalization and all of them are Phase 2 — see `docs/002-migration.md`
+- [x] T058 [US3] Derive the score from the `Evidence` accumulator and delete the parallel hit collection from `crates/core/src/engine.rs` (FR-124 — the two-collections bug class disappears)
+- [x] T059 [US3] Delete the duplicate reason sort from `crates/core/src/engine.rs`, leaving the single definition in `crates/core/src/finalize/mod.rs` (FR-125) — *discharged early by T016*: moving verdict assembly into finalization removed the second sort with it. Verified by `tests/seams.rs::exactly_one_definition_of_how_reasons_are_ordered`
+- [x] T060 [US3] Make score-and-risk derivation a property of finalization rather than a silent adjustment of caller-supplied values, in `crates/core/src/finalize/mod.rs` (FR-127)
+- [x] T061 [US3] Reduce `Engine::scan` to orchestration — build the plan, run detectors, hand evidence to finalization — in `crates/core/src/engine.rs`
+- [x] T062 [US3] Reduce `crates/core/src/detect/mod.rs` to dispatch, producing observations only (FR-121) — *discharged early by T017 and T050*: `Hit::into_reason` left with the former, class relabelling with the latter. What remains is the submodules, structural dispatch, and quoting suppression. The module doc now states the guarantee and names the tests that hold it
+- [x] T063 [US3] **Verify** the seal in `crates/core/src/finalize/types.rs` still holds after Phases 3–5, and that each compile-fail case in `crates/core/tests/compile_fail/` still fails with the diagnostic its `.stderr` pins. *Amended*: the sealing itself landed in Phase 2 at T008, because T017–T023 are what remove the last construction sites outside finalization and all of them are Phase 2 — see `docs/002-migration.md`
 
 **Checkpoint**: Only finalization can produce a verdict, and the compiler enforces it.
 

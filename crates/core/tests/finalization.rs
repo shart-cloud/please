@@ -30,6 +30,7 @@
 use please_core::finalize::evidence::{CoverageGap, Evidence, Observation};
 use please_core::finalize::plan::Bounds;
 use please_core::finalize::{finalize, Attribution};
+use please_core::ruleset::Bands;
 use please_core::verdict::{
     IncompleteCause, Outcome, RiskLevel, RulesetId, Span, TargetRef, Verdict,
 };
@@ -54,12 +55,16 @@ fn bounds() -> Bounds {
     }
 }
 
-fn attribution(score: u8, risk: RiskLevel) -> Attribution {
+/// Where the verdict came from, and the band table it scores against.
+///
+/// Since T060 this carries no score and no risk: finalization derives both from the evidence it was handed.
+/// Before that, a caller passed them in — which meant the caller was holding its own view of the
+/// observations in order to compute them, which is the shape FR-124 removes.
+fn attribution() -> Attribution {
     Attribution {
-        score,
-        risk,
         target: TargetRef::buffer("test", 0),
         ruleset: ruleset(),
+        bands: Bands::default(),
     }
 }
 
@@ -77,7 +82,7 @@ fn an_observation(rule_id: &str, start: usize, severity: u8) -> Observation {
 
 /// Finalize the given evidence at default bounds and a score of zero.
 fn verdict_from(evidence: Evidence) -> Verdict {
-    finalize(evidence, bounds(), attribution(0, RiskLevel::None))
+    finalize(evidence, bounds(), attribution())
 }
 
 // ── Clean requires BOTH accumulators empty ─────────────────────────────────────────────────────
@@ -132,16 +137,20 @@ fn not_clean_when_an_optional_tier_was_unavailable() {
 fn risk_found_when_a_rule_fired() {
     let mut evidence = Evidence::new();
     evidence.observe(an_observation("override.ignore_previous", 10, 85));
-    let v = finalize(evidence, bounds(), attribution(85, RiskLevel::High));
+    let v = finalize(evidence, bounds(), attribution());
     assert_eq!(v.outcome(), Outcome::RiskFound);
 }
 
 #[test]
 fn clean_verdict_carries_zero_score() {
     // A clean verdict with a non-zero score would be incoherent: the score exists to summarise findings,
-    // and there are none. Finalization discards the score rather than trusting it, so a scoring bug shows
-    // up as a failing test instead of as a confusing "clean, score 42" verdict.
-    let v = finalize(Evidence::new(), bounds(), attribution(42, RiskLevel::Low));
+    // and there are none.
+    //
+    // 001 achieved this by accepting a caller's score and then discarding it, which is the "silent
+    // adjustment" FR-127 objects to: the call site read `score: 42` and the verdict said 0. Now there is no
+    // score to discard — an empty accumulator aggregates to 0 because that is what aggregating nothing
+    // gives, and the coherence is arithmetic rather than a correction.
+    let v = finalize(Evidence::new(), bounds(), attribution());
     assert_eq!(v.outcome(), Outcome::Clean);
     assert_eq!(v.score(), 0, "a clean verdict must report score 0");
     assert_eq!(v.risk(), RiskLevel::None);
@@ -161,7 +170,7 @@ fn risk_found_outranks_inconclusive() {
         "rule `override.ignore_previous` saturated",
     ));
 
-    let v = finalize(evidence, bounds(), attribution(85, RiskLevel::High));
+    let v = finalize(evidence, bounds(), attribution());
     assert_eq!(v.outcome(), Outcome::RiskFound);
     assert!(v.is_incomplete(), "the coverage gap must still be visible");
 }
@@ -201,7 +210,7 @@ fn truncation_keeps_the_earliest_reasons_and_records_the_bound() {
         max_reasons: 3,
         ..bounds()
     };
-    let v = finalize(evidence, limited, attribution(50, RiskLevel::Medium));
+    let v = finalize(evidence, limited, attribution());
 
     assert!(v.reasons_truncated());
     let ids: Vec<&str> = v.reasons().iter().map(|r| r.rule_id()).collect();
@@ -227,7 +236,7 @@ fn an_excerpt_is_neutralised_on_the_way_into_a_reason() {
     let mut evidence = Evidence::new();
     evidence.observe(observation);
 
-    let v = finalize(evidence, bounds(), attribution(80, RiskLevel::High));
+    let v = finalize(evidence, bounds(), attribution());
     let matched = v.reasons()[0].matched();
     assert!(!matched.contains('\u{1b}'), "escape survived: {matched:?}");
     assert!(!matched.contains('\u{202e}'), "bidi survived: {matched:?}");
@@ -247,7 +256,7 @@ fn a_truncated_excerpt_is_recorded_as_a_coverage_gap() {
         max_excerpt_bytes: 16,
         ..bounds()
     };
-    let v = finalize(evidence, tight, attribution(80, RiskLevel::High));
+    let v = finalize(evidence, tight, attribution());
 
     let gap = v
         .incomplete()
@@ -262,6 +271,175 @@ fn a_truncated_excerpt_is_recorded_as_a_coverage_gap() {
     );
 }
 
+// ── FR-124, SC-109: the score aggregates over everything, then reasons truncate ────────────────
+
+#[test]
+fn the_score_reflects_every_observation_when_the_report_is_truncated_to_one() {
+    // SC-109, and the reason the two-collections shape existed. Reasons are ordered by BYTE OFFSET, not by
+    // severity, so truncating first can drop the worst finding — and a score computed after truncation would
+    // then understate the risk of the very input it was summarising.
+    //
+    // The severe finding is placed LAST in the input on purpose. Under `max_reasons: 1` only the earliest
+    // survives into the report, so if the score were derived from what is reported it would read 20.
+    let mut evidence = Evidence::new();
+    evidence.observe(an_observation("a.mild", 0, 20));
+    evidence.observe(an_observation("b.moderate", 100, 55));
+    evidence.observe(an_observation("c.severe", 200, 95));
+
+    let one = Bounds {
+        max_reasons: 1,
+        ..bounds()
+    };
+    let v = finalize(evidence, one, attribution());
+
+    assert_eq!(v.reasons().len(), 1, "the report is truncated");
+    assert_eq!(
+        v.reasons()[0].rule_id(),
+        "a.mild",
+        "the earliest by offset is what survives truncation"
+    );
+    assert_eq!(
+        v.score(),
+        95,
+        "the score must summarise every observation, not the one that fitted"
+    );
+    assert!(
+        v.reasons_truncated(),
+        "and the reader must be told the report is partial"
+    );
+}
+
+#[test]
+fn a_score_cannot_be_supplied_by_a_caller_at_all() {
+    // FR-127. This is not "the caller's score is validated" or "corrected" — there is nowhere to put one.
+    // 001 accepted `score` and `risk` in `VerdictParts` and then overwrote them for non-`RiskFound`
+    // outcomes, which is a silent adjustment invisible at the call site: the code read `score: 42` and the
+    // verdict said 0.
+    //
+    // Asserted by construction: `Attribution` has three fields and none of them is a score. If that ever
+    // changes, this test stops compiling, which is the notification we want.
+    let attribution = Attribution {
+        target: TargetRef::buffer("test", 0),
+        ruleset: ruleset(),
+        bands: Bands::default(),
+    };
+    let mut evidence = Evidence::new();
+    evidence.observe(an_observation("a.one", 0, 70));
+    let v = finalize(evidence, bounds(), attribution);
+    assert_eq!(
+        v.score(),
+        70,
+        "derived from the evidence and from nothing else"
+    );
+}
+
+#[test]
+fn risk_is_the_band_the_score_falls_into_under_the_supplied_table() {
+    // The band table is data a deployment can retune, so it is an input; the score is not. Distinguishing
+    // those two is what FR-127 asks for — the derivation belongs to finalization, the calibration does not.
+    let mut evidence = Evidence::new();
+    evidence.observe(an_observation("a.one", 0, 50));
+
+    let strict = Attribution {
+        bands: Bands {
+            low: 10,
+            medium: 20,
+            high: 30,
+            critical: 40,
+        },
+        ..attribution()
+    };
+    let v = finalize(evidence, bounds(), strict);
+    assert_eq!(v.score(), 50);
+    assert_eq!(
+        v.risk(),
+        RiskLevel::Critical,
+        "50 is above a critical boundary of 40"
+    );
+}
+
+// ── T055: combinations a real scan cannot easily produce ───────────────────────────────────────
+
+#[test]
+fn a_saturated_rule_and_a_truncated_excerpt_and_a_found_payload_at_once() {
+    // The point of being able to build evidence by hand. Arranging all three of these in one real scan means
+    // finding an input that matches one rule more than sixteen times, carries an excerpt over the byte cap,
+    // AND trips a second rule — reachable, but the test would then be about the input rather than about
+    // finalization, and it would break whenever the rules changed.
+    //
+    // What must hold when they coincide: the verdict is `RiskFound` (a confirmed payload outranks any gap),
+    // the score reflects the worst observation, and **all three** gaps are reported. A verdict that reported
+    // the payload and dropped the gaps would be claiming coverage it did not have.
+    let mut evidence = Evidence::new();
+
+    let mut long_excerpt = an_observation("a.verbose", 0, 40);
+    long_excerpt.matched = "x".repeat(500);
+    evidence.observe(long_excerpt);
+
+    evidence.observe(an_observation("b.payload", 50, 90));
+
+    evidence.record_gap(CoverageGap::bound(
+        IncompleteCause::MaxMatchesPerRule,
+        16,
+        "rule `c.repetitive` saturated",
+    ));
+
+    let tight = Bounds {
+        max_excerpt_bytes: 32,
+        ..bounds()
+    };
+    let v = finalize(evidence, tight, attribution());
+
+    assert_eq!(
+        v.outcome(),
+        Outcome::RiskFound,
+        "a confirmed payload outranks every coverage gap"
+    );
+    assert_eq!(v.score(), 90, "the worst observation sets the score");
+
+    let causes: Vec<IncompleteCause> = v.incomplete().iter().map(|i| i.cause()).collect();
+    assert!(
+        causes.contains(&IncompleteCause::MaxMatchesPerRule),
+        "the saturated rule must still be reported: {causes:?}"
+    );
+    assert!(
+        causes.contains(&IncompleteCause::ExcerptLength),
+        "the truncated excerpt must still be reported: {causes:?}"
+    );
+    assert_eq!(
+        v.reasons().len(),
+        2,
+        "both findings are reported; neither gap suppressed a finding"
+    );
+}
+
+#[test]
+fn a_gap_recorded_after_the_last_observation_is_still_reported() {
+    // Ordering inside the accumulator must not affect what a verdict says. A gap recorded before any
+    // observation and one recorded after must both survive — the accumulator is append-only and
+    // finalization reads all of it, so this is really a test that nothing takes a shortcut on the empty
+    // case.
+    let mut evidence = Evidence::new();
+    evidence.record_gap(CoverageGap::failure(
+        IncompleteCause::DecodeFailed,
+        "recorded first, before anything was found",
+    ));
+    evidence.observe(an_observation("a.one", 0, 60));
+    evidence.record_gap(CoverageGap::bound(
+        IncompleteCause::DecodeDepth,
+        3,
+        "recorded last, after the finding",
+    ));
+
+    let v = verdict_from(evidence);
+    assert_eq!(v.outcome(), Outcome::RiskFound);
+    assert_eq!(
+        v.incomplete().len(),
+        2,
+        "both gaps must be reported regardless of when they were recorded"
+    );
+}
+
 // ── The invariant holds for arbitrary evidence ─────────────────────────────────────────────────
 
 proptest::proptest! {
@@ -273,11 +451,14 @@ proptest::proptest! {
     fn clean_implies_nothing_found_and_nothing_missed(
         observation_count in 0usize..6,
         gap_count in 0usize..6,
-        score in 0u8..=100,
+        severity in 0u8..=100,
     ) {
         let mut evidence = Evidence::new();
         for i in 0..observation_count {
-            evidence.observe(an_observation(&format!("test.rule_{i}"), i * 8, 50));
+            // Severity varies across the run rather than being fixed at 50: the score is now DERIVED from
+            // these, so a constant severity would leave the score half-unexercised. It used to be a separate
+            // input to `finalize`; there is nowhere to put one now (FR-127).
+            evidence.observe(an_observation(&format!("test.rule_{i}"), i * 8, severity));
         }
         for i in 0..gap_count {
             evidence.record_gap(CoverageGap::bound(
@@ -287,7 +468,7 @@ proptest::proptest! {
             ));
         }
 
-        let v = finalize(evidence, bounds(), attribution(score, RiskLevel::Medium));
+        let v = finalize(evidence, bounds(), attribution());
 
         if v.outcome() == Outcome::Clean {
             proptest::prop_assert!(
