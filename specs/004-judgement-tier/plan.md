@@ -85,7 +85,7 @@ wanted, and adopting it for a future that may not arrive is how a 27-crate graph
 
 ## D3 — Auth: four environment variables, one resolution order, stated once
 
-**Decision**: resolve in this order, first match wins.
+**Decision**: `ANTHROPIC_AUTH_TOKEN` wins whenever it is set. Then this order, first match wins.
 
 | Variable | Header sent | Why this position |
 |---|---|---|
@@ -111,6 +111,34 @@ unset  CLAUDE_CODE_OAUTH_TOKEN
 **Two credentials live at once, and a non-default endpoint.** So "use whichever is set" is not a rule — it
 does not resolve, and the two want different headers. Having several set is the normal case rather than the
 edge case, because tools export their own and nothing cleans up after them.
+
+### Why the precedence is unconditional
+
+The tempting refinement is to pair the two variables — *prefer `ANTHROPIC_AUTH_TOKEN` **when
+`ANTHROPIC_BASE_URL` is also set***, since together they describe a proxy. It reads well and it has a hole.
+
+Take the config apart:
+
+| `AUTH_TOKEN` | `BASE_URL` | conditional rule | unconditional rule |
+|---|---|---|---|
+| set | set | use it | use it |
+| set | unset | **falls through** | use it |
+| set | unset, nothing else set | **no credential at all** | use it |
+
+The third row is the hole. Someone who exports one variable and expects it to be used gets a tool that says
+it is unauthenticated while holding a token — and to avoid that, the conditional rule needs a fallback to
+`AUTH_TOKEN` anyway, at which point it has collapsed back into the unconditional one for every case except
+the second row.
+
+That second row is the only real disagreement: a bearer token with the default Anthropic endpoint. It is not
+a dangerous combination — an Anthropic credential going to Anthropic is where it belongs — so the cost of
+guessing wrong is a 401 that the resolution diagnostic explains in one line. The cost of the conditional rule
+is that "I set the token and it ignored it" becomes possible, which is the harder failure to diagnose and the
+worse one to ship.
+
+**Predictable beats clever for credential selection**, and where they conflict the diagnostic is what closes
+the gap: it names the variable chosen and the ones ignored, before any request is made. Unsetting a variable
+you do not want used is a normal expectation; a tool silently declining to use one is not.
 
 ### Picking wrong is a credential-disclosure bug, not a compatibility bug
 
