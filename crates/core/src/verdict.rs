@@ -504,6 +504,36 @@ impl Verdict {
         !self.incomplete.is_empty()
     }
 
+    /// One line describing this verdict, for a log or a denial message.
+    ///
+    /// Deliberately short and deliberately specific: this is what a blocked caller sees, and "blocked by
+    /// policy" tells them nothing they can act on. Naming the worst rule and the count gives them
+    /// somewhere to start.
+    pub fn summary(&self) -> String {
+        match self.outcome {
+            Outcome::Clean => "clean".to_string(),
+            Outcome::Inconclusive => {
+                let causes: Vec<&str> = self.incomplete.iter().map(|i| i.cause.as_str()).collect();
+                format!("inconclusive ({})", causes.join(", "))
+            }
+            Outcome::RiskFound => {
+                let worst = self
+                    .reasons
+                    .iter()
+                    .max_by_key(|r| r.severity)
+                    .map(|r| r.rule_id.as_str())
+                    .unwrap_or("unknown");
+                let extra = self.reasons.len().saturating_sub(1);
+                let more = if extra > 0 {
+                    format!(" (+{extra} more)")
+                } else {
+                    String::new()
+                };
+                format!("{:?} risk, score {}: {worst}{more}", self.risk, self.score)
+            }
+        }
+    }
+
     /// A verdict for a target that could not be read (FR-032a).
     ///
     /// Lives here rather than in the CLI because the core never opens a file, so the *caller* doing

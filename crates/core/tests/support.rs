@@ -25,7 +25,11 @@ pub fn fixtures() -> PathBuf {
     repo_root().join("tests/fixtures")
 }
 
-/// Absolute path to one fixture, e.g. `fixture("override/ignore_previous.md")`.
+/// Absolute path to one fixture, e.g. `fixture("files/certificate.pem")`.
+///
+/// Used by tests over file-based fixtures (binaries, certificates, rule sets). Retained while those
+/// fixture directories are still being populated.
+#[allow(dead_code)]
 ///
 /// Panics with the resolved path when the fixture is missing. A missing fixture is a broken test
 /// rather than a skippable condition — silently passing because the input was absent is the same
@@ -42,6 +46,9 @@ pub fn fixture(relative: &str) -> PathBuf {
 }
 
 /// Every regular file under one fixture category, sorted for reproducible iteration order.
+///
+/// Companion to [`fixture`], for the same file-based fixture directories.
+#[allow(dead_code)]
 ///
 /// Sorted because an unordered walk makes a failure report differ between runs, which is the
 /// determinism problem the whole project takes a position on (SC-011).
@@ -74,6 +81,9 @@ pub enum Expected {
 pub struct Case {
     pub id: String,
     pub text: String,
+    /// `benign` | `direct_injection` | `indirect_injection`. Read by reporting that groups by category;
+    /// the accuracy gates key off `expected` instead.
+    #[allow(dead_code)]
     pub category: String,
     /// Where this text would reach an agent — `email_body`, `tool_result`, `skill_md`,
     /// `mcp_tool_description`, `file_read`. Metrics are reported per context, so a strong result on

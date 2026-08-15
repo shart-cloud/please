@@ -109,29 +109,29 @@ the reported risk level and reasons. No harness, no configuration, no network.
 - [x] T042 [P] [US1] Create positive fixtures for solicitation in `tests/fixtures/solicitation/` including system-prompt extraction requests
 - [ ] T043 [US1] Create **at least 200** hard-negative fixtures in `tests/fixtures/benign/` including `threat_model_excerpt.md`, advisories discussing injection, `certificate_block.pem`, content-hash listings, non-English prose, and `plain.md` — the 200 minimum is part of SC-003, not a suggestion
 - [x] T044 [US1] Write failing per-class detection tests asserting every positive fixture is detected and every benign control is silent, in `crates/core/tests/fixtures.rs` (SC-002)
-- [ ] T045 [US1] Write failing test asserting the false-positive rate over `tests/fixtures/benign/` is at most 1% at the default threshold, and failing the run if the set holds fewer than 200 examples, in `crates/core/tests/fixtures.rs` (SC-003)
+- [x] T045 [US1] Write failing test asserting the false-positive rate over `tests/fixtures/benign/` is at most 1% at the default threshold, and failing the run if the set holds fewer than 200 examples, in `crates/core/tests/fixtures.rs` (SC-003)
 - [x] T046 [US1] Write failing test asserting every `risk_found` verdict carries rule identity, class, location, excerpt, and description, in `crates/core/tests/fixtures.rs` (SC-001, SC-008)
 - [x] T047 [P] [US1] Write failing tests asserting an encoded blob whose decoded content matches no rule produces no finding, in `crates/core/tests/decode.rs` (D5)
 
 ### Implementation for User Story 1
 
-- [ ] T048 [US1] Implement the linear-time structural pre-pass classifying fenced code, inline code, block quotes, quoted strings, and attributive-marker spans, in `crates/core/src/structure.rs`
+- [x] T048 [US1] Implement the linear-time structural pre-pass classifying fenced code, inline code, block quotes, quoted strings, and attributive-marker spans, in `crates/core/src/structure.rs`
 - [x] T049 [US1] Implement quoting suppression honouring each rule's `fires_in_quotes` and recording the `QuotingContext` that suppressed a match, in `crates/core/src/detect/mod.rs` (depends on T048)
 - [x] T050 [P] [US1] Implement the concealment scanner covering C0/C1, U+200B–U+200F, U+2060–U+2064, U+202A–U+202E, U+2066–U+2069, U+FEFF, U+180E, the Tags block U+E0000–U+E007F, and variation selectors, in `crates/core/src/detect/concealment.rs`
 - [x] T051 [P] [US1] Implement Tags-block decoding (subtract U+E0000 to recover ASCII) and variation-selector decoding, feeding recovered text back into the decode pipeline, in `crates/core/src/decode/unicode.rs`
-- [ ] T052 [P] [US1] Implement per-token confusable analysis using UTS #39 skeleton, mixed-script, and restriction level, explicitly not flagging whole-document script mixing, in `crates/core/src/detect/confusable.rs` (D7)
-- [ ] T053 [P] [US1] Implement the base-64 decoder with charset, length, and decoded-printability gating in `crates/core/src/decode/base64.rs`
-- [ ] T054 [P] [US1] Implement hexadecimal, rotation-cipher, reversal, and glyph-substitution decoders in `crates/core/src/decode/hex.rs`, `rot13.rs`, `reversed.rs`, and `leetspeak.rs`
-- [ ] T055 [US1] Implement the bounded, cycle-guarded decode pipeline that re-scans decoded output and reports a transformation only when the decoded content trips a rule, in `crates/core/src/decode/mod.rs` (depends on T051, T053, T054; makes T047 pass)
-- [ ] T056 [US1] Implement class dispatch wiring pattern, concealment, and confusable detectors into the scan, in `crates/core/src/detect/mod.rs`
-- [ ] T057 [US1] Author the built-in `override` and `boundary` rules with literals, patterns, severities, and required descriptions in `rules/builtin.toml`
-- [ ] T058 [US1] Author the built-in `solicitation` rules and the rules that fire on decoded content in `rules/builtin.toml`
-- [ ] T059 [US1] Implement `Verdict::summary()` and `Verdict::is_at_or_above()` in `crates/core/src/verdict.rs`
-- [ ] T060 [US1] Implement CLI argument parsing for `plz scan` with target, `--format`, `--threshold`, `--explain`, and the bound overrides, in `crates/cli/src/args.rs`
-- [ ] T061 [US1] Implement target reading for file paths, `-`/stdin, and lexicographic directory walking, in `crates/cli/src/target.rs`
-- [ ] T062 [US1] Implement human-readable rendering per [contracts/cli.md](./contracts/cli.md), showing band, score, rule id, byte span, neutralised excerpt, description, decode chain, and the `unexamined:` line, in `crates/cli/src/render/human.rs`
-- [ ] T063 [US1] Wire `main` to build the engine, scan each target, and render, in `crates/cli/src/main.rs`
-- [ ] T064 [US1] Add snapshot tests for human output over representative fixtures in `crates/cli/tests/cli.rs`
+- [x] T052 [P] [US1] Implement per-token confusable analysis using UTS #39 skeleton, mixed-script, and restriction level, explicitly not flagging whole-document script mixing, in `crates/core/src/detect/confusable.rs` (D7)
+- [x] T053 [P] [US1] Implement the base-64 decoder with charset, length, and decoded-printability gating in `crates/core/src/decode/base64.rs`
+- [x] T054 [P] [US1] Implement hexadecimal, rotation-cipher, reversal, and glyph-substitution decoders in `crates/core/src/decode/hex.rs`, `rot13.rs`, `reversed.rs`, and `leetspeak.rs`
+- [x] T055 [US1] Implement the bounded, cycle-guarded decode pipeline that re-scans decoded output and reports a transformation only when the decoded content trips a rule, in `crates/core/src/decode/mod.rs` (depends on T051, T053, T054; makes T047 pass)
+- [x] T056 [US1] Implement class dispatch wiring pattern, concealment, and confusable detectors into the scan, in `crates/core/src/detect/mod.rs`
+- [x] T057 [US1] Author the built-in `override` and `boundary` rules with literals, patterns, severities, and required descriptions in `rules/builtin.toml`
+- [x] T058 [US1] Author the built-in `solicitation` rules and the rules that fire on decoded content in `rules/builtin.toml`
+- [x] T059 [US1] Implement `Verdict::summary()` and `Verdict::is_at_or_above()` in `crates/core/src/verdict.rs`
+- [x] T060 [US1] Implement CLI argument parsing for `plz scan` with target, `--format`, `--threshold`, `--explain`, and the bound overrides, in `crates/cli/src/args.rs`
+- [x] T061 [US1] Implement target reading for file paths, `-`/stdin, and lexicographic directory walking, in `crates/cli/src/target.rs`
+- [x] T062 [US1] Implement human-readable rendering per [contracts/cli.md](./contracts/cli.md), showing band, score, rule id, byte span, neutralised excerpt, description, decode chain, and the `unexamined:` line, in `crates/cli/src/render/human.rs`
+- [x] T063 [US1] Wire `main` to build the engine, scan each target, and render, in `crates/cli/src/main.rs`
+- [x] T064 [US1] Add snapshot tests for human output over representative fixtures in `crates/cli/tests/cli.rs`
 
 **Checkpoint**: `plz scan <file>` reports actionable findings for all six classes and stays silent on technical security prose. MVP is demonstrable.
 

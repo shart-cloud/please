@@ -45,12 +45,26 @@ const ATTRIBUTIVE_MARKERS: &[&str] = &[
     "e.g.",
     "such as",
     "the phrase",
+    "phrases like",
     "the string",
-    "payload:",
+    "strings like",
+    "patterns include",
     "attack string",
     "example payload",
     "injection example",
+    "test case",
+    "sample input",
 ];
+
+// NOT in the list, and worth recording why: `payload:`.
+//
+// It reads like a documentation marker and behaves like the opposite. An attacker labels their own payload
+// — "Payload: <base64>" — far more often than a document labels an example that way, so including it
+// suppressed the very thing it preceded. It was caught by a nested-encoding fixture returning zero
+// findings: the marker had silenced the decoded match.
+//
+// The lesson generalises to every candidate marker here: a phrase only belongs on this list if it is more
+// common in prose *about* attacks than in attacks themselves.
 
 /// How far an attributive marker's influence extends, in bytes.
 ///

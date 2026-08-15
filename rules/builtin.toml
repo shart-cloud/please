@@ -1,24 +1,26 @@
 # PLEASE built-in rule set.
 #
-# This file is the product. It is what a reviewer reads to learn what the scanner detects, and it is
-# the artifact a team diffs when they disagree with a finding — which is why rules are declarative data
-# rather than Rust (constitution Principle III).
+# This file is the product. It is what a reviewer reads to learn what the scanner detects, and what a team
+# diffs when they disagree with a finding — which is why rules are declarative data rather than Rust
+# (constitution Principle III).
 #
 # Two things every rule must earn:
 #
 #   * a `description`, because an unexplained finding is one nobody can act on;
-#   * at least one `literal`, because literals are the cheap gate. All literals across all rules go
-#     into one automaton, and a rule's `pattern` is compiled only if one of its literals is present.
-#     Text matching no literal costs a single linear pass and compiles nothing. A rule with no
-#     literals is evaluated against every input, and the loader warns about it.
+#   * at least one `literal`, because literals are the cheap gate. All literals across all rules go into
+#     one automaton, and a rule's `pattern` is compiled only if one of its literals is present. Text
+#     matching no literal costs a single linear pass and compiles nothing — 0.1 ms instead of 44 ms.
 #
-# Patterns are matched by a finite-automaton engine. Look-around and backreferences are NOT
-# expressible: a pattern using them fails to compile and therefore fails to load. That absence is what
-# makes every accepted rule linear-time, so the guarantee is structural rather than a review habit.
+# Patterns are matched by a finite-automaton engine. Look-around and backreferences are NOT expressible:
+# a pattern using them fails to compile and therefore fails to load. That absence is what makes every
+# accepted rule linear-time, so the guarantee is structural rather than a review habit.
 #
-# Detection rules land at T057 and T058. This file currently carries only the header and bands, so that
-# the embed path, the loader, and `Engine::builtin()` are exercised end to end before any rule content
-# depends on them.
+# Rules are matched against decoded content too, so a base-64 or tag-block payload is caught by the same
+# rule that catches it in the clear. There is no separate corpus of "encoded" rules to keep in sync.
+#
+# Two classes are absent by design: `concealment` and `confusable` are detected structurally, in code,
+# because they recognise a mechanism rather than a phrase. A run of tag-block characters means the same
+# thing regardless of what it decodes to, and no pattern could express it.
 
 [ruleset]
 name = "please.builtin"
@@ -30,13 +32,110 @@ version = "0.1.0"
 #
 # They are chosen, not derived. The default threshold is `high`, so every block/allow decision a caller
 # makes rests on the number below — and it will move once the evaluation harness measures per-source
-# metrics against a real corpus. Fixture-era values are recorded alongside the metrics they produced so
-# a recalibration reads as a visible diff rather than a number that quietly changed meaning.
+# metrics against a real corpus. Fixture-era values are recorded alongside the metrics they produced so a
+# recalibration reads as a visible diff rather than a number that quietly changed meaning.
 #
-# See docs/limits.md. Do not cite a false-positive rate measured at these bands as though the bands
-# were calibrated.
+# See docs/limits.md. Do not cite a false-positive rate measured at these bands as though the bands were
+# calibrated.
 [bands]
 low = 20
 medium = 45
 high = 70
 critical = 90
+
+# ── override ────────────────────────────────────────────────────────────────────────────────────────
+#
+# Instructions telling a reading agent to set aside what it was told before. The bounded gaps
+# (`[^.\n]{0,40}`) are deliberate: they let the rule span "ignore any of your previous instructions"
+# without crossing a sentence boundary, which is what stops it matching two unrelated clauses.
+
+[[rule]]
+id = "override.disregard_prior"
+class = "override"
+severity = 85
+literals = ["ignore", "disregard", "forget", "override", "bypass"]
+pattern = '(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any)\b[^.\n]{0,25}\b(instruction|prompt|rule|direction|guideline|constraint|context)s?\b'
+description = "Instruction directed at a reading agent to disregard its prior instructions."
+
+[[rule]]
+id = "override.forget_everything"
+class = "override"
+severity = 80
+literals = ["forget everything", "disregard everything", "ignore everything"]
+pattern = '(?i)\b(forget|disregard|ignore)\s+everything\b'
+description = "Instruction to discard all prior context."
+
+[[rule]]
+id = "override.new_identity"
+class = "override"
+severity = 75
+literals = ["you are now", "you are no longer", "act as if you"]
+pattern = '(?i)\byou are (now|no longer)\b|\bact as if you\b'
+description = "Attempt to reassign the agent's role or identity."
+
+[[rule]]
+id = "override.new_instructions_follow"
+class = "override"
+severity = 70
+literals = ["new instruction", "updated instruction", "revised instruction"]
+pattern = '(?i)\b(new|updated|revised)\s+instructions?\b\s*[:.]'
+description = "Text announcing replacement instructions."
+
+# ── boundary ────────────────────────────────────────────────────────────────────────────────────────
+#
+# Forged structure: text impersonating a higher-authority turn, a completed tool call, or a delimiter
+# that would end the data region. These are the rules most likely to need per-deployment tuning, because
+# the markers a given harness uses are specific to it — which is what `--rules` is for.
+
+[[rule]]
+id = "boundary.forged_role_marker"
+class = "boundary"
+severity = 80
+literals = ["system:", "assistant:", "[system]", "<|im_start|>", "### system"]
+pattern = '(?im)^\s*(\[|<\||#{2,3}\s*)?(system|assistant)\s*(\]|\|>)?\s*:'
+description = "Forged conversational role marker, impersonating a higher-authority turn."
+
+[[rule]]
+id = "boundary.forged_tool_result"
+class = "boundary"
+severity = 80
+literals = ["<tool_result", "</tool_result", "tool_output:", "function_results"]
+pattern = '(?i)(</?tool_result|tool_output\s*:|function_results)'
+description = "Fabricated tool-result framing, so data is read as a completed action."
+
+[[rule]]
+id = "boundary.delimiter_breakout"
+class = "boundary"
+severity = 70
+literals = ["end of document", "end of user input", "begin system", "end context"]
+pattern = '(?i)-{2,}\s*(end of (document|user input|context)|begin system)'
+description = "Delimiter breakout attempting to close the data region and open an instruction region."
+
+# ── solicitation ────────────────────────────────────────────────────────────────────────────────────
+#
+# Requests for the agent's own configuration or for credentials it can reach. Distinct from override:
+# these extract rather than redirect, and they are frequently the reconnaissance step before one.
+
+[[rule]]
+id = "solicitation.system_prompt"
+class = "solicitation"
+severity = 70
+literals = ["system prompt", "your instructions", "initial prompt", "your prompt"]
+pattern = '(?i)\b(reveal|repeat|print|show|output|display|dump|verbatim|disclose)\b[^.\n]{0,30}\b(system prompt|your instructions|initial prompt|your prompt)\b'
+description = "Request for the agent's own instructions or configuration."
+
+[[rule]]
+id = "solicitation.credentials"
+class = "solicitation"
+severity = 85
+literals = ["environment variable", "api key", "id_rsa", "credentials", "access token"]
+pattern = '(?i)\b(print|output|reveal|send|forward|exfiltrate|email|upload|list)\b[^.\n]{0,40}\b(environment variables?|api keys?|id_rsa|credentials?|access tokens?|secrets?)\b'
+description = "Solicitation of credentials or secrets reachable by the agent."
+
+[[rule]]
+id = "solicitation.tool_enumeration"
+class = "solicitation"
+severity = 55
+literals = ["your available tools", "list your tools", "your tool schemas"]
+pattern = '(?i)\b(list|enumerate|describe|show)\b[^.\n]{0,25}\b(your )?(available )?tools?\b'
+description = "Enumeration of the agent's available tools — reconnaissance rather than an immediate payload."

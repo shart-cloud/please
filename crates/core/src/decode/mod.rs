@@ -64,7 +64,13 @@ pub struct Expansion {
 /// tag text is fed back through the same pipeline so a tag-encoded base-64 payload is still found.
 pub fn expand(input: &[u8], max_depth: u8) -> Expansion {
     let mut result = Expansion::default();
-    let mut seen: Vec<String> = Vec::new();
+
+    // Seeded with the ORIGINAL input, not empty. Every transform here has an inverse among the others —
+    // ROT-13 is its own, and so is reversal — so a two-step chain reconstructs the input exactly. With an
+    // empty set that reconstruction is not recognised as a cycle: it is accepted as a fresh candidate, and
+    // then every rule matches the original text a second time, producing duplicate reasons misattributed
+    // to the encoding class. Seeding closes the cycle at the only place it can be closed.
+    let mut seen: Vec<String> = vec![String::from_utf8_lossy(input).into_owned()];
 
     // Work queue of (text, origin span, chain so far). Breadth-first so shallower candidates — which are
     // the more likely and the cheaper — are produced before the fan-out bound bites.
@@ -75,11 +81,18 @@ pub fn expand(input: &[u8], max_depth: u8) -> Expansion {
     while depth < max_depth {
         depth += 1;
         let mut next: Vec<(Vec<u8>, Span, Vec<Transform>)> = Vec::new();
+        // Tracks whether this layer found genuinely encoded content, as opposed to yet another
+        // unconditional permutation. Only the former means something went unexamined at the bound.
+        let mut pending_run_based = false;
 
         for (bytes, origin, chain) in std::mem::take(&mut queue) {
-            for (kind, span, text) in one_layer(&bytes) {
+            for (kind, span, text) in one_layer(&bytes, depth) {
                 if result.candidates.len() + next.len() >= MAX_CANDIDATES {
-                    result.fanout_exceeded = true;
+                    // Only a dropped *run-based* candidate is unexamined encoded content. Dropping another
+                    // permutation of a whole-input transform costs nothing worth reporting.
+                    if is_run_based(kind) {
+                        result.fanout_exceeded = true;
+                    }
                     break;
                 }
                 if text.trim().is_empty() || seen.contains(&text) {
@@ -108,6 +121,9 @@ pub fn expand(input: &[u8], max_depth: u8) -> Expansion {
                     origin: candidate_origin,
                     chain: chain_here.clone(),
                 });
+                if is_run_based(kind) {
+                    pending_run_based = true;
+                }
                 next.push((text.into_bytes(), candidate_origin, chain_here));
             }
             if result.fanout_exceeded {
@@ -118,9 +134,12 @@ pub fn expand(input: &[u8], max_depth: u8) -> Expansion {
         if next.is_empty() || result.fanout_exceeded {
             break;
         }
-        if depth == max_depth && !next.is_empty() {
-            // There was more to decode and the bound stopped it. Reported rather than dropped: a limit
-            // the reader cannot see reads as complete coverage.
+        if depth == max_depth && pending_run_based {
+            // Genuinely encoded content remained and the bound stopped it. Reported rather than dropped: a
+            // limit the reader cannot see reads as complete coverage.
+            //
+            // Gated on `pending_run_based` because whole-input transforms ALWAYS have another permutation
+            // available, so keying this on "next is non-empty" made every scan inconclusive.
             result.depth_exceeded = true;
         }
         queue = next;
@@ -129,8 +148,32 @@ pub fn expand(input: &[u8], max_depth: u8) -> Expansion {
     result
 }
 
+/// Depth beyond which whole-input transforms are no longer applied.
+///
+/// Two, and the reason is that these transforms are *unconditional*: ROT-13 and reversal produce new text
+/// from any input, so recursing on them multiplies candidates at every level regardless of whether the
+/// input contains anything encoded at all. Left unbounded they made every scan of ordinary prose exceed
+/// both the depth and fan-out budgets, which turned every verdict inconclusive — fail-closed to the point
+/// of useless.
+///
+/// Two still covers composition (reversal of a ROT-13 payload), which is the realistic case. Three would
+/// buy a vanishingly rare evasion for a 27x candidate explosion on every document.
+const WHOLE_INPUT_MAX_DEPTH: u8 = 2;
+
+/// Whether a transform searches for encoded *regions* or rewrites the whole buffer.
+///
+/// The distinction decides what "there was more to examine" means. A run-based decoder finding another
+/// encoded region at the depth bound is genuinely unexamined content. A whole-input transform having yet
+/// another permutation available is not — it always does.
+fn is_run_based(kind: TransformKind) -> bool {
+    matches!(
+        kind,
+        TransformKind::Base64 | TransformKind::Hex | TransformKind::UnicodeTags
+    )
+}
+
 /// Every decoding of one buffer, as `(kind, span_within_this_buffer, decoded_text)`.
-fn one_layer(bytes: &[u8]) -> Vec<(TransformKind, Span, String)> {
+fn one_layer(bytes: &[u8], depth: u8) -> Vec<(TransformKind, Span, String)> {
     let mut out: Vec<(TransformKind, Span, String)> = Vec::new();
 
     for ((start, end), text) in transforms::base64(bytes) {
@@ -139,24 +182,24 @@ fn one_layer(bytes: &[u8]) -> Vec<(TransformKind, Span, String)> {
     for ((start, end), text) in transforms::hex(bytes) {
         out.push((TransformKind::Hex, Span::new(start, end), text));
     }
+    for (span, text) in unicode::tag_runs(bytes) {
+        out.push((TransformKind::UnicodeTags, span, text));
+    }
 
     // Whole-input transforms. The span is the whole buffer because there is no sub-region to point at —
     // the transformation applies to everything or not at all.
-    let whole = Span::new(0, bytes.len());
-    for (kind, text) in [
-        (TransformKind::Rot13, transforms::rot13(bytes)),
-        (TransformKind::Reversed, transforms::reversed(bytes)),
-        (TransformKind::Leetspeak, transforms::leetspeak(bytes)),
-    ] {
-        // A transform that changed nothing is not a transform. Skipping identity results is what stops
-        // leetspeak folding of ordinary prose from occupying the whole candidate budget.
-        if text.as_bytes() != bytes {
-            out.push((kind, whole, text));
+    if depth <= WHOLE_INPUT_MAX_DEPTH {
+        let whole = Span::new(0, bytes.len());
+        for (kind, text) in [
+            (TransformKind::Rot13, transforms::rot13(bytes)),
+            (TransformKind::Reversed, transforms::reversed(bytes)),
+            (TransformKind::Leetspeak, transforms::leetspeak(bytes)),
+        ] {
+            // A transform that changed nothing is not a transform.
+            if text.as_bytes() != bytes {
+                out.push((kind, whole, text));
+            }
         }
-    }
-
-    for (span, text) in unicode::tag_runs(bytes) {
-        out.push((TransformKind::UnicodeTags, span, text));
     }
 
     out

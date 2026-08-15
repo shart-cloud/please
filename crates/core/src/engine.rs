@@ -12,12 +12,14 @@
 //! [`Engine::from_toml`] takes a string rather than a path for exactly that reason: rule-set *loading*
 //! is I/O, and I/O belongs to the caller.
 
-use crate::detect::pattern::PatternSet;
+use crate::decode;
+use crate::detect::{self, pattern::PatternSet, Hit};
 use crate::policy::ScanPolicy;
 use crate::prefilter::Prefilter;
 use crate::ruleset::{Ruleset, RulesetError, RulesetLimits};
 use crate::sanitize::sanitize_bytes;
 use crate::score::aggregate;
+use crate::structure::QuotingMap;
 use crate::verdict::{
     DetectionClass, EngineId, IncompleteCause, Incompleteness, Reason, RulesetId, TargetRef,
     Verdict, VerdictParts,
@@ -150,6 +152,32 @@ impl Engine {
             });
         }
 
+        // ── Structure ───────────────────────────────────────────────────────────────────────────
+        //
+        // Classify quoting regions once, before any matching, so every rule-driven hit can be checked
+        // against it without re-deriving the map.
+        let quoting = QuotingMap::build(input);
+
+        // ── Decode ──────────────────────────────────────────────────────────────────────────────
+        //
+        // Recovered texts are re-scanned against the same rules. A transformation is reported only when
+        // its decoded content trips a rule, which is what keeps "contains base-64" from being a finding.
+        let expansion = decode::expand(input, policy.max_decode_depth);
+        if expansion.depth_exceeded {
+            incomplete.push(
+                Incompleteness::bound(IncompleteCause::DecodeDepth, policy.max_decode_depth as u64)
+                    .with_detail(
+                        "nested encoding beyond the depth bound was not examined".to_string(),
+                    ),
+            );
+        }
+        if expansion.fanout_exceeded {
+            incomplete.push(Incompleteness::failure(
+                IncompleteCause::DecodeFailed,
+                "too many decodable regions; some were not examined",
+            ));
+        }
+
         // ── Prefilter ───────────────────────────────────────────────────────────────────────────
         //
         // One linear pass to learn which rules are worth compiling. Text matching no literal — nearly
@@ -163,7 +191,8 @@ impl Engine {
         // split is FR-001b: reasons are ordered by offset rather than severity, so truncating before
         // aggregating could discard the highest-severity finding and understate the score.
         let mut all_hits: Vec<(u8, DetectionClass)> = Vec::new();
-        let mut saturated_rules: Vec<&str> = Vec::new();
+        let mut saturated_rules: Vec<String> = Vec::new();
+        let mut hits: Vec<Hit> = Vec::new();
 
         for index in candidates {
             let rule = &rules[index];
@@ -177,32 +206,21 @@ impl Engine {
             {
                 Ok(found) => {
                     if found.saturated {
-                        saturated_rules.push(&rule.id);
+                        saturated_rules.push(rule.id.clone());
                     }
                     for span in found.spans {
-                        all_hits.push((rule.severity, rule.class));
-                        let (matched, excerpt_truncated) = sanitize_bytes(
+                        let (matched, _) = sanitize_bytes(
                             &input[span.start..span.end],
                             policy.max_excerpt_bytes as usize,
                         );
-                        if excerpt_truncated {
-                            incomplete.push(
-                                Incompleteness::bound(
-                                    IncompleteCause::ExcerptLength,
-                                    policy.max_excerpt_bytes as u64,
-                                )
-                                .with_detail(format!("excerpt for `{}` truncated", rule.id)),
-                            );
-                        }
-                        reasons.push(Reason {
+                        hits.push(Hit {
                             rule_id: rule.id.clone(),
                             class: rule.class,
                             span,
                             matched,
                             severity: rule.severity,
-                            chain: Vec::new(),
                             description: rule.description.clone(),
-                            suppressed_by: None,
+                            chain: Vec::new(),
                         });
                     }
                 }
@@ -220,6 +238,107 @@ impl Engine {
                     )),
                 ),
             }
+        }
+
+        // ── Rules against decoded content ───────────────────────────────────────────────────────
+        //
+        // Collected separately because these are deliberately EXEMPT from quoting suppression. Suppression
+        // exists to excuse text that is quoting a payload rather than issuing one — but someone who
+        // base-64'd an instruction was not illustrating it. The obfuscation is itself the evidence of
+        // intent, and "it appeared after the words 'for example'" is not exculpatory for content that had
+        // to be decoded before it could be read.
+        //
+        // This also removes a whole class of trivial evasion: wrapping an encoded payload in a code fence.
+        let mut decoded_hits: Vec<Hit> = Vec::new();
+
+        //
+        // Each recovered text is matched against the same rules. A hit reports the span of the *encoded*
+        // region in the original input — bytes the caller actually holds — and carries the transform
+        // chain, so the reader sees both where it was and how it was hidden.
+        for candidate in &expansion.candidates {
+            let bytes = candidate.text.as_bytes();
+            for index in self.prefilter.candidates(bytes) {
+                let rule = &rules[index];
+                if !policy.is_active(rule.class) {
+                    continue;
+                }
+                if let Ok(found) =
+                    self.patterns
+                        .matches(index, rule, bytes, policy.max_matches_per_rule)
+                {
+                    if found.spans.is_empty() {
+                        continue;
+                    }
+                    // One hit per rule per candidate, not one per match. A payload repeated inside a
+                    // decoded blob is still one concealed payload, and reporting each occurrence would
+                    // let a single encoded region fill the reason budget.
+                    let (excerpt, _) = crate::sanitize::sanitize_str(
+                        &candidate.text,
+                        policy.max_excerpt_bytes as usize,
+                    );
+                    decoded_hits.push(Hit {
+                        rule_id: rule.id.clone(),
+                        class: DetectionClass::Encoding,
+                        span: candidate.origin,
+                        matched: excerpt,
+                        severity: rule.severity,
+                        description: format!("{} Recovered by decoding.", rule.description),
+                        chain: candidate.chain.clone(),
+                    });
+                }
+            }
+        }
+
+        // ── Suppression ─────────────────────────────────────────────────────────────────────────
+        //
+        // Rule-driven hits only. A documentation example of an override phrase is prose; a document that
+        // actually contains invisible characters is smuggling them regardless of the surrounding text.
+        let (mut kept, suppressed) = if policy.suppress_in_quotes {
+            detect::apply_suppression(hits, &quoting, |rule_id| {
+                rules
+                    .iter()
+                    .find(|r| r.id == rule_id)
+                    .map(|r| r.fires_in_quotes)
+                    .unwrap_or(false)
+            })
+        } else {
+            (hits, Vec::new())
+        };
+
+        // Suppressed hits are dropped rather than reported. `--no-suppress-in-quotes` works by not
+        // suppressing in the first place (the branch above), which is simpler than reporting-with-a-flag
+        // and gives the caller exactly one thing to reason about.
+        let _ = suppressed;
+
+        // ── Structural and decoded detectors ────────────────────────────────────────────────────
+        //
+        // Added after suppression because none of these are suppressed. Concealment and confusables detect
+        // a mechanism rather than a phrase, and decoded content carries its own evidence of intent.
+        for hit in detect::structural::scan(input) {
+            if policy.is_active(hit.class) {
+                kept.push(hit);
+            }
+        }
+        for hit in decoded_hits {
+            if policy.is_active(hit.class) {
+                kept.push(hit);
+            }
+        }
+
+        // ── Assemble reasons ────────────────────────────────────────────────────────────────────
+        for hit in kept {
+            all_hits.push((hit.severity, hit.class));
+            let (reason, excerpt_truncated) = hit.into_reason(policy.max_excerpt_bytes as usize);
+            if excerpt_truncated {
+                incomplete.push(
+                    Incompleteness::bound(
+                        IncompleteCause::ExcerptLength,
+                        policy.max_excerpt_bytes as u64,
+                    )
+                    .with_detail(format!("excerpt for `{}` truncated", reason.rule_id)),
+                );
+            }
+            reasons.push(reason);
         }
 
         if !saturated_rules.is_empty() {
