@@ -43,6 +43,25 @@ toml_parser
 toml_writer
 winnow
 
+# ── Direct: rule-set identity ───────────────────────────────────────────────────────────────────
+#
+# Added deliberately, with a cost of eight crates. The rule-set digest is what makes a verdict
+# attributable to the exact rules that produced it (SC-012), and that identity has to stay stable
+# across Rust releases — `std::hash::DefaultHasher` explicitly does not promise that, so a digest built
+# on it would silently fork every stored verdict's attribution on a toolchain upgrade.
+#
+# A hand-rolled non-cryptographic hash would avoid the dependency but not the problem: the digest's job
+# is audit attribution, so a deliberately-forged collision would let a verdict claim it ran rules it
+# did not. That is worth eight small, pure-Rust, wasm-compatible crates.
+sha2
+digest
+block-buffer
+crypto-common
+generic-array
+typenum
+cpufeatures
+cfg-if
+
 # ── Transitive, and worth being precise about ───────────────────────────────────────────────────
 #
 # `serde` is an OPTIONAL feature of please-core and is correctly OFF in the default build: no

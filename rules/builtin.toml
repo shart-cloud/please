@@ -1,0 +1,42 @@
+# PLEASE built-in rule set.
+#
+# This file is the product. It is what a reviewer reads to learn what the scanner detects, and it is
+# the artifact a team diffs when they disagree with a finding — which is why rules are declarative data
+# rather than Rust (constitution Principle III).
+#
+# Two things every rule must earn:
+#
+#   * a `description`, because an unexplained finding is one nobody can act on;
+#   * at least one `literal`, because literals are the cheap gate. All literals across all rules go
+#     into one automaton, and a rule's `pattern` is compiled only if one of its literals is present.
+#     Text matching no literal costs a single linear pass and compiles nothing. A rule with no
+#     literals is evaluated against every input, and the loader warns about it.
+#
+# Patterns are matched by a finite-automaton engine. Look-around and backreferences are NOT
+# expressible: a pattern using them fails to compile and therefore fails to load. That absence is what
+# makes every accepted rule linear-time, so the guarantee is structural rather than a review habit.
+#
+# Detection rules land at T057 and T058. This file currently carries only the header and bands, so that
+# the embed path, the loader, and `Engine::builtin()` are exercised end to end before any rule content
+# depends on them.
+
+[ruleset]
+name = "please.builtin"
+version = "0.1.0"
+
+# Score → risk band boundaries.
+#
+# THESE VALUES ARE PROVISIONAL AND UNCALIBRATED.
+#
+# They are chosen, not derived. The default threshold is `high`, so every block/allow decision a caller
+# makes rests on the number below — and it will move once the evaluation harness measures per-source
+# metrics against a real corpus. Fixture-era values are recorded alongside the metrics they produced so
+# a recalibration reads as a visible diff rather than a number that quietly changed meaning.
+#
+# See docs/limits.md. Do not cite a false-positive rate measured at these bands as though the bands
+# were calibrated.
+[bands]
+low = 20
+medium = 45
+high = 70
+critical = 90

@@ -19,11 +19,15 @@
 
 #![forbid(unsafe_code)]
 
+pub mod engine;
 pub mod policy;
+pub mod ruleset;
 pub mod sanitize;
 pub mod verdict;
 
+pub use engine::{Engine, EngineBuilder};
 pub use policy::ScanPolicy;
+pub use ruleset::{Rule, Ruleset, RulesetError, RulesetLimits};
 pub use verdict::{
     DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, QuotingContext, Reason,
     RiskLevel, RulesetId, Span, TargetKind, TargetRef, Transform, TransformKind, Verdict,

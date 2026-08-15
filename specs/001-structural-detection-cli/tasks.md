@@ -67,13 +67,13 @@ repository root under `tests/`.
 - [x] T017 Implement `Verdict` assembly enforcing the FR-004 invariant and FR-032b precedence at a single point, in `crates/core/src/verdict.rs` (makes T014–T016 pass)
 - [x] T018 [P] Write failing tests for excerpt neutralisation covering C0/C1 controls, bidi overrides, zero-width characters, the Unicode Tags block, and variation selectors, in `crates/core/tests/sanitize.rs`
 - [x] T019 Implement excerpt neutralisation and length capping in `crates/core/src/sanitize.rs` (makes T018 pass)
-- [ ] T020 [P] Define `Rule`, `Ruleset`, and `RulesetId` in `crates/core/src/ruleset/mod.rs` per [contracts/ruleset.md](./contracts/ruleset.md)
-- [ ] T021 Write failing tests for rule-set rejection — unknown key, malformed id, duplicate id, unknown class, out-of-range severity, uncompilable pattern, look-around usage, oversized pattern source, oversized compiled program, excess rule count — in `crates/core/tests/ruleset_load.rs`
-- [ ] T022 Implement TOML deserialisation of rule sets in `crates/core/src/ruleset/parse.rs`
-- [ ] T023 Implement load-time validation with pattern-source, compiled-size, and rule-count limits, rejecting the whole set on any failure, in `crates/core/src/ruleset/validate.rs` (makes T021 pass)
-- [ ] T024 Implement rule-set resolution (built-in → additions → suppressions) and the content digest over the resolved set in `crates/core/src/ruleset/mod.rs`
-- [ ] T025 Create `rules/builtin.toml` with the `[ruleset]` header, `[bands]` table, and a comment recording that band boundaries are provisional pending corpus calibration
-- [ ] T026 Embed `rules/builtin.toml` at compile time and implement `Engine::builtin()`, `Engine::from_toml()`, and `Engine::builder()` in `crates/core/src/lib.rs`
+- [x] T020 [P] Define `Rule`, `Ruleset`, and `RulesetId` in `crates/core/src/ruleset/mod.rs` per [contracts/ruleset.md](./contracts/ruleset.md)
+- [x] T021 Write failing tests for rule-set rejection — unknown key, malformed id, duplicate id, unknown class, out-of-range severity, uncompilable pattern, look-around usage, oversized pattern source, oversized compiled program, excess rule count — in `crates/core/tests/ruleset_load.rs`
+- [x] T022 Implement TOML deserialisation of rule sets in `crates/core/src/ruleset/parse.rs`
+- [x] T023 Implement load-time validation with pattern-source, compiled-size, and rule-count limits, rejecting the whole set on any failure, in `crates/core/src/ruleset/validate.rs` (makes T021 pass)
+- [x] T024 Implement rule-set resolution (built-in → additions → suppressions) and the content digest over the resolved set in `crates/core/src/ruleset/mod.rs`
+- [x] T025 Create `rules/builtin.toml` with the `[ruleset]` header, `[bands]` table, and a comment recording that band boundaries are provisional pending corpus calibration
+- [x] T026 Embed `rules/builtin.toml` at compile time and implement `Engine::builtin()`, `Engine::from_toml()`, and `Engine::builder()` in `crates/core/src/lib.rs`
 - [ ] T027 [P] Implement the multi-literal prefilter over all rules' literals, warning on rules with no literals, in `crates/core/src/prefilter.rs`
 - [ ] T028 Implement lazy per-rule pattern compilation with a compiled-size limit and memoised caching behind interior synchronisation, in `crates/core/src/detect/pattern.rs`
 - [ ] T029 Implement bounded match collection capped at `max_matches_per_rule`, recording an `Incompleteness` on saturation, in `crates/core/src/detect/pattern.rs`

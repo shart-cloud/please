@@ -47,6 +47,12 @@ unicode-normalization = "0.1"
 # ── Decoding ────────────────────────────────────────────────────────────────────────────────────
 base64 = "0.23"
 
+# Rule-set identity. A digest whose job is attribution has to outlive the compiler that produced it,
+# and `std::hash::DefaultHasher` explicitly does NOT promise stability across Rust releases — an
+# identity built on it would silently fork every stored verdict's attribution on a toolchain upgrade
+# (SC-012). SHA-256 does promise it.
+sha2 = "0.10"
+
 # ── Rules as data ───────────────────────────────────────────────────────────────────────────────
 # TOML because rules are a reviewable product artifact: comments carry a rule's justification, diffs
 # are line-by-line, and it matches the policy format bee already uses (constitution Principle III).
