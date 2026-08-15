@@ -33,8 +33,11 @@ Moves recorded during the feature
 
 PHASE 2 (T007-T024) — 244 -> 258 tests. No test lost. Every line below is a move or an addition.
 
-  MOVED, file only (name unchanged) — 12 tests
+  MOVED, file only (name unchanged) — 14 tests
       tests/invariants.rs::*  ->  tests/finalization.rs::*                            (T024)
+      score::tests::*  ->  finalize::score::tests::*                                  (T015)
+        Two tests, moved with score.rs into finalize/. Omitted from this entry when it was written and
+        added at T083, which is what T083 is for.
         The whole file. Renamed because what it tests is now a module rather than a property in the
         abstract: the invariant is enforced by finalization, so that is where its tests live.
         Every test also changed SHAPE -- see below -- but no name in the 001 inventory disappeared
@@ -221,8 +224,8 @@ PHASE 6 (T064-T069) — 316 -> 327 tests. No test lost.
 PHASE 7 (T070-T076) — 327 -> 337 tests. No test lost.
 
   MOVED, file only (names unchanged) — 21 tests
-      prefilter::tests::*        (7)  ->  matcher::prefilter::tests::*        (T072)
-      detect::pattern::tests::* (14)  ->  matcher::patterns::tests::*         (T073)
+      prefilter::tests::*        (9)  ->  matcher::prefilter::tests::*        (T072)
+      detect::pattern::tests::* (10)  ->  matcher::patterns::tests::*         (T073)
         Both modules moved into matcher/ and became PRIVATE to it. Their unit tests moved with them and
         are unchanged; the module path in the test name is the only difference.
 
@@ -248,6 +251,28 @@ PHASE 7 (T070-T076) — 327 -> 337 tests. No test lost.
   ruleset/mod.rs. The latter is `Ruleset::resolve` doing `rules[index] = rule` after `position()`, over a
   Vec it owns, inside one function -- created and consumed without reaching a caller. FR-140 forbids
   exchanging a position between components, not computing one.
+
+T083 VERIFICATION (SC-112) — no test was lost
+--------------------------------------------
+
+  Ran at the end of Phase 8, mechanically rather than by reading the notes above.
+
+      cargo test --workspace -- --list        244 names before, 337 after
+      27 names present before and absent after, each matched to a counterpart:
+
+        21  moved with their module, leaf name unchanged
+             10  detect::pattern::tests::*      -> matcher::patterns::tests::*        (T073)
+              9  prefilter::tests::*            -> matcher::prefilter::tests::*       (T072)
+              2  score::tests::*                -> finalize::score::tests::*          (T015)
+         5  renamed, each with its reason in the phase entries above
+         1  deleted, with its replacement named (compiled_validation_accepts_ordinary_rules)
+
+      NO unexplained disappearance. SC-112 holds.
+
+  The check corrected three errors in the records above, which is the argument for running it rather
+  than trusting them: two move counts were wrong (prefilter 7 -> 9, patterns 14 -> 10) and the
+  score::tests move was not recorded at all. A hand-maintained ledger drifts; the ledger plus a
+  mechanical diff does not.
 
 Verbatim listing
 ----------------

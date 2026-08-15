@@ -303,8 +303,16 @@ in each verdict.
   reviewable without executing them.
 - **FR-023**: The system MUST load rule sets at run time, and MUST allow a caller to supply
   additional rules and to disable built-in rules.
-- **FR-024**: The system MUST reject a malformed rule set with a diagnostic identifying the
-  offending rule, and MUST NOT proceed with a partially loaded rule set.
+- **FR-024**: The system MUST reject a malformed **or resource-exhausting** rule set with a diagnostic
+  identifying the offending rule, and MUST NOT proceed with a partially loaded rule set. A rule set MUST NOT
+  yield an executable scanning capability unless every caller-supplied rule has been proven to compile within
+  a stated resource budget.
+  > **Amended by feature 002 (FR-150).** As originally written this covered only *malformed* rule sets, and a
+  > resource-exhausting rule is not malformed: `a{1000}{1000}{1000}` is nineteen bytes of valid
+  > regular-expression syntax that `regex_syntax` accepts in microseconds and that compiles to an automaton
+  > with on the order of 10⁹ states. The implementation had the check — `Ruleset::validate_compiled` — but as
+  > a separate public call nothing invoked, so a requirement about malformedness described neither the threat
+  > nor the code. The second sentence is the part that had no requirement behind it.
 - **FR-025**: The system MUST ship a default rule set that requires no configuration to be useful.
 
 **Scan command**
@@ -381,9 +389,18 @@ in each verdict.
   false-positive rate is at most 1%, measured at the default threshold. The minimum set size is part
   of the criterion: a rate of 1% over fewer than 100 negatives silently means zero, which is a
   materially different and stricter bar than the one intended.
-- **SC-004**: 95% of scans of inputs up to 4 KB return a verdict within 10 milliseconds, and
-  sustained throughput is at least 10 MB per second, both measured on a single core of commodity
-  hardware.
+- **SC-004a** (warm, per scan): 95% of scans of inputs up to 4 KB return a verdict within 10 milliseconds,
+  and sustained throughput is at least 10 MB per second, both measured on a single core of commodity hardware,
+  with the engine already constructed.
+- **SC-004b** (cold start): process launch to first verdict, including rule-set preparation, completes within
+  25 milliseconds for the built-in rule set.
+  > **Amended by feature 002 (FR-151).** One criterion covering both was unfalsifiable in a useful way,
+  > because the two have different causes and different remedies. A warm scan is bounded by the matching
+  > engine and the match cap; cold start is bounded by how many patterns get compiled before the first
+  > verdict, which is why the built-in set is validated in CI and compiled lazily while caller-supplied rules
+  > are compiled once at preparation and retained. Measured at 002's Phase 3 checkpoint: preparing the
+  > built-in set costs ~489 µs and compiles nothing, against ~5.75 ms if every pattern is compiled. Merging
+  > the two numbers would have hidden the entire reason preparation is asymmetric.
 - **SC-005**: Measured cost grows no faster than linearly with input length across four orders of
   magnitude of input size.
 - **SC-006**: Fuzzing of at least one million generated inputs produces no crash, no hang, and no

@@ -217,17 +217,17 @@ assert no rule position appears.
 
 ## Phase 8: Polish & Amendments
 
-- [ ] T077 Amend FR-024 in `specs/001-structural-detection-cli/spec.md` to require rule-set resource limits (FR-150) — carried over from 001 and still open
-- [ ] T077a Record the **`plz --rules` gap** found at the Phase 3 checkpoint: quickstart Scenario 1 and 4 both invoke a CLI flag that does not exist, and 001's `ruleset_load.rs` documented it as already working. US1's guarantee is established at the library level across all seven construction paths; the CLI cannot yet load a caller's rule set at all. Amend `specs/001-structural-detection-cli/spec.md` where it implies otherwise, and note the flag as unbuilt in `docs/limits.md`
-- [ ] T078 Amend SC-004 in `specs/001-structural-detection-cli/spec.md` to state warm per-scan and cold-start budgets separately (FR-151)
-- [ ] T079 [P] Correct `specs/001-structural-detection-cli/contracts/core-api.md` where it no longer matches the implementation, including the cloneability claim and the two-tier validation split (FR-152)
-- [ ] T080 [P] Update `docs/limits.md` if any declared gap changed; this feature should add none
-- [ ] T081 [P] Update `docs/attribution.md` with this feature's authorship split
-- [ ] T082 Verify the dependency set is unchanged against `docs/002-dependency-baseline.txt`
-- [ ] T083 Verify no test was silently lost against `docs/002-test-inventory-before.txt`, recording every move (SC-112)
-- [ ] T084 Verify accuracy is unchanged against `docs/002-accuracy-baseline.txt` — **any movement is a defect in this feature, not a tuning result** (SC-113)
-- [ ] T085 Run the full `specs/002-trustworthy-core/quickstart.md` validation, all ten scenarios
-- [ ] T086 Verify every Constitution Check gate in `specs/002-trustworthy-core/plan.md` is discharged by a **passing mechanical check**, and record the commit that discharges each — the lesson from 001, where gates passed on the strength of design intent
+- [x] T077 Amend FR-024 in `specs/001-structural-detection-cli/spec.md` to require rule-set resource limits (FR-150) — carried over from 001 and still open
+- [x] T077a Record the **`plz --rules` gap** found at the Phase 3 checkpoint: quickstart Scenario 1 and 4 both invoke a CLI flag that does not exist, and 001's `ruleset_load.rs` documented it as already working. US1's guarantee is established at the library level across all seven construction paths; the CLI cannot yet load a caller's rule set at all. Amend `specs/001-structural-detection-cli/spec.md` where it implies otherwise, and note the flag as unbuilt in `docs/limits.md`
+- [x] T078 Amend SC-004 in `specs/001-structural-detection-cli/spec.md` to state warm per-scan and cold-start budgets separately (FR-151)
+- [x] T079 [P] Correct `specs/001-structural-detection-cli/contracts/core-api.md` where it no longer matches the implementation, including the cloneability claim and the two-tier validation split (FR-152) — five corrections made. **The cloneability claim was not there**: FR-152 names it, and `core-api.md` never asserted it (`Engine` derives `Debug` only, and the code comment beside it always said to share behind an `Arc`). The absence is recorded in the document rather than a correction invented for it
+- [x] T080 [P] Update `docs/limits.md` if any declared gap changed; this feature should add none — **it added four**, which the task did not anticipate: the displayed-vs-live problem in tool output, the whole-input-transform suppression bypass, the `p@ssword` false negative, and the missing `plz --rules` flag. Two amendments as well. The prediction assumed 002 would be purely structural; detection work landed at the examiner's direction
+- [x] T081 [P] Update `docs/attribution.md` with this feature's authorship split
+- [x] T082 Verify the dependency set is unchanged against `docs/002-dependency-baseline.txt`
+- [x] T083 Verify no test was silently lost against `docs/002-test-inventory-before.txt`, recording every move (SC-112)
+- [x] T084 Verify accuracy is unchanged against `docs/002-accuracy-baseline.txt` — **any movement is a defect in this feature, not a tuning result** (SC-113)
+- [x] T085 Run the full `specs/002-trustworthy-core/quickstart.md` validation, all ten scenarios — recorded in `docs/002-validation.md`. **Eight pass as written.** Scenario 1's CLI half is not runnable (`plz --rules` does not exist, T077a) and Scenario 2 is 8 of 10 combinations, both named rather than rounded up
+- [x] T086 Verify every Constitution Check gate in `specs/002-trustworthy-core/plan.md` is discharged by a **passing mechanical check**, and record the commit that discharges each — the lesson from 001, where gates passed on the strength of design intent
 
 ---
 

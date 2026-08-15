@@ -195,6 +195,30 @@ mapped back to the matching position first, since a whole-input candidate curren
 entire document, which is also why such a finding's excerpt is the document's first 256 bytes rather than the
 match. Both are worth doing; neither is done.
 
+## `plz` cannot load a caller's rule set
+
+**Status: unbuilt. Documented as working in two places, which is worse than absent.**
+
+`please-core` accepts caller-supplied rules by three routes, all validated (002 FR-102). The **CLI exposes
+none of them**: there is no `--rules` flag, and `plz` scans with the built-in rule set only.
+
+That would be an ordinary gap except that three artifacts describe it as working:
+
+* 002's `quickstart.md` Scenarios 1 and 4 both invoke `plz scan --rules …`. Scenario 1 is the primary
+  acceptance check for the resource-bomb defect. Neither is runnable; both now carry a note saying so.
+* 001's `ruleset_load.rs` carried a comment reading "Any caller accepting a rule set it did not ship must
+  call [`validate_compiled`] — which is exactly what the CLI does for `--rules`." Two claims, both false: the
+  CLI has no such flag, and nothing in the tree called that method.
+
+The guarantee the flag would need is in place and tested at the library level across all seven construction
+paths, which is a wider surface than one flag. What is missing is the flag, its file I/O, and its exit-code
+mapping. Feature 002 did not add it because no task covered it and it is a feature rather than part of closing
+the defect.
+
+The lesson is not about the flag. **Documentation asserting that an unbuilt thing works is how a guarantee
+comes to rest on nothing**, and this is the second instance in this codebase — the first being the CI check
+for built-in validation, which 002 had to add before the built-in fast path could be called sound.
+
 ## Risk band boundaries are provisional
 
 **Status: uncalibrated pending corpus metrics.**
