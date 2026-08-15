@@ -147,3 +147,11 @@ severity = 55
 literals = ["your available tools", "list your tools", "your tool schemas"]
 pattern = '(?i)\b(list|enumerate|describe|show)\b[^.\n]{0,25}\b(your )?(available )?tools?\b'
 description = "Enumeration of the agent's available tools — reconnaissance rather than an immediate payload."
+
+[[rule]]
+id = "boundary.forged_system_directive"
+class = "boundary"
+severity = 85
+literals = ["system override", "system_override", "system-override"]
+pattern = '(?i)\bsystem[ _-]?override\b'
+description = "Forged system-authority directive, impersonating a control-plane instruction."
