@@ -37,17 +37,17 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
     for reason in v.reasons() {
         out.push_str(&format!(
             "\n  {:<6} {:<34} bytes {}–{}\n",
-            severity_label(reason.severity),
-            reason.rule_id,
-            reason.span.start,
-            reason.span.end
+            severity_label(reason.severity()),
+            reason.rule_id(),
+            reason.span().start,
+            reason.span().end
         ));
-        out.push_str(&format!("         {:?}\n", reason.matched));
+        out.push_str(&format!("         {:?}\n", reason.matched()));
         if explain {
-            out.push_str(&format!("         {}\n", reason.description));
-            if !reason.chain.is_empty() {
+            out.push_str(&format!("         {}\n", reason.description()));
+            if !reason.chain().is_empty() {
                 let steps: Vec<String> = reason
-                    .chain
+                    .chain()
                     .iter()
                     .map(|t| format!("{:?} (depth {})", t.kind, t.depth))
                     .collect();
@@ -70,9 +70,9 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         let gaps: Vec<String> = v
             .incomplete()
             .iter()
-            .map(|i| match &i.detail {
-                Some(d) => format!("{} ({d})", i.cause.as_str()),
-                None => i.cause.as_str().to_string(),
+            .map(|i| match i.detail() {
+                Some(d) => format!("{} ({d})", i.cause().as_str()),
+                None => i.cause().as_str().to_string(),
             })
             .collect();
         out.push_str(&gaps.join("; "));

@@ -31,8 +31,56 @@ naming so T083's diff is unambiguous rather than merely explicable:
 Moves recorded during the feature
 ---------------------------------
 
-(T024, T072, T073 and any other task that relocates a test appends here: old path::name →
-new path::name, and why. Empty until the first move lands.)
+PHASE 2 (T007-T024) — 244 -> 258 tests. No test lost. Every line below is a move or an addition.
+
+  MOVED, file only (name unchanged) — 12 tests
+      tests/invariants.rs::*  ->  tests/finalization.rs::*                            (T024)
+        The whole file. Renamed because what it tests is now a module rather than a property in the
+        abstract: the invariant is enforced by finalization, so that is where its tests live.
+        Every test also changed SHAPE -- see below -- but no name in the 001 inventory disappeared
+        except the three noted under RENAMED.
+
+  RENAMED, with the reason — 3 tests
+      invariants.rs::not_clean_when_a_bound_was_hit_even_with_no_reasons
+        -> finalization.rs::not_clean_when_a_bound_was_hit_even_with_no_observations  (T024)
+        "reasons" is what a verdict reports; "observations" is what a detector records. The test now
+        constructs the latter, so the old name described the wrong end of the transition.
+
+      invariants.rs::verdict_cannot_be_constructed_outside_assemble
+        -> tests/compile_fail/only_finalization_produces_a_verdict.rs                 (T010, T024)
+        NOT a rename so much as a replacement, and the point of the feature. The old test asserted
+        nothing: it was a comment saying "uncommenting the following must fail to compile" plus a
+        call to each accessor. The claim is now made by a compile-fail case that actually fails.
+
+      detect::tests::a_reason_built_from_a_hit_is_sanitised
+        -> finalization.rs::an_excerpt_is_neutralised_on_the_way_into_a_reason         (T017)
+        It tested `Hit::into_reason`, which no longer exists. A detector cannot build a reason.
+
+  REWRITTEN IN PLACE, same names — 5 tests
+      decode::tests::depth_is_bounded_and_the_bound_is_reported                        (T021)
+      decode::tests::fan_out_is_bounded                                                (T021)
+      detect::pattern::tests::collection_stops_at_the_cap_and_says_so                  (T022)
+      detect::pattern::tests::a_zero_cap_still_reports_saturation_when_the_rule_would_match
+      detect::pattern::tests::an_uncompilable_pattern_is_reported_not_ignored          (T022)
+        Each asserted on a boolean or an `Err` that the caller had to translate into a coverage
+        judgement. They now assert on the gap the detector recorded, which is the same claim made
+        against what a caller actually receives.
+
+  ADDED — 14 tests
+      finalize::evidence::tests::*                                    4   (T011-T013)
+      finalize::plan::tests::*                                        3   (T014)
+      detect::pattern::tests::a_saturation_gap_names_the_rule_and_the_cap_that_stopped_it  (T022)
+      detect::pattern::tests::an_uncompilable_pattern_keeps_the_compilers_explanation      (T022)
+      finalization.rs::reasons_are_ordered_by_offset_then_rule_id         (T016)
+      finalization.rs::truncation_keeps_the_earliest_reasons_and_records_the_bound (T016)
+      finalization.rs::a_truncated_excerpt_is_recorded_as_a_coverage_gap  (T023)
+      finalization.rs::an_oversized_input_is_inconclusive_and_names_the_limit (T018)
+      finalization.rs::an_unreadable_target_is_inconclusive_and_never_skipped (T020)
+      compile_fail: 3 cases under one harness test, which the count above already includes (T010)
+
+  DELETED — none.
+
+(T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
 
 Verbatim listing
 ----------------

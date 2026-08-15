@@ -1,4 +1,4 @@
-//! Detection: turning input into reasons.
+//! Detection: turning input into observations.
 //!
 //! One module per detection class, and the dispatch that runs the active ones. Each class is
 //! independently addressable so it can be reported on, scored, and disabled in isolation (FR-015).
@@ -21,46 +21,17 @@ pub mod concealment;
 pub mod confusable;
 pub mod pattern;
 
-use crate::sanitize::sanitize_str;
+use crate::finalize::evidence::Observation;
+use crate::finalize::types::{DetectionClass, QuotingContext};
 use crate::structure::QuotingMap;
-use crate::verdict::{DetectionClass, Reason, Span, Transform};
 
-/// A finding before it becomes a [`Reason`] — the common currency every detector produces.
-#[derive(Debug, Clone)]
-pub struct Hit {
-    pub rule_id: String,
-    pub class: DetectionClass,
-    /// Span in the **original** input.
-    pub span: Span,
-    /// Content to show the reader. Sanitised on the way into a [`Reason`], not here.
-    pub matched: String,
-    pub severity: u8,
-    pub description: String,
-    pub chain: Vec<Transform>,
-}
-
-impl Hit {
-    /// Turn a hit into a reported reason, neutralising its excerpt.
-    ///
-    /// Sanitising here rather than at each display site is what makes FR-021 hold for every consumer,
-    /// including the ones that forget.
-    pub fn into_reason(self, max_excerpt: usize) -> (Reason, bool) {
-        let (matched, truncated) = sanitize_str(&self.matched, max_excerpt);
-        (
-            Reason {
-                rule_id: self.rule_id,
-                class: self.class,
-                span: self.span,
-                matched,
-                severity: self.severity,
-                chain: self.chain,
-                description: self.description,
-                suppressed_by: None,
-            },
-            truncated,
-        )
-    }
-}
+// The common currency every detector produces is `finalize::evidence::Observation`.
+//
+// It was `detect::Hit` in 001, defined here, with an `into_reason` method that sanitised the excerpt
+// and produced a `Reason`. Both the type and the method moved to `finalize` (T011, T017), and the direction of
+// the move is the argument: the transition from "what a detector saw" to "what the verdict says" is
+// finalization's decision, and it has to be, because the excerpt truncation it can cause is a coverage gap
+// that a detector has no vocabulary to record (FR-121, FR-122, FR-126).
 
 /// Structural detectors: concealment and confusables.
 ///
@@ -78,7 +49,7 @@ pub mod structural {
     const CONFUSABLE_SEVERITY: u8 = 60;
 
     /// Run the structural detectors over `input`.
-    pub fn scan(input: &[u8]) -> Vec<Hit> {
+    pub fn scan(input: &[u8]) -> Vec<Observation> {
         let mut hits = Vec::new();
 
         for found in concealment::scan(input) {
@@ -90,7 +61,7 @@ pub mod structural {
                 }
                 _ => format!("{} {}", found.count, found.kind.as_str()),
             };
-            hits.push(Hit {
+            hits.push(Observation {
                 rule_id: format!("concealment.{}", kind_slug(found.kind)),
                 class: DetectionClass::Concealment,
                 span: found.span,
@@ -105,7 +76,7 @@ pub mod structural {
         }
 
         for found in confusable::scan(input) {
-            hits.push(Hit {
+            hits.push(Observation {
                 rule_id: "confusable.homoglyph_token".to_string(),
                 class: DetectionClass::Confusable,
                 span: found.span,
@@ -142,10 +113,10 @@ pub mod structural {
 /// `fires_in_quotes` on a rule opts it out: a rule matching a mechanism rather than a phrase should still
 /// fire inside a code block.
 pub fn apply_suppression(
-    hits: Vec<Hit>,
+    hits: Vec<Observation>,
     quoting: &QuotingMap,
     fires_in_quotes: impl Fn(&str) -> bool,
-) -> (Vec<Hit>, Vec<(Hit, crate::verdict::QuotingContext)>) {
+) -> (Vec<Observation>, Vec<(Observation, QuotingContext)>) {
     let mut kept = Vec::new();
     let mut suppressed = Vec::new();
 
@@ -162,6 +133,7 @@ pub fn apply_suppression(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::finalize::types::Span;
 
     #[test]
     fn structural_detectors_report_concealment_with_recovered_text() {
@@ -196,8 +168,8 @@ mod tests {
         assert!(structural::scan("这是一个测试 café".as_bytes()).is_empty());
     }
 
-    fn hit(rule_id: &str, start: usize) -> Hit {
-        Hit {
+    fn hit(rule_id: &str, start: usize) -> Observation {
+        Observation {
             rule_id: rule_id.to_string(),
             class: DetectionClass::Override,
             span: Span::new(start, start + 6),
@@ -246,12 +218,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_reason_built_from_a_hit_is_sanitised() {
-        let mut h = hit("override.x", 0);
-        h.matched = "ignore\u{1b}[2J\u{202e}".to_string();
-        let (reason, _) = h.into_reason(256);
-        assert!(!reason.matched.contains('\u{1b}'));
-        assert!(!reason.matched.contains('\u{202e}'));
-    }
+    // `a_reason_built_from_a_hit_is_sanitised` moved to tests/finalization.rs as
+    // `an_excerpt_is_neutralised_on_the_way_into_a_reason` (T017). It tested `Hit::into_reason`, which no
+    // longer exists here — a detector cannot build a reason, which is the point. See
+    // docs/002-test-inventory-before.txt for the record of the move.
 }

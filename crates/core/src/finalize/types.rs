@@ -5,12 +5,32 @@
 //! that ran out of budget, hit an unreadable target, or lost a decoder is [`Outcome::Inconclusive`],
 //! never clean (FR-004, SC-007).
 //!
-//! That guarantee is enforced structurally rather than by convention. [`Verdict`]'s fields are private
-//! and its only constructor is [`Verdict::assemble`], so there is no way for a caller — or for a
-//! future detector in this crate — to hand back a clean verdict alongside a recorded gap in coverage.
-//! A rule you can bypass by writing a struct literal is not an invariant, it is a suggestion.
-
-use crate::policy::ScanPolicy;
+//! That guarantee is enforced structurally rather than by convention. [`Verdict`]'s fields are private and
+//! its only constructor is visible only to [`crate::finalize`], so there is no way for a caller — or for a
+//! detector in this crate — to hand back a clean verdict alongside a recorded gap in coverage. A rule you
+//! can bypass by writing a struct literal is not an invariant, it is a suggestion.
+//!
+//! # Why these types live inside `finalize`
+//!
+//! This file was `crates/core/src/verdict.rs` until feature 002 (T007). It moved without a single
+//! change to any type, and the move is the whole point.
+//!
+//! 001 made `Verdict`'s *fields* private, which stops a caller from fabricating an outcome — but it
+//! left `Verdict::assemble`, `Reason`, and `Incompleteness` fully public, so any module in the crate
+//! could still mint a finding or declare a coverage gap. Three places in `engine.rs` did exactly that.
+//! Feature 002 narrows those constructors to `pub(super)` (T008), which makes finalization the only
+//! module that can produce a verdict — enforced by the compiler rather than by review (FR-120, FR-121,
+//! SC-108).
+//!
+//! `pub(super)` is why the types are *here* rather than in a sibling module. Rust has no way to say
+//! "visible to `crate::finalize` only" from outside that tree: a `pub(in crate::finalize)` item written
+//! in a module that is not a descendant of `crate::finalize` does not compile, because the path in a
+//! visibility qualifier must name an ancestor of the item. A module that must be the sole producer of a
+//! type therefore has to be the module the type is defined in. Research P3 records the two alternatives
+//! that do not work.
+//!
+//! Everything is re-exported from the crate root and through `please_core::verdict`, so no embedder
+//! has to know any of this happened.
 
 /// A half-open byte range into the **original** input.
 ///
@@ -162,26 +182,96 @@ pub struct Transform {
 /// One supporting observation within a verdict (FR-002).
 ///
 /// A verdict without these is an assertion; with them it is evidence.
+///
+/// Fields are private and the constructor is `pub(super)`, so only finalization can mint one (FR-121,
+/// SC-108). The field this protects hardest is [`matched`](Self::matched): an excerpt is neutralised on
+/// the way in here and nowhere else, so a `Reason` that exists is a `Reason` whose excerpt is safe to
+/// print. While a detector could build one, that was a property of every detector remembering to call
+/// `sanitize_str` — and 001 had a detector-side helper that did it, which is not the same thing as being
+/// unable to skip it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reason {
+    rule_id: String,
+    class: DetectionClass,
+    span: Span,
+    matched: String,
+    severity: u8,
+    chain: Vec<Transform>,
+    description: String,
+    suppressed_by: Option<QuotingContext>,
+}
+
+impl Reason {
+    /// Build a reason. Visible to finalization only.
+    ///
+    /// Takes an already-neutralised excerpt, because the neutralisation happens in the caller
+    /// (`finalize::into_reason`) where the truncation it may cause can be recorded as a coverage gap. A
+    /// function that both sanitised and reported would have to either swallow that fact or return it,
+    /// and returning it is what the caller does.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new(
+        rule_id: String,
+        class: DetectionClass,
+        span: Span,
+        matched: String,
+        severity: u8,
+        chain: Vec<Transform>,
+        description: String,
+        suppressed_by: Option<QuotingContext>,
+    ) -> Self {
+        Self {
+            rule_id,
+            class,
+            span,
+            matched,
+            severity,
+            chain,
+            description,
+            suppressed_by,
+        }
+    }
+
     /// Namespaced rule identifier, e.g. `override.ignore_previous`. Also the suppression handle.
-    pub rule_id: String,
-    pub class: DetectionClass,
-    pub span: Span,
+    pub fn rule_id(&self) -> &str {
+        &self.rule_id
+    }
+
+    pub fn class(&self) -> DetectionClass {
+        self.class
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
     /// Excerpt of the matching content, **already neutralised** (FR-021).
     ///
-    /// Sanitised at this boundary rather than at each display site, so the guarantee holds for every
-    /// consumer including the ones that forget. Sanitise the payload, then style it — never the
+    /// Sanitised on the way into this type rather than at each display site, so the guarantee holds for
+    /// every consumer including the ones that forget. Sanitise the payload, then style it — never the
     /// reverse.
-    pub matched: String,
-    pub severity: u8,
+    pub fn matched(&self) -> &str {
+        &self.matched
+    }
+
+    pub fn severity(&self) -> u8 {
+        self.severity
+    }
+
     /// Empty for a direct match; populated when the match came out of decoded content.
-    pub chain: Vec<Transform>,
+    pub fn chain(&self) -> &[Transform] {
+        &self.chain
+    }
+
     /// Why this rule exists, carried from the rule so a finding explains itself without a lookup.
-    pub description: String,
-    /// Present only when a quoting context would normally have suppressed this reason and
-    /// suppression was disabled by policy.
-    pub suppressed_by: Option<QuotingContext>,
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+
+    /// Present only when a quoting context would normally have suppressed this reason and suppression
+    /// was disabled by policy.
+    pub fn suppressed_by(&self) -> Option<QuotingContext> {
+        self.suppressed_by
+    }
 }
 
 /// Why some part of the input went unexamined (FR-003, FR-007, FR-017, FR-018, FR-032a).
@@ -238,42 +328,39 @@ impl IncompleteCause {
     }
 }
 
-/// One thing the scan did not examine.
+/// One thing the scan did not examine, **as reported in a verdict**.
+///
+/// Sealed like [`Reason`]: fields private, constructor `pub(super)`. What a detector records is a
+/// [`CoverageGap`](super::evidence::CoverageGap), which carries the same information with public
+/// constructors and reaches a verdict only by way of the evidence accumulator. Two types for one fact,
+/// distinguished by who may create one — that module explains why at length (FR-122).
+///
+/// The `with_detail` builder from 001 is gone. Every one of the five call sites used it immediately after
+/// `bound()`, which means the two-step construction existed only to make the detail forgettable; the gap
+/// constructors now require it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Incompleteness {
-    pub cause: IncompleteCause,
-    /// The value in force when a bound was reached, so a caller can raise it deliberately. Present
-    /// for bounds, absent for failures.
-    pub configured: Option<u64>,
-    /// What went unexamined — which rule saturated, which region was skipped, why a target could not
-    /// be read.
-    pub detail: Option<String>,
+    pub(super) cause: IncompleteCause,
+    pub(super) configured: Option<u64>,
+    pub(super) detail: Option<String>,
 }
 
 impl Incompleteness {
-    /// A bound that was reached, with the configured value that stopped analysis.
-    pub fn bound(cause: IncompleteCause, configured: u64) -> Self {
-        debug_assert!(cause.is_bound(), "{cause:?} is not a bound");
-        Self {
-            cause,
-            configured: Some(configured),
-            detail: None,
-        }
+    /// Why this part of the input went unexamined.
+    pub fn cause(&self) -> IncompleteCause {
+        self.cause
     }
 
-    /// An environmental failure, with a human-readable explanation.
-    pub fn failure(cause: IncompleteCause, detail: impl Into<String>) -> Self {
-        debug_assert!(!cause.is_bound(), "{cause:?} is a bound, not a failure");
-        Self {
-            cause,
-            configured: None,
-            detail: Some(detail.into()),
-        }
+    /// The value in force when a bound was reached, so a caller can raise it deliberately. Present for
+    /// bounds, absent for failures.
+    pub fn configured(&self) -> Option<u64> {
+        self.configured
     }
 
-    pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
-        self.detail = Some(detail.into());
-        self
+    /// What went unexamined — which rule saturated, which region was skipped, why a target could not be
+    /// read.
+    pub fn detail(&self) -> Option<&str> {
+        self.detail.as_deref()
     }
 }
 
@@ -351,27 +438,16 @@ impl EngineId {
     }
 }
 
-/// The inputs to [`Verdict::assemble`].
-///
-/// A struct rather than eight positional parameters: the fields are easy to transpose and a
-/// transposed `score`/`severity` pair would be a silent scoring bug rather than a compile error.
-#[derive(Debug, Clone)]
-pub struct VerdictParts {
-    /// Aggregate score, computed over **every** match found before truncation (FR-001b).
-    pub score: u8,
-    pub risk: RiskLevel,
-    pub reasons: Vec<Reason>,
-    pub reasons_truncated: bool,
-    pub incomplete: Vec<Incompleteness>,
-    pub target: TargetRef,
-    pub ruleset: RulesetId,
-    pub engine: EngineId,
-}
-
 /// The complete result of one scan.
 ///
-/// Fields are private on purpose. [`Verdict::assemble`] is the only constructor, which makes it the
-/// single place the [`Outcome::Clean`] invariant is decided — see the module documentation.
+/// Fields are private and [`Verdict::new`] is `pub(super)`, so [`crate::finalize`] is the only module
+/// that can produce one — which makes it the single place the [`Outcome::Clean`] invariant is decided
+/// (FR-120, and see the module documentation).
+///
+/// 001 had a public `assemble` taking a `VerdictParts` struct, and three callers in `engine.rs`. The
+/// parts struct is deleted (T020): it carried the reasons and the coverage gaps, so anyone able to build
+/// one was deciding what the verdict said, and privacy on `Verdict`'s own fields bought nothing against
+/// a caller who could hand in whatever evidence they liked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     outcome: Outcome,
@@ -386,62 +462,32 @@ pub struct Verdict {
 }
 
 impl Verdict {
-    /// Derive the outcome from the evidence and build the verdict.
+    /// Store an already-decided verdict. Visible to finalization only.
     ///
-    /// **This is the single point where the [`Outcome::Clean`] invariant is decided** (FR-004,
-    /// FR-032b). Every other path into a `Verdict` goes through here, which is the entire reason the
-    /// fields are private.
+    /// Deliberately dumb: it derives nothing and validates nothing. Deciding the outcome, ordering the
+    /// reasons, and truncating them all happen in [`crate::finalize`], which is where the whole sequence
+    /// is visible at once and where the ordering has to precede the truncation.
     ///
-    /// The order of the three branches is the design:
-    ///
-    /// 1. Any reason at all makes this `RiskFound`, **even if coverage was also incomplete**. A scan
-    ///    that found a real payload and then ran out of budget has still found a real payload;
-    ///    downgrading it to inconclusive would discard a confirmed detection. The gap stays visible in
-    ///    [`Verdict::incomplete`] so the caller knows the finding may not be the only one.
-    /// 2. Otherwise, anything left unexamined makes this `Inconclusive`. "Found nothing" and "looked
-    ///    at nothing" are indistinguishable from the outside, so they must not collapse into the same
-    ///    outcome.
-    /// 3. Only with both empty is the verdict `Clean`.
-    pub fn assemble(parts: VerdictParts) -> Self {
-        let VerdictParts {
-            score,
-            risk,
-            mut reasons,
-            reasons_truncated,
-            incomplete,
-            target,
-            ruleset,
-            engine,
-        } = parts;
-
-        let outcome = if !reasons.is_empty() {
-            Outcome::RiskFound
-        } else if !incomplete.is_empty() {
-            Outcome::Inconclusive
-        } else {
-            Outcome::Clean
-        };
-
-        // A verdict with no reasons has nothing for a score to summarise, so any score handed in is
-        // discarded rather than reported. Trusting the caller here would let a scoring bug surface as
-        // a confusing "clean, score 42" verdict instead of as a failing test.
-        let (score, risk) = match outcome {
-            Outcome::Clean | Outcome::Inconclusive => (0, RiskLevel::None),
-            Outcome::RiskFound => (score, risk),
-        };
-
-        // Total order over reasons: byte offset, then rule id as the tie-break. Deterministic output
-        // is a requirement rather than a nicety (FR-030, SC-011) — it is what lets a caller cache a
-        // verdict and diff it in CI. Sorting by *offset* rather than by severity is also why the score
-        // must be aggregated before truncation (FR-001b): truncating an offset-ordered list can drop
-        // the highest-severity finding.
-        reasons.sort_by(|a, b| {
-            a.span
-                .start
-                .cmp(&b.span.start)
-                .then_with(|| a.rule_id.cmp(&b.rule_id))
-        });
-
+    /// 001's `assemble` did the deriving *and* the sorting here, in the type. That reads as defensive —
+    /// the invariant lives with the data — but it split the sequence across two files: `engine.rs` had to
+    /// sort before truncating, then `assemble` sorted again because it could not know whether the caller
+    /// had. Two sorts and one authority is worse than one sort and one authority.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn new(
+        outcome: Outcome,
+        score: u8,
+        risk: RiskLevel,
+        reasons: Vec<Reason>,
+        reasons_truncated: bool,
+        incomplete: Vec<Incompleteness>,
+        target: TargetRef,
+        ruleset: RulesetId,
+        engine: EngineId,
+    ) -> Self {
+        debug_assert!(
+            outcome != Outcome::Clean || (reasons.is_empty() && incomplete.is_empty()),
+            "FR-004: a clean verdict requires no reasons and no coverage gaps",
+        );
         Self {
             outcome,
             score,
@@ -533,33 +579,4 @@ impl Verdict {
             }
         }
     }
-
-    /// A verdict for a target that could not be read (FR-032a).
-    ///
-    /// Lives here rather than in the CLI because the core never opens a file, so the *caller* doing
-    /// the I/O has to produce this — and it must be trivial to produce correctly. Skipping the file
-    /// instead is the one thing that must not happen.
-    pub fn unreadable_target(
-        target: TargetRef,
-        detail: impl Into<String>,
-        ruleset: RulesetId,
-    ) -> Self {
-        Self::assemble(VerdictParts {
-            score: 0,
-            risk: RiskLevel::None,
-            reasons: Vec::new(),
-            reasons_truncated: false,
-            incomplete: vec![Incompleteness::failure(
-                IncompleteCause::TargetUnreadable,
-                detail,
-            )],
-            target,
-            ruleset,
-            engine: EngineId::current(),
-        })
-    }
 }
-
-/// Reserved for the scan pipeline (T032); referenced here so the policy module is wired in.
-#[allow(dead_code)]
-fn _policy_is_reachable(_: &ScanPolicy) {}

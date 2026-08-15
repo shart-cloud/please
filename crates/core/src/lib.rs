@@ -31,17 +31,31 @@ pub mod prefilter;
 pub mod prepare;
 pub mod ruleset;
 pub mod sanitize;
-pub mod score;
 pub mod structure;
-pub mod verdict;
+
+/// Score aggregation and banding.
+///
+/// Moved into [`finalize::score`] by T015: deriving a score is part of turning evidence into a verdict,
+/// and leaving it outside meant a caller could compute a score over one collection and report reasons
+/// from another. Aliased so `please_core::score` keeps working.
+pub use finalize::score;
+
+/// The verdict model.
+///
+/// The types themselves live in [`finalize::types`], because finalization has to be the only module
+/// that can construct one and Rust cannot grant construction rights to a sibling module — see that
+/// module's documentation for the full argument. This alias exists so the move is invisible from
+/// outside: `please_core::verdict::Verdict` names what it always named.
+pub use finalize::types as verdict;
 
 pub use engine::{Engine, EngineBuilder};
+pub use finalize::evidence::{CoverageGap, Evidence, Observation};
+pub use finalize::plan::{Bounds, ScanPlan};
 pub use policy::ScanPolicy;
 pub use ruleset::{Rule, Ruleset, RulesetError, RulesetLimits};
 pub use verdict::{
     DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, QuotingContext, Reason,
     RiskLevel, RulesetId, Span, TargetKind, TargetRef, Transform, TransformKind, Verdict,
-    VerdictParts,
 };
 
 /// Engine name reported in every verdict's `engine` field (FR-005).

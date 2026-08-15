@@ -95,7 +95,7 @@ fn every_declared_expected_class_actually_fires() {
         let fired: Vec<String> = verdict
             .reasons()
             .iter()
-            .map(|r| r.class.as_str().to_string())
+            .map(|r| r.class().as_str().to_string())
             .collect();
         for expected in &case.expected_classes {
             if !fired.contains(expected) {
@@ -145,7 +145,7 @@ fn the_false_positive_rate_is_within_budget() {
                 verdict
                     .reasons()
                     .iter()
-                    .map(|r| r.rule_id.as_str())
+                    .map(|r| r.rule_id())
                     .collect::<Vec<_>>()
             );
             eprintln!("      why benign: {}", case.notes);
@@ -196,25 +196,28 @@ fn every_finding_is_actionable() {
     for case in load_all_cases() {
         let verdict = scan(&engine, &case);
         for reason in verdict.reasons() {
-            if reason.rule_id.is_empty() {
+            if reason.rule_id().is_empty() {
                 defects.push(format!("{}: reason with no rule id", case.id));
             }
-            if reason.span.end <= reason.span.start {
+            if reason.span().end <= reason.span().start {
                 defects.push(format!(
                     "{}: reason `{}` has an empty span",
-                    case.id, reason.rule_id
+                    case.id,
+                    reason.rule_id()
                 ));
             }
-            if reason.description.trim().is_empty() {
+            if reason.description().trim().is_empty() {
                 defects.push(format!(
                     "{}: reason `{}` has no description",
-                    case.id, reason.rule_id
+                    case.id,
+                    reason.rule_id()
                 ));
             }
-            if reason.matched.is_empty() {
+            if reason.matched().is_empty() {
                 defects.push(format!(
                     "{}: reason `{}` has no excerpt",
-                    case.id, reason.rule_id
+                    case.id,
+                    reason.rule_id()
                 ));
             }
         }
@@ -235,14 +238,15 @@ fn no_excerpt_leaks_a_raw_control_or_invisible_character() {
     for case in load_all_cases() {
         let verdict = scan(&engine, &case);
         for reason in verdict.reasons() {
-            for ch in reason.matched.chars() {
+            for ch in reason.matched().chars() {
                 let code = ch as u32;
                 let dangerous = matches!(code, 0x00..=0x08 | 0x0B | 0x0C | 0x0E..=0x1F | 0x7F..=0x9F)
                     || matches!(code, 0x200B..=0x200F | 0x202A..=0x202E | 0xE0000..=0xE007F);
                 assert!(
                     !dangerous,
                     "{}: excerpt for `{}` leaked U+{code:04X}",
-                    case.id, reason.rule_id
+                    case.id,
+                    reason.rule_id()
                 );
             }
         }

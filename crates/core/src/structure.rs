@@ -24,7 +24,7 @@
 //! adoption, while this false negative costs one evasion route among several that the structural tier
 //! already cannot see.
 
-use crate::verdict::QuotingContext;
+use crate::finalize::types::QuotingContext;
 
 /// Byte ranges in which matches are suppressed by default.
 #[derive(Debug, Default)]

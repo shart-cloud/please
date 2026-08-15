@@ -30,7 +30,7 @@
 //! what the tests pin down, so retuning these numbers during calibration will not silently change the
 //! formula's character.
 
-use crate::verdict::DetectionClass;
+use super::types::DetectionClass;
 
 /// Added per distinct detection class beyond the highest-scoring one.
 pub const BONUS_PER_CLASS: u8 = 5;

@@ -30,7 +30,7 @@
 mod parse;
 mod validate;
 
-use crate::verdict::{DetectionClass, RiskLevel, RulesetId};
+use crate::finalize::types::{DetectionClass, RiskLevel, RulesetId};
 
 /// Resource limits enforced when a rule set is loaded.
 ///

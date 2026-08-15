@@ -16,7 +16,7 @@
 //! fabricated decoding is not, and in a security tool the difference matters more than the extra coverage
 //! would be worth.
 
-use crate::verdict::Span;
+use crate::finalize::types::Span;
 
 /// Runs of tag-block characters, as `(span_in_input, recovered_ascii)`.
 ///

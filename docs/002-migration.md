@@ -12,10 +12,10 @@ reason, recorded under "Reconciliation" below.
 | Phase | Research step | What lands | Behaviour |
 |---|---|---|---|
 | 1 | — | Baselines: accuracy, test inventory, dependency set. Compile-fail harness. Module skeletons | preserving |
-| 2 | 1, 2, 3 | `finalize` with the verdict types inside it; all three construction sites routed through it; `Evidence`; `ScanPlan`; gaps recorded at the point they occur | preserving |
+| 2 | 1, 2, 3, 9 (verdict half) | `finalize` with the verdict types inside it; all three construction sites routed through it; `Evidence`; `ScanPlan`; gaps recorded at the point they occur; **verdict constructors sealed** | preserving |
 | 3 | 4 | **Preparation enforces compiled validation on caller-supplied rules** | **changes** |
 | 4 | 5 | **The `Encoding` class is removed; one class filter, in the plan** | **changes** |
-| 5 | 7, 8, 9 (verdict half) | Parallel hit collection deleted; duplicate ordering deleted; verdict constructors sealed | preserving |
+| 5 | 7, 8 | Parallel hit collection deleted; duplicate ordering deleted; the seal verified | preserving |
 | 6 | — | Suppression retained and reportable | preserving¹ |
 | 7 | 6 | `prefilter` and `patterns` merge into `matcher`; the index space becomes private | preserving |
 | 8 | — | Amendments to 001's specs, and the verification tasks | preserving |
@@ -69,13 +69,34 @@ claims.
 
 Two apparent divergences, both deliberate.
 
-**Sealing is research step 9, but lands in Phase 5, before Phase 7's matcher merge.** "Sealing last"
-means *after every construction site is gone*, not *after every other task in the feature*. What T063
-seals is verdict construction. Phase 7 moves the prefilter and the pattern store into `matcher` and
-its output is observations — by the end of Phase 5 nothing outside finalization builds a `Reason`, so
-Phase 7 has nothing to seal against and is unaffected. The other half of step 9 — provenance kept
-private, `validate_compiled` removed from the public surface — lands with Phase 3, because those
-constructors are *created* sealed rather than sealed after the fact.
+**Sealing is research step 9, and landed in Phase 2.** This is the one place the plan and the code
+disagree, and the code is right.
+
+"Sealing last" means *after every construction site outside finalization is gone*. The tasks that
+remove those sites are T017 (the observation-to-reason transition moves into finalization), T018–T020
+(the three verdict-construction sites in `engine.rs` are routed through it), and T021–T023 (gaps are
+recorded at the point they occur instead of translated by the caller). **All six are Phase 2.** By the
+end of that phase the precondition is met, so waiting until Phase 5 would mean three phases in which
+the guarantee was available and declined — and any new code written in Phases 3 and 4 could
+reintroduce a construction site that compiled fine.
+
+So T008 sealed `Verdict::new`, `Reason`, and `Incompleteness` at the end of Phase 2, and T063 in Phase
+5 becomes a *verification* task: confirm the seal still holds after the churn of Phases 3–5, and that
+the compile-fail cases still fail for the reason they name. That is the strictly better ordering,
+because from Phase 3 onward the compiler polices the invariant instead of us.
+
+The red-green discipline survives. All three compile-fail cases were written first (T010) and
+confirmed failing with *"Expected test case to fail to compile, but it succeeded"* — the guarantee was
+provably absent — before T008 made them pass.
+
+One lesson worth recording. The cases started as a single file asserting all three claims, and it
+passed for the wrong reason: `rustc` stops at the first name-resolution failure, so the missing
+`VerdictParts` import masked whether the `Reason` literal would have been rejected at all. Splitting
+into one case per claim is what makes each `.stderr` file pin the diagnostic it says it pins.
+
+The other half of step 9 — provenance kept private, `validate_compiled` removed from the public
+surface — still lands with Phase 3, because those constructors are *created* sealed rather than sealed
+after the fact.
 
 **The matcher merge is research step 6, but lands in Phase 7, after steps 7–8.** Steps 7 and 8 delete
 duplicated logic in `engine.rs` (the parallel hit collection, the second reason sort). The matcher

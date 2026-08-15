@@ -1,0 +1,11 @@
+error[E0451]: fields `cause`, `configured` and `detail` of struct `Incompleteness` are private
+ --> tests/compile_fail/detector_cannot_declare_a_coverage_gap.rs
+  |
+  |     let _gap = Incompleteness {
+  |                -------------- in this type
+  |         cause: IncompleteCause::DecodeDepth,
+  |         ^^^^^ private field
+  |         configured: Some(3),
+  |         ^^^^^^^^^^ private field
+  |         detail: Some("invented, with no decoder involved".to_string()),
+  |         ^^^^^^ private field

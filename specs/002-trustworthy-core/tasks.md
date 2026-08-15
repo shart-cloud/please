@@ -49,24 +49,24 @@ migration steps 1–3 from research P7.
 
 **⚠️ CRITICAL**: Both P1 defects are fixed inside this structure, so none of US1 or US2 can start until this is complete.
 
-- [ ] T007 Move `Verdict`, `Reason`, `Incompleteness`, `Span`, `Outcome`, `RiskLevel`, `DetectionClass`, `Transform`, `TargetRef`, `RulesetId`, `EngineId`, and `QuotingContext` from `crates/core/src/verdict.rs` into `crates/core/src/finalize/types.rs`, unchanged
-- [ ] T008 Change every constructor in `crates/core/src/finalize/types.rs` to `pub(super)`, keeping all accessors public (research P3 — a sibling module cannot be granted construction rights, so the types must live here)
-- [ ] T009 Re-export the verdict types from `crates/core/src/lib.rs` so embedders name them unchanged, and delete `crates/core/src/verdict.rs`
-- [ ] T010 [P] Write failing compile-fail cases asserting a detector cannot construct a `Reason`, an `Incompleteness`, or a `Verdict`, in `crates/core/tests/compile_fail/detector_cannot_construct.rs` (SC-108)
-- [ ] T011 Define `Observation` — rule id, one class, span, matched content, severity, chain — in `crates/core/src/finalize/evidence.rs` per [data-model.md](./data-model.md)
-- [ ] T012 Define `CoverageGap` with the shared cause vocabulary, replacing the four detector-specific shapes, in `crates/core/src/finalize/evidence.rs`
-- [ ] T013 Define the `Evidence` accumulator with **write-only** record operations for detectors and read access restricted to finalization, in `crates/core/src/finalize/evidence.rs` (FR-122, FR-124)
-- [ ] T014 Define `ScanPlan` resolving active classes, participating rules, and bounds **once**, in `crates/core/src/finalize/plan.rs` (FR-129)
-- [ ] T015 Move score aggregation and banding from `crates/core/src/score.rs` to `crates/core/src/finalize/score.rs`
-- [ ] T016 Move the verdict-assembly logic into `crates/core/src/finalize/mod.rs` as the single producer, taking `Evidence` and producing a `Verdict` (FR-120)
-- [ ] T017 Move the observation-to-reason transition, including excerpt neutralisation, from `crates/core/src/detect/mod.rs` into `crates/core/src/finalize/mod.rs` (FR-126)
-- [ ] T018 Route the size-gate construction site in `crates/core/src/engine.rs` through finalization instead of building a verdict directly
-- [ ] T019 Route the main construction site in `crates/core/src/engine.rs` through finalization
-- [ ] T020 Route the unreadable-target construction site through finalization and delete `VerdictParts` entirely, in `crates/core/src/finalize/types.rs` and `crates/core/src/engine.rs` (FR-120 — three producers become one)
-- [ ] T021 Replace `Expansion`'s `depth_exceeded` and `fanout_exceeded` with direct gap recording at the point each bound is hit, in `crates/core/src/decode/mod.rs` (FR-123 — the gap judgement leaves the decoder)
-- [ ] T022 Replace `RuleMatches::saturated` with direct gap recording in `crates/core/src/detect/pattern.rs`
-- [ ] T023 Replace the excerpt-truncation boolean with direct gap recording at the neutralisation site, in `crates/core/src/finalize/mod.rs` and `crates/core/src/sanitize.rs` (FR-122)
-- [ ] T024 Move every test from `crates/core/tests/invariants.rs` to `crates/core/tests/finalization.rs`, rewriting them against constructed evidence rather than a constructed verdict, and delete `invariants.rs` — recording the move in `docs/002-test-inventory-before.txt` (SC-112)
+- [x] T007 Move `Verdict`, `Reason`, `Incompleteness`, `Span`, `Outcome`, `RiskLevel`, `DetectionClass`, `Transform`, `TargetRef`, `RulesetId`, `EngineId`, and `QuotingContext` from `crates/core/src/verdict.rs` into `crates/core/src/finalize/types.rs`, unchanged
+- [x] T008 Change every constructor in `crates/core/src/finalize/types.rs` to `pub(super)`, keeping all accessors public (research P3 — a sibling module cannot be granted construction rights, so the types must live here)
+- [x] T009 Re-export the verdict types from `crates/core/src/lib.rs` so embedders name them unchanged, and delete `crates/core/src/verdict.rs`
+- [x] T010 [P] Write failing compile-fail cases asserting a detector cannot construct a `Reason`, an `Incompleteness`, or a `Verdict` — **one file per claim** in `crates/core/tests/compile_fail/`, because `rustc` stops at the first name-resolution error and a combined case passes for the wrong reason (SC-108)
+- [x] T011 Define `Observation` — rule id, one class, span, matched content, severity, chain — in `crates/core/src/finalize/evidence.rs` per [data-model.md](./data-model.md)
+- [x] T012 Define `CoverageGap` with the shared cause vocabulary, replacing the four detector-specific shapes, in `crates/core/src/finalize/evidence.rs`
+- [x] T013 Define the `Evidence` accumulator with **write-only** record operations for detectors and read access restricted to finalization, in `crates/core/src/finalize/evidence.rs` (FR-122, FR-124)
+- [x] T014 Define `ScanPlan` resolving active classes, participating rules, and bounds **once**, in `crates/core/src/finalize/plan.rs` (FR-129)
+- [x] T015 Move score aggregation and banding from `crates/core/src/score.rs` to `crates/core/src/finalize/score.rs`
+- [x] T016 Move the verdict-assembly logic into `crates/core/src/finalize/mod.rs` as the single producer, taking `Evidence` and producing a `Verdict` (FR-120)
+- [x] T017 Move the observation-to-reason transition, including excerpt neutralisation, from `crates/core/src/detect/mod.rs` into `crates/core/src/finalize/mod.rs` (FR-126)
+- [x] T018 Route the size-gate construction site in `crates/core/src/engine.rs` through finalization instead of building a verdict directly
+- [x] T019 Route the main construction site in `crates/core/src/engine.rs` through finalization
+- [x] T020 Route the unreadable-target construction site through finalization and delete `VerdictParts` entirely, in `crates/core/src/finalize/types.rs` and `crates/core/src/engine.rs` (FR-120 — three producers become one)
+- [x] T021 Replace `Expansion`'s `depth_exceeded` and `fanout_exceeded` with direct gap recording at the point each bound is hit, in `crates/core/src/decode/mod.rs` (FR-123 — the gap judgement leaves the decoder)
+- [x] T022 Replace `RuleMatches::saturated` with direct gap recording in `crates/core/src/detect/pattern.rs`
+- [x] T023 Replace the excerpt-truncation boolean with direct gap recording at the neutralisation site, in `crates/core/src/finalize/mod.rs` and `crates/core/src/sanitize.rs` (FR-122)
+- [x] T024 Move every test from `crates/core/tests/invariants.rs` to `crates/core/tests/finalization.rs`, rewriting them against constructed evidence rather than a constructed verdict, and delete `invariants.rs` — recording the move in `docs/002-test-inventory-before.txt` (SC-112)
 
 **Checkpoint**: One verdict producer, one gap vocabulary, one class resolution. Behaviour unchanged — verify against T001's baseline before proceeding.
 
@@ -162,7 +162,7 @@ and assert the resulting verdict, with no engine, no rules, and no input.
 - [ ] T060 [US3] Make score-and-risk derivation a property of finalization rather than a silent adjustment of caller-supplied values, in `crates/core/src/finalize/mod.rs` (FR-127)
 - [ ] T061 [US3] Reduce `Engine::scan` to orchestration — build the plan, run detectors, hand evidence to finalization — in `crates/core/src/engine.rs`
 - [ ] T062 [US3] Reduce `crates/core/src/detect/mod.rs` to dispatch, producing observations only (FR-121)
-- [ ] T063 [US3] Seal the verdict constructors in `crates/core/src/finalize/types.rs` and verify the compile-fail cases in `crates/core/tests/compile_fail/` now fail to build
+- [ ] T063 [US3] **Verify** the seal in `crates/core/src/finalize/types.rs` still holds after Phases 3–5, and that each compile-fail case in `crates/core/tests/compile_fail/` still fails with the diagnostic its `.stderr` pins. *Amended*: the sealing itself landed in Phase 2 at T008, because T017–T023 are what remove the last construction sites outside finalization and all of them are Phase 2 — see `docs/002-migration.md`
 
 **Checkpoint**: Only finalization can produce a verdict, and the compiler enforces it.
 

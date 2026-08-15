@@ -29,7 +29,7 @@
 //! well-defined decoding, the recovered text is attached so the reader sees *what* was hidden rather than
 //! only that something was.
 
-use crate::verdict::Span;
+use crate::finalize::types::Span;
 
 /// The channel a concealed run used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

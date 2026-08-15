@@ -9,7 +9,7 @@
 //! are also deterministic, which SC-011's byte-identical output requires anyway. A wall-clock budget
 //! belongs to whoever launched the process.
 
-use crate::verdict::{DetectionClass, RiskLevel};
+use crate::finalize::types::{DetectionClass, RiskLevel};
 
 /// Default maximum input size: 1 MiB.
 ///

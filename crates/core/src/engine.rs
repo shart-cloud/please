@@ -13,17 +13,17 @@
 //! is I/O, and I/O belongs to the caller.
 
 use crate::decode;
-use crate::detect::{self, pattern::PatternSet, Hit};
+use crate::detect::{self, pattern::PatternSet};
+use crate::finalize::evidence::{Evidence, Observation};
+use crate::finalize::plan::ScanPlan;
+use crate::finalize::score::aggregate;
+use crate::finalize::types::{DetectionClass, RulesetId, TargetRef, Verdict};
+use crate::finalize::{self, Attribution};
 use crate::policy::ScanPolicy;
 use crate::prefilter::Prefilter;
 use crate::ruleset::{Ruleset, RulesetError, RulesetLimits};
 use crate::sanitize::sanitize_bytes;
-use crate::score::aggregate;
 use crate::structure::QuotingMap;
-use crate::verdict::{
-    DetectionClass, EngineId, IncompleteCause, Incompleteness, Reason, RulesetId, TargetRef,
-    Verdict, VerdictParts,
-};
 
 /// The built-in rule set, embedded at compile time.
 ///
@@ -116,127 +116,91 @@ impl Engine {
     /// # Pipeline
     ///
     /// ```text
-    /// size gate → [decode] → [structure] → prefilter → patterns → [suppression] → score → verdict
+    /// size gate → decode → structure → prefilter → patterns → suppression → finalize
     /// ```
     ///
-    /// Stages in brackets arrive with User Story 1 (T044–T056): bounded decoding, the quoting pre-pass,
-    /// and the concealment and confusable detectors. The stages present now are the ones every other
-    /// stage plugs into, and the accumulate-then-assemble shape is what makes the FR-004 invariant
-    /// checkable at a single point.
+    /// Every stage may only *add* observations or record coverage gaps into the evidence accumulator;
+    /// none may remove them, and none may read them back. That monotonicity plus the write-only handle is
+    /// what lets finalization decide the outcome by looking at one accumulator (FR-124).
     ///
-    /// Every stage may only *add* reasons or record coverage gaps; none may remove them. That
-    /// monotonicity is why assembly can decide the outcome by looking at two accumulators.
+    /// This function no longer builds a verdict. It builds a plan, runs detectors, and hands the evidence
+    /// to [`crate::finalize`] — which is the only producer (FR-120). 001 assembled verdicts here in three
+    /// places, sorted reasons here as well as in `assemble`, and kept six overlapping collections whose
+    /// mutual agreement the score depended on.
     pub fn scan(&self, input: &[u8], policy: &ScanPolicy, target: TargetRef) -> Verdict {
-        let mut reasons: Vec<Reason> = Vec::new();
-        let mut incomplete: Vec<Incompleteness> = Vec::new();
+        let plan = ScanPlan::resolve(policy, self.ruleset.all_rules());
+        let bounds = plan.bounds();
+        let mut evidence = Evidence::new();
 
         // ── Size gate ───────────────────────────────────────────────────────────────────────────
         //
-        // First, and short-circuiting. An oversized input is not analysed at all, so there is nothing
-        // to report except that fact — and reporting it as clean would be the exact fail-open the
-        // whole outcome model exists to prevent (FR-017).
-        if input.len() as u64 > policy.max_input_bytes {
-            return Verdict::assemble(VerdictParts {
-                score: 0,
-                risk: crate::verdict::RiskLevel::None,
-                reasons,
-                reasons_truncated: false,
-                incomplete: vec![Incompleteness::bound(
-                    IncompleteCause::InputSize,
-                    policy.max_input_bytes,
-                )
-                .with_detail(format!("input is {} bytes", input.len()))],
+        // First, and short-circuiting: an oversized input is not analysed at all, so there is nothing to
+        // report except that fact. Routed through finalization rather than assembling a verdict here
+        // (T018), which is why this branch no longer has to know that `score: 0` and `risk: None` are the
+        // right values for a verdict with no findings.
+        if input.len() as u64 > bounds.max_input_bytes {
+            return finalize::oversized(
+                bounds.max_input_bytes,
+                input.len(),
                 target,
-                ruleset: self.ruleset.id().clone(),
-                engine: EngineId::current(),
-            });
+                self.ruleset.id().clone(),
+            );
         }
 
         // ── Structure ───────────────────────────────────────────────────────────────────────────
         //
-        // Classify quoting regions once, before any matching, so every rule-driven hit can be checked
-        // against it without re-deriving the map.
+        // Classify quoting regions once, before any matching, so every rule-driven observation can be
+        // checked against it without re-deriving the map.
         let quoting = QuotingMap::build(input);
 
         // ── Decode ──────────────────────────────────────────────────────────────────────────────
         //
         // Recovered texts are re-scanned against the same rules. A transformation is reported only when
         // its decoded content trips a rule, which is what keeps "contains base-64" from being a finding.
-        let expansion = decode::expand(input, policy.max_decode_depth);
-        if expansion.depth_exceeded {
-            incomplete.push(
-                Incompleteness::bound(IncompleteCause::DecodeDepth, policy.max_decode_depth as u64)
-                    .with_detail(
-                        "nested encoding beyond the depth bound was not examined".to_string(),
-                    ),
-            );
-        }
-        if expansion.fanout_exceeded {
-            incomplete.push(Incompleteness::failure(
-                IncompleteCause::DecodeFailed,
-                "too many decodable regions; some were not examined",
-            ));
-        }
+        //
+        // The decoder records its own bounds now (T021). This call site used to translate two booleans
+        // into coverage judgements, and one of the translations was the bug that made every scan
+        // inconclusive.
+        let expansion = decode::expand(input, bounds.max_decode_depth, &mut evidence);
 
         // ── Prefilter ───────────────────────────────────────────────────────────────────────────
         //
-        // One linear pass to learn which rules are worth compiling. Text matching no literal — nearly
-        // all text — leaves this loop having compiled nothing.
-        let rules = self.ruleset.all_rules();
+        // One linear pass to learn which rules are worth compiling. Text matching no literal — nearly all
+        // text — leaves this loop having compiled nothing.
+        let rules = plan.rules();
         let candidates = self.prefilter.candidates(input);
 
         // ── Patterns ────────────────────────────────────────────────────────────────────────────
-        //
-        // `all_hits` feeds scoring and is NOT truncated; `reasons` is what gets reported and is. That
-        // split is FR-001b: reasons are ordered by offset rather than severity, so truncating before
-        // aggregating could discard the highest-severity finding and understate the score.
-        let mut all_hits: Vec<(u8, DetectionClass)> = Vec::new();
-        let mut saturated_rules: Vec<String> = Vec::new();
-        let mut hits: Vec<Hit> = Vec::new();
+        let mut hits: Vec<Observation> = Vec::new();
 
         for index in candidates {
             let rule = &rules[index];
-            if !policy.is_active(rule.class) {
+            if !plan.is_active(rule.class) {
                 continue;
             }
 
-            match self
-                .patterns
-                .matches(index, rule, input, policy.max_matches_per_rule)
-            {
-                Ok(found) => {
-                    if found.saturated {
-                        saturated_rules.push(rule.id.clone());
-                    }
-                    for span in found.spans {
-                        let (matched, _) = sanitize_bytes(
-                            &input[span.start..span.end],
-                            policy.max_excerpt_bytes as usize,
-                        );
-                        hits.push(Hit {
-                            rule_id: rule.id.clone(),
-                            class: rule.class,
-                            span,
-                            matched,
-                            severity: rule.severity,
-                            description: rule.description.clone(),
-                            chain: Vec::new(),
-                        });
-                    }
-                }
-                // A rule that will not compile is a gap in coverage, not a rule that found nothing.
-                // Unreachable for a rule set that passed `validate_compiled`, and recorded rather than
-                // ignored precisely because "unreachable" is not "impossible".
-                Err(unavailable) => incomplete.push(
-                    Incompleteness::failure(
-                        IncompleteCause::RulesetUnavailable,
-                        unavailable.detail,
-                    )
-                    .with_detail(format!(
-                        "rule `{}` could not be compiled",
-                        unavailable.rule_id
-                    )),
-                ),
+            // Saturation and uncompilable patterns are recorded by the matcher itself (T022), so there is
+            // no longer an `Err` here for this loop to interpret.
+            for span in self.patterns.matches(
+                index,
+                rule,
+                input,
+                bounds.max_matches_per_rule,
+                &mut evidence,
+            ) {
+                let (matched, _) = sanitize_bytes(
+                    &input[span.start..span.end],
+                    bounds.max_excerpt_bytes as usize,
+                );
+                hits.push(Observation {
+                    rule_id: rule.id.clone(),
+                    class: rule.class,
+                    span,
+                    matched,
+                    severity: rule.severity,
+                    description: rule.description.clone(),
+                    chain: Vec::new(),
+                });
             }
         }
 
@@ -249,51 +213,57 @@ impl Engine {
         // to be decoded before it could be read.
         //
         // This also removes a whole class of trivial evasion: wrapping an encoded payload in a code fence.
-        let mut decoded_hits: Vec<Hit> = Vec::new();
-
         //
-        // Each recovered text is matched against the same rules. A hit reports the span of the *encoded*
-        // region in the original input — bytes the caller actually holds — and carries the transform
-        // chain, so the reader sees both where it was and how it was hidden.
+        // Each recovered text is matched against the same rules. An observation reports the span of the
+        // *encoded* region in the original input — bytes the caller actually holds — and carries the
+        // transform chain, so the reader sees both where it was and how it was hidden.
+        let mut decoded_hits: Vec<Observation> = Vec::new();
         for candidate in &expansion.candidates {
             let bytes = candidate.text.as_bytes();
             for index in self.prefilter.candidates(bytes) {
                 let rule = &rules[index];
-                if !policy.is_active(rule.class) {
+                if !plan.is_active(rule.class) {
                     continue;
                 }
-                if let Ok(found) =
-                    self.patterns
-                        .matches(index, rule, bytes, policy.max_matches_per_rule)
-                {
-                    if found.spans.is_empty() {
-                        continue;
-                    }
-                    // One hit per rule per candidate, not one per match. A payload repeated inside a
-                    // decoded blob is still one concealed payload, and reporting each occurrence would
-                    // let a single encoded region fill the reason budget.
-                    let (excerpt, _) = crate::sanitize::sanitize_str(
-                        &candidate.text,
-                        policy.max_excerpt_bytes as usize,
-                    );
-                    decoded_hits.push(Hit {
-                        rule_id: rule.id.clone(),
-                        class: DetectionClass::Encoding,
-                        span: candidate.origin,
-                        matched: excerpt,
-                        severity: rule.severity,
-                        description: format!("{} Recovered by decoding.", rule.description),
-                        chain: candidate.chain.clone(),
-                    });
+                let spans = self.patterns.matches(
+                    index,
+                    rule,
+                    bytes,
+                    bounds.max_matches_per_rule,
+                    &mut evidence,
+                );
+                if spans.is_empty() {
+                    continue;
                 }
+                // One observation per rule per candidate, not one per match. A payload repeated inside a
+                // decoded blob is still one concealed payload, and reporting each occurrence would let a
+                // single encoded region fill the reason budget.
+                let (excerpt, _) = crate::sanitize::sanitize_str(
+                    &candidate.text,
+                    bounds.max_excerpt_bytes as usize,
+                );
+                decoded_hits.push(Observation {
+                    rule_id: rule.id.clone(),
+                    // Still relabelled from the rule's own class, which is the US2 defect: this
+                    // observation had to satisfy the class filter above as its rule's class and then
+                    // arrived carrying another. T050 makes it carry `rule.class`; changing it here would
+                    // be a behaviour change, and Phase 2 is not where behaviour changes.
+                    class: DetectionClass::Encoding,
+                    span: candidate.origin,
+                    matched: excerpt,
+                    severity: rule.severity,
+                    description: format!("{} Recovered by decoding.", rule.description),
+                    chain: candidate.chain.clone(),
+                });
             }
         }
 
         // ── Suppression ─────────────────────────────────────────────────────────────────────────
         //
-        // Rule-driven hits only. A documentation example of an override phrase is prose; a document that
-        // actually contains invisible characters is smuggling them regardless of the surrounding text.
-        let (mut kept, suppressed) = if policy.suppress_in_quotes {
+        // Rule-driven observations only. A documentation example of an override phrase is prose; a
+        // document that actually contains invisible characters is smuggling them regardless of the
+        // surrounding text.
+        let (mut kept, suppressed) = if plan.suppress_in_quotes() {
             detect::apply_suppression(hits, &quoting, |rule_id| {
                 rules
                     .iter()
@@ -305,9 +275,10 @@ impl Engine {
             (hits, Vec::new())
         };
 
-        // Suppressed hits are dropped rather than reported. `--no-suppress-in-quotes` works by not
-        // suppressing in the first place (the branch above), which is simpler than reporting-with-a-flag
-        // and gives the caller exactly one thing to reason about.
+        // Suppressed observations are dropped rather than retained. That is the state US4 changes: FR-128
+        // wants them recorded with the context that suppressed them, because suppression is the main lever
+        // on the false-positive problem and its effect currently cannot be measured from one run. T066 and
+        // T067 replace this discard.
         let _ = suppressed;
 
         // ── Structural and decoded detectors ────────────────────────────────────────────────────
@@ -315,74 +286,45 @@ impl Engine {
         // Added after suppression because none of these are suppressed. Concealment and confusables detect
         // a mechanism rather than a phrase, and decoded content carries its own evidence of intent.
         for hit in detect::structural::scan(input) {
-            if policy.is_active(hit.class) {
+            if plan.is_active(hit.class) {
                 kept.push(hit);
             }
         }
         for hit in decoded_hits {
-            if policy.is_active(hit.class) {
+            if plan.is_active(hit.class) {
                 kept.push(hit);
             }
         }
 
-        // ── Assemble reasons ────────────────────────────────────────────────────────────────────
-        for hit in kept {
-            all_hits.push((hit.severity, hit.class));
-            let (reason, excerpt_truncated) = hit.into_reason(policy.max_excerpt_bytes as usize);
-            if excerpt_truncated {
-                incomplete.push(
-                    Incompleteness::bound(
-                        IncompleteCause::ExcerptLength,
-                        policy.max_excerpt_bytes as u64,
-                    )
-                    .with_detail(format!("excerpt for `{}` truncated", reason.rule_id)),
-                );
-            }
-            reasons.push(reason);
-        }
-
-        if !saturated_rules.is_empty() {
-            incomplete.push(
-                Incompleteness::bound(
-                    IncompleteCause::MaxMatchesPerRule,
-                    policy.max_matches_per_rule as u64,
-                )
-                .with_detail(format!("saturated: {}", saturated_rules.join(", "))),
-            );
-        }
-
-        // ── Score, then truncate ────────────────────────────────────────────────────────────────
-        let score = aggregate(&all_hits);
+        // ── Score, then hand over ───────────────────────────────────────────────────────────────
+        //
+        // The score is aggregated over EVERY observation, before finalization orders and truncates the
+        // reasons (FR-001b): reasons are ordered by byte offset rather than by severity, so truncating
+        // first could discard the highest-severity finding and understate the score.
+        //
+        // This is the parallel collection FR-124 exists to remove. It survives Phase 2 because deriving
+        // the score inside finalization is T058's job and has a test that must go red first — but note
+        // that it is now derived from the same `kept` list that becomes the observations, in one pass,
+        // rather than from a separately-accumulated `all_hits` as in 001.
+        let severities: Vec<(u8, DetectionClass)> =
+            kept.iter().map(|hit| (hit.severity, hit.class)).collect();
+        let score = aggregate(&severities);
         let risk = self.ruleset.bands().band(score);
 
-        let mut reasons_truncated = false;
-        if reasons.len() > policy.max_reasons as usize {
-            reasons_truncated = true;
-            incomplete.push(
-                Incompleteness::bound(IncompleteCause::MaxReasons, policy.max_reasons as u64)
-                    .with_detail(format!("{} reasons found", reasons.len())),
-            );
-            // Sort before truncating so the reasons kept are the earliest in the input rather than
-            // whichever the rule iteration order happened to produce (SC-011).
-            reasons.sort_by(|a, b| {
-                a.span
-                    .start
-                    .cmp(&b.span.start)
-                    .then_with(|| a.rule_id.cmp(&b.rule_id))
-            });
-            reasons.truncate(policy.max_reasons as usize);
+        for hit in kept {
+            evidence.observe(hit);
         }
 
-        Verdict::assemble(VerdictParts {
-            score,
-            risk,
-            reasons,
-            reasons_truncated,
-            incomplete,
-            target,
-            ruleset: self.ruleset.id().clone(),
-            engine: EngineId::current(),
-        })
+        finalize::finalize(
+            evidence,
+            bounds,
+            Attribution {
+                score,
+                risk,
+                target,
+                ruleset: self.ruleset.id().clone(),
+            },
+        )
     }
 
     /// The resource limits this engine enforces when compiling patterns.

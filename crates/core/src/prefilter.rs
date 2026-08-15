@@ -130,7 +130,7 @@ impl Prefilter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::verdict::DetectionClass;
+    use crate::finalize::types::DetectionClass;
 
     fn rule(id: &str, literals: &[&str]) -> Rule {
         Rule {

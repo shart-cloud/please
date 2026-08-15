@@ -83,7 +83,7 @@ fn run() -> i32 {
                     "plz: cannot read {}: {detail}",
                     reference.name.as_deref().unwrap_or("?")
                 );
-                verdicts.push(Verdict::unreadable_target(
+                verdicts.push(please_core::finalize::unreadable_target(
                     reference,
                     detail,
                     engine.ruleset_id().clone(),

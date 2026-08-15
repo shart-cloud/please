@@ -31,7 +31,7 @@
 
 use super::parse::{RawRule, RawRuleset};
 use super::{Rule, Ruleset, RulesetError, RulesetLimits};
-use crate::verdict::DetectionClass;
+use crate::finalize::types::DetectionClass;
 
 pub(super) fn validate(raw: RawRuleset, limits: &RulesetLimits) -> Result<Ruleset, RulesetError> {
     raw.bands.validate()?;

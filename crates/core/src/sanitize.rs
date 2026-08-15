@@ -6,7 +6,7 @@
 //! the very report that is exposing it — and the most valuable line to forge is the one saying a file
 //! is clean.
 //!
-//! Sanitisation happens at the boundary where a [`crate::verdict::Reason`] is built, not at each
+//! Sanitisation happens at the boundary where a [`crate::finalize::types::Reason`] is built, not at each
 //! display site, so the guarantee holds for every consumer including the ones that forget. The
 //! ordering is the whole design: **sanitise the payload, then style it.** Never the reverse — colour
 //! codes added by the harness are applied to already-clean text.
@@ -71,10 +71,14 @@ fn escape(c: char, out: &mut String) {
 
 /// Sanitise text, capping the **output** at `max_bytes`.
 ///
-/// Returns the sanitised text and whether the cap truncated it. Truncation is reported rather than
-/// silent so the caller can record it as an
-/// [`IncompleteCause::ExcerptLength`](crate::verdict::IncompleteCause::ExcerptLength) — a limit the
-/// reader cannot see reads as complete coverage.
+/// Returns the sanitised text and whether the cap truncated it. Truncation is reported rather than silent
+/// because a limit the reader cannot see reads as complete coverage.
+///
+/// The boolean stays a boolean, and this function does **not** record a coverage gap itself, which is worth
+/// justifying since T022 and T021 moved gap recording into the decoder and the matcher. Those two knew
+/// *why* their bound mattered; this one does not. It shortens a string and has no idea whose excerpt it is
+/// or what the bound is called, so a gap constructed here would carry no detail worth reading. Its single
+/// caller — `finalize::into_reason` — knows both, and records it there (FR-122).
 ///
 /// Truncation never splits a character and never splits an escape sequence: a half-written `\u{202`
 /// in a log is both unreadable and a misrepresentation of what was found.

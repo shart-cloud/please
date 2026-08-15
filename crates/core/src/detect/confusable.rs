@@ -27,7 +27,7 @@
 use unicode_security::GeneralSecurityProfile;
 use unicode_security::MixedScript;
 
-use crate::verdict::Span;
+use crate::finalize::types::Span;
 
 /// A token whose characters imitate another script.
 #[derive(Debug, Clone, PartialEq, Eq)]

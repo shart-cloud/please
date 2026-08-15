@@ -24,27 +24,9 @@ use std::sync::OnceLock;
 
 use regex::bytes::{Regex, RegexBuilder};
 
+use crate::finalize::evidence::{CoverageGap, Evidence};
+use crate::finalize::types::{IncompleteCause, Span};
 use crate::ruleset::{Rule, RulesetLimits};
-use crate::verdict::Span;
-
-/// Outcome of evaluating one rule.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuleMatches {
-    /// Byte spans in the input, in order of occurrence.
-    pub spans: Vec<Span>,
-    /// True when the match cap stopped collection, so there may be further matches unreported.
-    pub saturated: bool,
-}
-
-/// Why a rule could not be evaluated.
-///
-/// Never silently skipped. A rule that failed to compile is a gap in coverage, and a gap in coverage
-/// that nothing records is the fail-open this project exists to close.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RuleUnavailable {
-    pub rule_id: String,
-    pub detail: String,
-}
 
 /// Lazily compiled patterns for one rule set.
 ///
@@ -83,47 +65,66 @@ impl PatternSet {
 
     /// Evaluate one rule, collecting at most `max_matches` spans.
     ///
-    /// Returns `Err` when the pattern cannot be compiled. That should be unreachable for a rule set that
-    /// passed `validate_compiled`, but it is returned rather than ignored so the caller can record it as
-    /// a coverage gap instead of treating the rule as having found nothing.
+    /// Records its own coverage gaps (T022, FR-122). 001 returned `RuleMatches { spans, saturated }` and
+    /// a `RuleUnavailable` error, and `engine.rs` turned both into `Incompleteness` values — which is the
+    /// translation FR-122 removes. Two things improve by moving it here:
+    ///
+    ///  * **saturation is reported per rule.** The caller used to collect saturated rule ids and emit one
+    ///    gap with them comma-joined, so a reader got `saturated: a, b, c` and no configured value per
+    ///    rule. Each rule now records its own, which is more to read and the right amount to read.
+    ///  * **a compile failure keeps the compiler's message.** The old site called `.with_detail(..)` on a
+    ///    failure that already had a detail, and `with_detail` overwrites — so the actual reason the
+    ///    pattern would not build was constructed and then discarded, leaving only "rule `x` could not be
+    ///    compiled". Unreachable in principle for a validated rule set, which is exactly why the one time
+    ///    it fires you want the message.
+    ///
+    /// Returns the spans found; an empty vector for a rule that could not be compiled. There is no `Err`
+    /// for a caller to translate, because the gap is already recorded — and no way to treat an
+    /// uncompilable rule as a rule that found nothing, because those two now differ in the evidence.
     pub fn matches(
         &self,
         index: usize,
         rule: &Rule,
         haystack: &[u8],
         max_matches: u32,
-    ) -> Result<RuleMatches, RuleUnavailable> {
-        let regex = self
-            .regex_for(index, rule)
-            .map_err(|detail| RuleUnavailable {
-                rule_id: rule.id.clone(),
-                detail: detail.clone(),
-            })?;
+        evidence: &mut Evidence,
+    ) -> Vec<Span> {
+        let regex = match self.regex_for(index, rule) {
+            Ok(regex) => regex,
+            Err(detail) => {
+                // Never silently skipped. A rule that failed to compile is a gap in coverage, and a gap in
+                // coverage that nothing records is the fail-open this project exists to close.
+                evidence.record_gap(CoverageGap::failure(
+                    IncompleteCause::RulesetUnavailable,
+                    format!("rule `{}` could not be compiled: {detail}", rule.id),
+                ));
+                return Vec::new();
+            }
+        };
 
         if max_matches == 0 {
-            // A cap of zero means "collect nothing", which is still a saturated collection rather than
-            // an absence of matches — reporting it as clean would be a lie about coverage.
-            return Ok(RuleMatches {
-                spans: Vec::new(),
-                saturated: regex.is_match(haystack),
-            });
+            // A cap of zero means "collect nothing", which is still a saturated collection rather than an
+            // absence of matches — reporting it as clean would be a lie about coverage.
+            if regex.is_match(haystack) {
+                record_saturation(evidence, rule, max_matches);
+            }
+            return Vec::new();
         }
 
         let limit = max_matches as usize;
         let mut spans = Vec::new();
-        let mut saturated = false;
 
         // `take(limit + 1)` rather than `take(limit)`: pulling one extra element is how we learn whether
         // there was more to find, without scanning the remainder of the input.
         for found in regex.find_iter(haystack).take(limit + 1) {
             if spans.len() == limit {
-                saturated = true;
+                record_saturation(evidence, rule, max_matches);
                 break;
             }
             spans.push(Span::new(found.start(), found.end()));
         }
 
-        Ok(RuleMatches { spans, saturated })
+        spans
     }
 
     /// True when this rule's pattern has already been compiled.
@@ -143,10 +144,22 @@ impl PatternSet {
     }
 }
 
+/// Record that a rule's match cap stopped collection.
+///
+/// Separate from [`PatternSet::matches`] only because it is recorded from two branches — the ordinary cap
+/// and the zero cap — and a reader should be able to see at a glance that both say the same thing.
+fn record_saturation(evidence: &mut Evidence, rule: &Rule, max_matches: u32) {
+    evidence.record_gap(CoverageGap::bound(
+        IncompleteCause::MaxMatchesPerRule,
+        max_matches as u64,
+        format!("rule `{}` saturated", rule.id),
+    ));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::verdict::DetectionClass;
+    use crate::finalize::types::DetectionClass;
 
     fn rule(id: &str, pattern: &str) -> Rule {
         Rule {
@@ -165,55 +178,85 @@ mod tests {
         PatternSet::new(2, RulesetLimits::default())
     }
 
+    /// The causes recorded during one evaluation.
+    ///
+    /// Asserting on causes rather than on a `saturated` boolean is the point of T022: what the caller used
+    /// to receive was a flag it had to interpret, and what it receives now is the interpretation.
+    fn causes(evidence: &Evidence) -> Vec<IncompleteCause> {
+        evidence.recorded_gaps().iter().map(|g| g.cause()).collect()
+    }
+
     #[test]
     fn a_matching_rule_reports_its_spans() {
         let r = rule("a.one", "needle");
-        let got = set().matches(0, &r, b"a needle here", 16).unwrap();
-        assert_eq!(got.spans, vec![Span::new(2, 8)]);
-        assert!(!got.saturated);
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, b"a needle here", 16, &mut evidence);
+        assert_eq!(spans, vec![Span::new(2, 8)]);
+        assert!(causes(&evidence).is_empty(), "nothing went unexamined");
     }
 
     #[test]
     fn a_non_matching_rule_reports_nothing() {
         let r = rule("a.one", "needle");
-        let got = set().matches(0, &r, b"nothing relevant", 16).unwrap();
-        assert!(got.spans.is_empty());
-        assert!(!got.saturated);
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, b"nothing relevant", 16, &mut evidence);
+        assert!(spans.is_empty());
+        assert!(causes(&evidence).is_empty());
     }
 
     #[test]
     fn collection_stops_at_the_cap_and_says_so() {
         let r = rule("a.one", "ab");
         let haystack = "ab".repeat(100);
-        let got = set().matches(0, &r, haystack.as_bytes(), 5).unwrap();
-        assert_eq!(got.spans.len(), 5, "must not collect beyond the cap");
-        assert!(got.saturated, "saturation must be reported, not silent");
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, haystack.as_bytes(), 5, &mut evidence);
+        assert_eq!(spans.len(), 5, "must not collect beyond the cap");
+        assert_eq!(
+            causes(&evidence),
+            [IncompleteCause::MaxMatchesPerRule],
+            "saturation must be recorded, not silent"
+        );
+    }
+
+    #[test]
+    fn a_saturation_gap_names_the_rule_and_the_cap_that_stopped_it() {
+        // The information the old comma-joined list could not carry. A caller raising a limit needs to
+        // know which rule to raise it for and what it currently is.
+        let r = rule("a.one", "ab");
+        let haystack = "ab".repeat(100);
+        let mut evidence = Evidence::new();
+        let _ = set().matches(0, &r, haystack.as_bytes(), 5, &mut evidence);
+        let gap = &evidence.recorded_gaps()[0];
+        assert_eq!(gap.detail(), Some("rule `a.one` saturated"));
     }
 
     #[test]
     fn exactly_the_cap_many_matches_is_not_saturated() {
-        // The off-by-one that matters: reporting saturation when nothing was dropped would put a
-        // spurious coverage gap on a complete scan, and every such gap turns a clean verdict
-        // inconclusive.
+        // The off-by-one that matters: reporting saturation when nothing was dropped would put a spurious
+        // coverage gap on a complete scan, and every such gap turns a clean verdict inconclusive.
         let r = rule("a.one", "ab");
         let haystack = "ab".repeat(5);
-        let got = set().matches(0, &r, haystack.as_bytes(), 5).unwrap();
-        assert_eq!(got.spans.len(), 5);
-        assert!(!got.saturated);
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, haystack.as_bytes(), 5, &mut evidence);
+        assert_eq!(spans.len(), 5);
+        assert!(causes(&evidence).is_empty());
     }
 
     #[test]
     fn a_zero_cap_still_reports_saturation_when_the_rule_would_match() {
         let r = rule("a.one", "needle");
-        let got = set().matches(0, &r, b"a needle here", 0).unwrap();
-        assert!(got.spans.is_empty());
-        assert!(
-            got.saturated,
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, b"a needle here", 0, &mut evidence);
+        assert!(spans.is_empty());
+        assert_eq!(
+            causes(&evidence),
+            [IncompleteCause::MaxMatchesPerRule],
             "collecting nothing is not the same as finding nothing"
         );
 
-        let got = set().matches(0, &r, b"no match at all", 0).unwrap();
-        assert!(!got.saturated);
+        let mut evidence = Evidence::new();
+        let _ = set().matches(0, &r, b"no match at all", 0, &mut evidence);
+        assert!(causes(&evidence).is_empty());
     }
 
     #[test]
@@ -221,8 +264,9 @@ mod tests {
         // The claim the latency budget rests on: an unevaluated rule costs nothing.
         let s = set();
         let r = rule("a.one", "needle");
+        let mut evidence = Evidence::new();
         assert!(!s.is_compiled(0), "must not compile before first use");
-        let _ = s.matches(0, &r, b"needle", 16).unwrap();
+        let _ = s.matches(0, &r, b"needle", 16, &mut evidence);
         assert!(s.is_compiled(0));
         assert!(!s.is_compiled(1), "an untouched rule stays uncompiled");
     }
@@ -232,19 +276,36 @@ mod tests {
         // Memoisation must not make a verdict depend on scan history (FR-020, FR-030).
         let s = set();
         let r = rule("a.one", "needle");
-        let first = s.matches(0, &r, b"a needle here", 16).unwrap();
-        let second = s.matches(0, &r, b"a needle here", 16).unwrap();
+        let mut evidence = Evidence::new();
+        let first = s.matches(0, &r, b"a needle here", 16, &mut evidence);
+        let second = s.matches(0, &r, b"a needle here", 16, &mut evidence);
         assert_eq!(first, second);
     }
 
     #[test]
     fn an_uncompilable_pattern_is_reported_not_ignored() {
-        // Reached only if a rule set skipped `validate_compiled`. It must surface as a coverage gap,
-        // never as "this rule found nothing".
+        // Reached only if a rule set reached an engine without compiled validation — which US1 makes
+        // unreachable. It must surface as a coverage gap, never as "this rule found nothing".
         let r = rule("a.one", "(unclosed");
-        let err = set().matches(0, &r, b"anything", 16).unwrap_err();
-        assert_eq!(err.rule_id, "a.one");
-        assert!(!err.detail.is_empty());
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, b"anything", 16, &mut evidence);
+        assert!(spans.is_empty());
+        assert_eq!(causes(&evidence), [IncompleteCause::RulesetUnavailable]);
+    }
+
+    #[test]
+    fn an_uncompilable_pattern_keeps_the_compilers_explanation() {
+        // 001 built this detail and then overwrote it with `with_detail`, so the one situation where the
+        // message matters reported only that a message existed.
+        let r = rule("a.one", "(unclosed");
+        let mut evidence = Evidence::new();
+        let _ = set().matches(0, &r, b"anything", 16, &mut evidence);
+        let detail = evidence.recorded_gaps()[0].detail().unwrap();
+        assert!(detail.contains("a.one"), "must name the rule: {detail}");
+        assert!(
+            detail.len() > "rule `a.one` could not be compiled: ".len(),
+            "must carry the compiler's reason, got {detail:?}"
+        );
     }
 
     #[test]
@@ -255,7 +316,10 @@ mod tests {
         };
         let s = PatternSet::new(1, limits);
         let r = rule("a.one", "a{1000}{1000}{1000}");
-        assert!(s.matches(0, &r, b"aaaa", 16).is_err());
+        let mut evidence = Evidence::new();
+        let spans = s.matches(0, &r, b"aaaa", 16, &mut evidence);
+        assert!(spans.is_empty());
+        assert_eq!(causes(&evidence), [IncompleteCause::RulesetUnavailable]);
     }
 
     #[test]
@@ -265,13 +329,14 @@ mod tests {
         let mut haystack = prefix.to_vec();
         haystack.extend_from_slice(b"needle");
         haystack.push(0xff);
-        let got = set().matches(0, &r, &haystack, 16).unwrap();
-        assert_eq!(got.spans.len(), 1);
+        let mut evidence = Evidence::new();
+        let spans = set().matches(0, &r, &haystack, 16, &mut evidence);
+        assert_eq!(spans.len(), 1);
         assert_eq!(
-            got.spans[0].start,
+            spans[0].start,
             prefix.len(),
             "span is a byte offset into the original input, counting the malformed prefix"
         );
-        assert_eq!(got.spans[0].end, prefix.len() + "needle".len());
+        assert_eq!(spans[0].end, prefix.len() + "needle".len());
     }
 }
