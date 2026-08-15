@@ -283,10 +283,15 @@ fn an_oversized_pattern_source_is_rejected() {
 }
 
 #[test]
-fn a_counted_repetition_bomb_is_rejected() {
+fn a_counted_repetition_bomb_survives_loading_but_fails_compiled_validation() {
     // Twenty bytes of source, an enormous automaton. This is the one that makes a shared rule set a
-    // memory-exhaustion path, and it is well-formed TOML with a valid pattern — so nothing but an
-    // explicit compiled-size limit catches it.
+    // memory-exhaustion path — and it is well-formed TOML containing a pattern that PARSES fine, so
+    // only compilation catches it.
+    //
+    // Loading deliberately does not compile: 44 ms for 80 rules against a 25 ms cold-start budget
+    // (research D17). So the bomb loads, and `validate_compiled` is what rejects it. Any caller
+    // accepting a rule set it did not ship must call that — which is exactly what the CLI does for
+    // `--rules`.
     let body = valid_rule().replace(
         r"pattern = '(?i)\bignore\b'",
         "pattern = 'a{1000}{1000}{1000}'",
@@ -295,11 +300,22 @@ fn a_counted_repetition_bomb_is_rejected() {
         max_compiled_bytes: 64 * 1024,
         ..RulesetLimits::default()
     };
-    let err = Ruleset::from_toml_with_limits(&with_rule(&body), &limits).unwrap_err();
+
+    let set = Ruleset::from_toml_with_limits(&with_rule(&body), &limits)
+        .expect("a size bomb parses cleanly — that is the whole point of the second tier");
+
+    let err = set.validate_compiled(&limits).unwrap_err();
     assert!(
         matches!(err, RulesetError::PatternTooComplex { .. }),
         "got {err:?}"
     );
+}
+
+#[test]
+fn compiled_validation_accepts_ordinary_rules() {
+    let set = Ruleset::from_toml(&with_rule(valid_rule())).unwrap();
+    set.validate_compiled(&RulesetLimits::default())
+        .expect("a legitimate rule must pass the expensive tier too");
 }
 
 #[test]

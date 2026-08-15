@@ -29,6 +29,7 @@ serde = ["dep:serde"]
 [dependencies]
 regex = { workspace = true }
 aho-corasick = { workspace = true }
+regex-syntax = { workspace = true }
 unicode-security = { workspace = true }
 unicode-normalization = { workspace = true }
 base64 = { workspace = true }

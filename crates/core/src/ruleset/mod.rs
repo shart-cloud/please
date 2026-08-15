@@ -202,6 +202,24 @@ impl Ruleset {
         &self.bands
     }
 
+    /// The expensive validation tier: compile every pattern under the size limit.
+    ///
+    /// **Call this for any rule set you did not ship.** Loading runs a cheap syntax-only check that
+    /// rejects malformed patterns, look-around, and backreferences, but a counted-repetition size bomb
+    /// parses fine in microseconds and only explodes when compiled — so this is where
+    /// `a{1000}{1000}{1000}` is caught.
+    ///
+    /// It is separate because it is expensive: ~44 ms for 80 rules, against a 25 ms cold-start budget
+    /// for the whole process (research D17). Paying it on every invocation would spend the budget
+    /// re-establishing a guarantee the built-in set already holds via a CI test. Paying it once, when a
+    /// caller supplies `--rules`, puts the cost where the untrusted input is.
+    pub fn validate_compiled(&self, limits: &RulesetLimits) -> Result<(), RulesetError> {
+        for rule in &self.rules {
+            validate::compiled_check(&rule.id, &rule.pattern, limits)?;
+        }
+        Ok(())
+    }
+
     /// Non-fatal observations from loading, e.g. a rule with no literals, or an addition replacing a
     /// built-in. Surfaced so overriding a rule is never accidental.
     pub fn warnings(&self) -> &[String] {

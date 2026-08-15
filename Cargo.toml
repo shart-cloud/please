@@ -36,6 +36,10 @@ regex = "1.13"
 # Multi-literal prefilter. Linear in haystack plus patterns, built once from every rule's required
 # literals, so text matching no literal compiles no pattern at all (research D4).
 aho-corasick = "1.1"
+# Syntax-only pattern validation at load time. Already in the tree via `regex`, so this adds no crates.
+# Parsing 80 patterns costs ~3.9ms; COMPILING them costs ~44ms, which is why the two are separated —
+# see research D17.
+regex-syntax = "0.8"
 
 # ── Unicode ─────────────────────────────────────────────────────────────────────────────────────
 # UTS #39: confusable skeletons, mixed-script detection, restriction levels. Applied PER TOKEN, never

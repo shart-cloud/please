@@ -569,6 +569,7 @@ dependencies = [
  "criterion",
  "proptest",
  "regex",
+ "regex-syntax",
  "serde",
  "serde_json",
  "sha2",

@@ -361,6 +361,51 @@ security-relevant behaviour.
 
 ---
 
+## D17 — Validation is two tiers, because compiling is 11× parsing
+
+**Decision**: Loading a rule set runs a **syntax-only** check on every pattern. A separate, explicit
+`validate_compiled` compiles every pattern under a size limit. Callers accepting a rule set they did not
+ship must call the second; the built-in set relies on a CI test instead.
+
+**Rationale**: D4 chose lazy pattern compilation to protect cold start, and then T023 specified
+compile-and-discard validation at load — which would have paid the entire cost D4 was avoiding. The
+conflict was invisible until measured. On 80 representative rules, on the development host:
+
+| Operation | Cost | Catches |
+|---|---|---|
+| `regex_syntax::parse` × 80 | **3.9 ms** | look-around, backreferences, malformed patterns |
+| `RegexBuilder::build` × 80 | **44.3 ms** | the above, plus counted-repetition size bombs |
+| `RegexBuilder::build` × 1 | 0.5–0.9 ms | (what a lazy path pays when one literal gate hits) |
+| `AhoCorasick::build` (all literals) | 0.08–0.11 ms | |
+
+44.3 ms is **1.8× the entire 25 ms cold-start budget**, before any input is read, on a binary a hook
+launches once per tool call. So eager compilation is not merely suboptimal, it is disqualifying — and
+this also confirms D4's lazy choice was necessary rather than speculative, since one pattern costs about
+0.5 ms against 44 ms for all of them.
+
+The split follows from what each tier can catch. A size bomb *parses cleanly in 3.8 µs* and only
+explodes when compiled, so the cheap tier provably cannot catch it — there is a test asserting exactly
+that, so the limitation is recorded rather than assumed. Everything a *malformed* rule can be, which is
+what FR-024 is about, is caught by parsing.
+
+The built-in set is not attacker-controlled: it ships inside the binary and a CI test runs the expensive
+tier over it. Paying 44 ms per invocation to re-establish a guarantee already held is paying twice for
+one thing. A caller-supplied rule set is genuinely untrusted, and there the cost lands once, at the
+moment the user asked for custom rules.
+
+**Alternatives considered**: Eager compilation at load — rejected on the measurement. Skipping
+resource-limit validation entirely — rejected; it is the only thing standing between a shared rule set
+and memory exhaustion. Estimating compiled size from the parsed syntax tree without building the
+automaton — attractive, and possible in principle, but it means reimplementing the compiler's size
+accounting and being wrong about it silently; the two-tier split gets the same protection using the real
+compiler.
+
+**Consequence for the spec**: T023's description ("load-time validation with pattern-source,
+compiled-size, and rule-count limits") is now split across loading and `validate_compiled`. The
+protection is unchanged; where it is paid for has moved.
+
+---
+
 ## D16 — Absorbed without design change
 
 Three clarifications land entirely in requirements and test tasks:

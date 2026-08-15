@@ -74,13 +74,13 @@ repository root under `tests/`.
 - [x] T024 Implement rule-set resolution (built-in → additions → suppressions) and the content digest over the resolved set in `crates/core/src/ruleset/mod.rs`
 - [x] T025 Create `rules/builtin.toml` with the `[ruleset]` header, `[bands]` table, and a comment recording that band boundaries are provisional pending corpus calibration
 - [x] T026 Embed `rules/builtin.toml` at compile time and implement `Engine::builtin()`, `Engine::from_toml()`, and `Engine::builder()` in `crates/core/src/lib.rs`
-- [ ] T027 [P] Implement the multi-literal prefilter over all rules' literals, warning on rules with no literals, in `crates/core/src/prefilter.rs`
-- [ ] T028 Implement lazy per-rule pattern compilation with a compiled-size limit and memoised caching behind interior synchronisation, in `crates/core/src/detect/pattern.rs`
-- [ ] T029 Implement bounded match collection capped at `max_matches_per_rule`, recording an `Incompleteness` on saturation, in `crates/core/src/detect/pattern.rs`
-- [ ] T030 [P] Write failing property tests for the score formula asserting insensitivity to input length, insensitivity to repeated matches of one rule, monotonic increase with distinct classes, and the 100 ceiling, in `crates/core/tests/score.rs`
-- [ ] T031 Implement score aggregation as `min(100, max_severity + min(15, 5 × (distinct_classes − 1)))`, computed over all matches before reason truncation, plus banding, in `crates/core/src/score.rs` (makes T030 pass)
-- [ ] T032 Implement `Engine::scan` assembling the pipeline (size gate → decode → structure → prefilter → patterns → suppression → score → verdict), returning `Verdict` and never `Result`, in `crates/core/src/lib.rs`
-- [ ] T033 [P] Add `#![forbid(unsafe_code)]` and crate-level documentation stating the no-clock, no-filesystem, no-network contract to `crates/core/src/lib.rs`
+- [x] T027 [P] Implement the multi-literal prefilter over all rules' literals, warning on rules with no literals, in `crates/core/src/prefilter.rs`
+- [x] T028 Implement lazy per-rule pattern compilation with a compiled-size limit and memoised caching behind interior synchronisation, in `crates/core/src/detect/pattern.rs`
+- [x] T029 Implement bounded match collection capped at `max_matches_per_rule`, recording an `Incompleteness` on saturation, in `crates/core/src/detect/pattern.rs`
+- [x] T030 [P] Write failing property tests for the score formula asserting insensitivity to input length, insensitivity to repeated matches of one rule, monotonic increase with distinct classes, and the 100 ceiling, in `crates/core/tests/score.rs`
+- [x] T031 Implement score aggregation as `min(100, max_severity + min(15, 5 × (distinct_classes − 1)))`, computed over all matches before reason truncation, plus banding, in `crates/core/src/score.rs` (makes T030 pass)
+- [x] T032 Implement `Engine::scan` assembling the pipeline (size gate → decode → structure → prefilter → patterns → suppression → score → verdict), returning `Verdict` and never `Result`, in `crates/core/src/lib.rs`
+- [x] T033 [P] Add `#![forbid(unsafe_code)]` and crate-level documentation stating the no-clock, no-filesystem, no-network contract to `crates/core/src/lib.rs`
 - [ ] T034 [P] Add dependency guard test asserting the default build's resolved dependency set matches a committed allow-list, in `tests/dep_guard.rs`
 - [ ] T035 [P] Configure a static gate denying networking and filesystem interfaces inside the core crate in `clippy.toml`, and enforce it as a CI job in `.github/workflows/ci.yml`
 - [x] T036 [P] Add a `cargo build -p please-core --target wasm32-unknown-unknown` job to `.github/workflows/ci.yml`

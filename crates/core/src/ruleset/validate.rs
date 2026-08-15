@@ -4,10 +4,27 @@
 //! legal *and* that loading it cannot hurt the host — because a rule set is caller-supplied and
 //! therefore untrusted input to the scanner (FR-023).
 //!
-//! Compilation happens here rather than lazily at match time. That is a deliberate trade against the
-//! lazy-compilation design used for *matching*: a pattern that would blow up the compiler must be
-//! rejected before it is accepted into a rule set, not discovered on the first input that happens to
-//! contain its literal. Load once, loudly; match many times, cheaply.
+//! # Why validation is in two tiers
+//!
+//! Measured on 80 representative rules (research D17):
+//!
+//! | Check | Cost | Catches |
+//! |---|---|---|
+//! | Syntax parse | ~3.9 ms | look-around, backreferences, malformed patterns |
+//! | Full compile | ~44 ms | the above, plus counted-repetition size bombs |
+//!
+//! 44 ms is 1.8x the entire cold-start budget, and the consumer is a hook that launches the binary
+//! once per tool call. So loading does the cheap tier always, and the expensive tier is explicit:
+//!
+//! * [`syntax_check`] runs on every load. It rejects everything a *malformed* rule can be, which is
+//!   the FR-024 case, at a cost that fits the budget.
+//! * [`super::Ruleset::validate_compiled`] compiles every pattern under a size limit and is called
+//!   where a rule set is genuinely untrusted — the CLI accepting `--rules` — and by a test over the
+//!   embedded built-in set. It is where a size bomb is caught.
+//!
+//! The built-in set is not attacker-controlled: it ships inside the binary, and a CI test proves it
+//! passes the expensive tier. Paying 44 ms on every invocation to re-establish that would be paying for
+//! a guarantee already held.
 //!
 //! Every check rejects the **whole** set. A half-loaded rule set is indistinguishable from a
 //! deliberately weakened one.
@@ -82,7 +99,7 @@ fn validate_rule(
         });
     }
 
-    compile_check(&raw.id, &raw.pattern, limits)?;
+    syntax_check(&raw.id, &raw.pattern)?;
 
     if raw.literals.is_empty() {
         // Permitted, but expensive: a rule with no literal gate is evaluated against every input, and
@@ -112,18 +129,33 @@ fn validate_rule(
     })
 }
 
-/// Compile the pattern under a size limit, discarding the result.
+/// Parse the pattern without building an automaton. The cheap tier, run on every load.
 ///
-/// Two distinct failures come out of this, and they deserve distinct diagnostics:
+/// Rejects any use of look-around or backreferences — not because we check for them, but because the
+/// syntax has no way to express them. That absence is exactly why every accepted pattern matches in
+/// linear time: an author cannot write a catastrophically backtracking rule (Principle II).
 ///
-/// * **Invalid syntax**, which includes any use of look-around or backreferences. Those are not
-///   supported by the engine, which is precisely why every accepted pattern matches in linear time —
-///   an author cannot write a catastrophically backtracking rule because the syntax has no way to say
-///   it.
-/// * **Exceeding the compiled-size limit**, which is the counted-repetition expansion case:
-///   `a{5}{5}{5}{5}{5}{5}` is twenty bytes of source and an enormous automaton. Without this limit a
-///   rule set copied from an untrusted source is a memory-exhaustion path into the scanner.
-fn compile_check(id: &str, pattern: &str, limits: &RulesetLimits) -> Result<(), RulesetError> {
+/// Does **not** catch a counted-repetition size bomb: `a{1000}{1000}{1000}` parses fine in 3.8 µs and
+/// only explodes when compiled. That is [`compiled_check`]'s job.
+pub(super) fn syntax_check(id: &str, pattern: &str) -> Result<(), RulesetError> {
+    regex_syntax::parse(pattern)
+        .map(|_| ())
+        .map_err(|e| RulesetError::PatternInvalid {
+            rule: id.to_string(),
+            detail: e.to_string(),
+        })
+}
+
+/// Compile the pattern under a size limit, discarding the result. The expensive tier.
+///
+/// This is where the counted-repetition expansion case is caught: `a{5}{5}{5}{5}{5}{5}` is twenty
+/// bytes of source and an enormous automaton, so without a compiled-size limit a rule set copied from
+/// an untrusted source is a memory-exhaustion path into the scanner.
+pub(super) fn compiled_check(
+    id: &str,
+    pattern: &str,
+    limits: &RulesetLimits,
+) -> Result<(), RulesetError> {
     match regex::RegexBuilder::new(pattern)
         .size_limit(limits.max_compiled_bytes)
         .build()
@@ -211,12 +243,24 @@ mod tests {
     }
 
     #[test]
-    fn lookaround_is_not_expressible() {
+    fn lookaround_is_not_expressible_and_the_cheap_tier_catches_it() {
         // Not a check we implement — the engine simply has no syntax for it, which is what makes every
-        // accepted pattern linear-time.
-        let limits = RulesetLimits::default();
-        assert!(compile_check("t.t", r"(?<=foo)bar", &limits).is_err());
-        assert!(compile_check("t.t", r"(\w)\1", &limits).is_err());
+        // accepted pattern linear-time. Caught by parsing alone, so it costs nothing at load.
+        assert!(syntax_check("t.t", r"(?<=foo)bar").is_err());
+        assert!(syntax_check("t.t", r"(?=foo)bar").is_err());
+        assert!(syntax_check("t.t", r"(\w)\1").is_err());
+        assert!(syntax_check("t.t", r"(unclosed").is_err());
+        assert!(syntax_check("t.t", r"(?i)\bignore\b").is_ok());
+    }
+
+    #[test]
+    fn the_cheap_tier_does_not_catch_a_size_bomb() {
+        // Stated as a test so the limitation is recorded rather than assumed. This is the entire reason
+        // compiled_check exists and why an untrusted rule set must go through it.
+        assert!(
+            syntax_check("t.t", "a{1000}{1000}{1000}").is_ok(),
+            "if this ever fails, the expensive tier may no longer be needed — re-measure D17"
+        );
     }
 
     #[test]
@@ -225,7 +269,7 @@ mod tests {
             max_compiled_bytes: 4096,
             ..RulesetLimits::default()
         };
-        let err = compile_check("t.t", "a{100}{100}{100}", &limits).unwrap_err();
+        let err = compiled_check("t.t", "a{100}{100}{100}", &limits).unwrap_err();
         assert!(
             matches!(err, RulesetError::PatternTooComplex { .. }),
             "expected PatternTooComplex, got {err:?}"
