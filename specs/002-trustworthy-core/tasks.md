@@ -177,15 +177,15 @@ suppression and its context without a second run.
 
 ### Tests for User Story 4
 
-- [ ] T064 [P] [US4] Write failing test asserting a suppressed observation is retained with its context, in `crates/core/tests/finalization.rs` (FR-128)
-- [ ] T065 [P] [US4] Write failing test asserting suppression is reportable from one scan, in `crates/core/tests/scan.rs` (SC-110)
+- [x] T064 [P] [US4] Write failing test asserting a suppressed observation is retained with its context, in `crates/core/tests/finalization.rs` (FR-128)
+- [x] T065 [P] [US4] Write failing test asserting suppression is reportable from one scan, in `crates/core/tests/scan.rs` (SC-110)
 
 ### Implementation for User Story 4
 
-- [ ] T066 [US4] Add suppressions to the `Evidence` accumulator, retaining the observation and the context that suppressed it, in `crates/core/src/finalize/evidence.rs`
-- [ ] T067 [US4] Record suppressions rather than discarding them, removing `let _ = suppressed;` from `crates/core/src/engine.rs`
-- [ ] T068 [US4] Populate `suppressed_by` on reported reasons — currently always absent — in `crates/core/src/finalize/mod.rs`
-- [ ] T069 [US4] Show suppressed observations under `--explain` in `crates/cli/src/render.rs`, so the false-positive investigation has something to read
+- [x] T066 [US4] Add suppressions to the `Evidence` accumulator, retaining the observation and the context that suppressed it, in `crates/core/src/finalize/evidence.rs`
+- [x] T067 [US4] Record suppressions rather than discarding them, removing `let _ = suppressed;` from `crates/core/src/engine.rs`
+- [x] T068 [US4] Populate `suppressed_by` on reported reasons — currently always absent — in `crates/core/src/finalize/mod.rs`
+- [x] T069 [US4] Show suppressed observations under `--explain` in `crates/cli/src/render.rs`, so the false-positive investigation has something to read
 
 **Checkpoint**: "What did suppression change here?" is answerable from one verdict.
 

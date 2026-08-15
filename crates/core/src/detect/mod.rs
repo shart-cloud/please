@@ -87,6 +87,7 @@ pub mod structural {
                     found.kind.as_str()
                 ),
                 chain: Vec::new(),
+                suppressed_by: None,
             });
         }
 
@@ -101,6 +102,7 @@ pub mod structural {
                     "Token uses characters resembling other characters, disguising an ASCII word."
                         .to_string(),
                 chain: Vec::new(),
+                suppressed_by: None,
             });
         }
 
@@ -192,6 +194,7 @@ mod tests {
             severity: 80,
             description: "test".to_string(),
             chain: Vec::new(),
+            suppressed_by: None,
         }
     }
 

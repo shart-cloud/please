@@ -43,7 +43,7 @@ pub mod types;
 
 use crate::ruleset::Bands;
 use crate::sanitize::sanitize_str;
-use evidence::{CoverageGap, Evidence, Observation};
+use evidence::{CoverageGap, Evidence, Observation, Suppression};
 use plan::Bounds;
 use score::aggregate;
 use types::{
@@ -90,7 +90,7 @@ pub struct Attribution {
 /// understate the score (FR-001b). Which is why the score is taken in step 0, from the observations, before
 /// anything here has had the chance to drop one.
 pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) -> Verdict {
-    let (observations, mut gaps) = evidence.into_parts();
+    let (observations, mut gaps, suppressions) = evidence.into_parts();
 
     // ── Score, before anything can be dropped ───────────────────────────────────────────────────
     //
@@ -121,8 +121,39 @@ pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) ->
         reasons.push(reason);
     }
 
+    // ── Suppressions become annotated reasons ───────────────────────────────────────────────────
+    //
+    // Same conversion as a reported reason, deliberately: `--explain` prints these, so the excerpt has to be
+    // neutralised by the same code that neutralises everything else (FR-021). An excerpt that is safe only
+    // when it is reported is not safe.
+    //
+    // No coverage gap is recorded when a suppressed excerpt is truncated. The reader is not being shown the
+    // whole excerpt of something they are not being shown at all, and a gap here would flip the verdict of
+    // every document that quotes a payload to `Inconclusive`.
+    let mut suppressed: Vec<Reason> = suppressions
+        .into_iter()
+        .map(
+            |Suppression {
+                 mut observation,
+                 context,
+             }| {
+                observation.suppressed_by = Some(context);
+                into_reason(observation, bounds.max_excerpt_bytes as usize).0
+            },
+        )
+        .collect();
+
     // ── One ordering definition ─────────────────────────────────────────────────────────────────
     order(&mut reasons);
+    order(&mut suppressed);
+
+    let mut suppressions_truncated = false;
+    if suppressed.len() > bounds.max_reasons as usize {
+        // Bounded for the reason reasons are (FR-007): a document quoting ten thousand payloads must not
+        // produce a ten-thousand-entry report. NOT recorded as incompleteness — see above.
+        suppressions_truncated = true;
+        suppressed.truncate(bounds.max_reasons as usize);
+    }
 
     // ── Truncate ────────────────────────────────────────────────────────────────────────────────
     let mut reasons_truncated = false;
@@ -144,6 +175,8 @@ pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) ->
     assemble(
         reasons,
         reasons_truncated,
+        suppressed,
+        suppressions_truncated,
         incomplete,
         score,
         risk,
@@ -192,6 +225,8 @@ pub fn unreadable_target(
 /// `risk: None` right independently.
 fn gap_only(gap: CoverageGap, target: TargetRef, ruleset: RulesetId) -> Verdict {
     assemble(
+        Vec::new(),
+        false,
         Vec::new(),
         false,
         vec![gap.into_incompleteness()],
@@ -247,8 +282,7 @@ fn into_reason(observation: Observation, max_excerpt: usize) -> (Reason, bool) {
             observation.severity,
             observation.chain,
             observation.description,
-            // Populated by T068, once suppressions are retained rather than discarded (FR-128).
-            None,
+            observation.suppressed_by,
         ),
         truncated,
     )
@@ -266,9 +300,12 @@ fn into_reason(observation: Observation, max_excerpt: usize) -> (Reason, bool) {
 /// 2. Otherwise, anything left unexamined makes this `Inconclusive`. "Found nothing" and "looked at
 ///    nothing" are indistinguishable from the outside, so they must not collapse into one outcome.
 /// 3. Only with both empty is the verdict `Clean`.
+#[allow(clippy::too_many_arguments)]
 fn assemble(
     reasons: Vec<Reason>,
     reasons_truncated: bool,
+    suppressed: Vec<Reason>,
+    suppressions_truncated: bool,
     incomplete: Vec<Incompleteness>,
     score: u8,
     risk: RiskLevel,
@@ -309,6 +346,8 @@ fn assemble(
         risk,
         reasons,
         reasons_truncated,
+        suppressed,
+        suppressions_truncated,
         incomplete,
         target,
         ruleset,

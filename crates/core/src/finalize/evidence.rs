@@ -22,7 +22,9 @@
 //! The fix is that the code which hits a bound records the gap itself, in the shared vocabulary, at the
 //! point it happens. Nobody translates anything.
 
-use super::types::{DetectionClass, IncompleteCause, Incompleteness, Span, Transform};
+use super::types::{
+    DetectionClass, IncompleteCause, Incompleteness, QuotingContext, Span, Transform,
+};
 
 /// One thing a detector saw. A detector's **only** output (FR-121).
 ///
@@ -51,6 +53,12 @@ pub struct Observation {
     pub description: String,
     /// The transformations by which this arrived. Empty for a direct match.
     pub chain: Vec<Transform>,
+    /// A quoting context covering this observation, when one does and policy chose **not** to act on it.
+    ///
+    /// Set only on the `--no-suppress-in-quotes` path (acceptance scenario 3): the observation is reported,
+    /// annotated with what would otherwise have hidden it. An observation that was actually suppressed does
+    /// not carry this — it is recorded as a [`Suppression`] instead, where the context is not optional.
+    pub suppressed_by: Option<QuotingContext>,
 }
 
 /// Something the scan did not examine, in the one vocabulary everything uses (FR-122).
@@ -123,6 +131,22 @@ impl CoverageGap {
     }
 }
 
+/// An observation that quoting suppression hid, with the context that hid it (FR-128).
+///
+/// 001 computed this list and threw it away — `let _ = suppressed;` in `Engine::scan`, with a comment
+/// explaining that dropping was simpler than reporting-with-a-flag. It was, and the cost was that the
+/// principal lever on the false-positive problem had no observable effect in a single run: answering "what
+/// did the heuristic hide here?" meant running the scan twice with different options and diffing.
+///
+/// The context is **not** optional here, unlike [`Observation::suppressed_by`]. A suppression that cannot say
+/// which context suppressed it is not actionable — "something was hidden" tells an engineer chasing a false
+/// positive nothing they can go and look at.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Suppression {
+    pub observation: Observation,
+    pub context: QuotingContext,
+}
+
 /// The accumulated observations and coverage gaps of one scan.
 ///
 /// # Write-only to detectors, read-only to finalization
@@ -144,6 +168,7 @@ impl CoverageGap {
 pub struct Evidence {
     observations: Vec<Observation>,
     gaps: Vec<CoverageGap>,
+    suppressions: Vec<Suppression>,
 }
 
 impl Evidence {
@@ -163,10 +188,23 @@ impl Evidence {
         self.gaps.push(gap);
     }
 
+    /// Record something seen and deliberately **not** reported, with the context that hid it (FR-128).
+    ///
+    /// Separate from [`observe`](Self::observe) rather than a flag on it, because the two are different
+    /// kinds of thing all the way down: an observation is a finding and contributes to the score, a
+    /// suppression is a decision and must not. One collection with a boolean would put that distinction in
+    /// every reader's hands; two collections put it in the type.
+    pub fn suppress(&mut self, observation: Observation, context: QuotingContext) {
+        self.suppressions.push(Suppression {
+            observation,
+            context,
+        });
+    }
+
     // ── Read side: `pub(super)`, for finalization only ──────────────────────────────────────────
 
-    pub(super) fn into_parts(self) -> (Vec<Observation>, Vec<CoverageGap>) {
-        (self.observations, self.gaps)
+    pub(super) fn into_parts(self) -> (Vec<Observation>, Vec<CoverageGap>, Vec<Suppression>) {
+        (self.observations, self.gaps, self.suppressions)
     }
 
     /// Read the recorded gaps. **Test builds only.**
@@ -195,14 +233,16 @@ mod tests {
             severity: 50,
             description: "test rule".to_string(),
             chain: Vec::new(),
+            suppressed_by: None,
         }
     }
 
     #[test]
     fn an_empty_accumulator_has_nothing_to_report() {
-        let (observations, gaps) = Evidence::new().into_parts();
+        let (observations, gaps, suppressions) = Evidence::new().into_parts();
         assert!(observations.is_empty());
         assert!(gaps.is_empty());
+        assert!(suppressions.is_empty());
     }
 
     #[test]
@@ -213,7 +253,7 @@ mod tests {
         let mut evidence = Evidence::new();
         evidence.observe(observation("a"));
         evidence.observe(observation("b"));
-        let (observations, _) = evidence.into_parts();
+        let (observations, _, _) = evidence.into_parts();
         let ids: Vec<&str> = observations.iter().map(|o| o.rule_id.as_str()).collect();
         assert_eq!(ids, ["a", "b"]);
     }

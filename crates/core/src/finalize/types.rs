@@ -465,6 +465,14 @@ pub struct Verdict {
     risk: RiskLevel,
     reasons: Vec<Reason>,
     reasons_truncated: bool,
+    /// Observations quoting suppression hid, each carrying the context that hid it (FR-128).
+    ///
+    /// Deliberately a separate list from `reasons` rather than a flag on them. These are **not findings**:
+    /// they do not score, they do not affect the outcome, and a verdict whose only content is suppressions is
+    /// `Clean`. One list with a boolean would leave that distinction to every reader to remember, and the
+    /// reader who forgets reintroduces every security-prose false positive.
+    suppressed: Vec<Reason>,
+    suppressions_truncated: bool,
     incomplete: Vec<Incompleteness>,
     target: TargetRef,
     ruleset: RulesetId,
@@ -489,6 +497,8 @@ impl Verdict {
         risk: RiskLevel,
         reasons: Vec<Reason>,
         reasons_truncated: bool,
+        suppressed: Vec<Reason>,
+        suppressions_truncated: bool,
         incomplete: Vec<Incompleteness>,
         target: TargetRef,
         ruleset: RulesetId,
@@ -498,12 +508,18 @@ impl Verdict {
             outcome != Outcome::Clean || (reasons.is_empty() && incomplete.is_empty()),
             "FR-004: a clean verdict requires no reasons and no coverage gaps",
         );
+        debug_assert!(
+            suppressed.iter().all(|r| r.suppressed_by().is_some()),
+            "a suppressed reason must name the context that suppressed it",
+        );
         Self {
             outcome,
             score,
             risk,
             reasons,
             reasons_truncated,
+            suppressed,
+            suppressions_truncated,
             incomplete,
             target,
             ruleset,
@@ -529,6 +545,23 @@ impl Verdict {
 
     pub fn reasons_truncated(&self) -> bool {
         self.reasons_truncated
+    }
+
+    /// What quoting suppression hid, each annotated with the context that hid it (FR-128, SC-110).
+    ///
+    /// Answers "what did the heuristic change here?" from one scan. Empty when suppression is disabled by
+    /// policy — in that case the same observations appear in [`reasons`](Self::reasons), annotated via
+    /// [`Reason::suppressed_by`].
+    ///
+    /// These are not findings. They do not contribute to [`score`](Self::score) and cannot make an outcome
+    /// `RiskFound`.
+    pub fn suppressed(&self) -> &[Reason] {
+        &self.suppressed
+    }
+
+    /// True when more was suppressed than the reason bound reports.
+    pub fn suppressions_truncated(&self) -> bool {
+        self.suppressions_truncated
     }
 
     pub fn incomplete(&self) -> &[Incompleteness] {

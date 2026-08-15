@@ -7,7 +7,7 @@
 //! The ordering matters and is the same discipline throughout: **sanitise the payload, then style it.**
 //! Never the reverse.
 
-use please_core::verdict::{Outcome, RiskLevel, Verdict};
+use please_core::verdict::{Outcome, QuotingContext, RiskLevel, Verdict};
 
 /// Render one verdict.
 pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
@@ -20,6 +20,13 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
     match v.outcome() {
         Outcome::Clean => {
             out.push_str(&format!("{name} — clean\n"));
+            // Not an unconditional return. A clean verdict is exactly where the suppressed list matters
+            // most: security prose whose every payload was correctly hidden reports clean, and "what did the
+            // heuristic do here?" is precisely the question its author is asking (SC-110). Returning early
+            // would make the answer unavailable in the one case it is wanted.
+            if explain {
+                suppressed(out, v);
+            }
             return;
         }
         Outcome::Inconclusive => {
@@ -45,6 +52,15 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         out.push_str(&format!("         {:?}\n", reason.matched()));
         if explain {
             out.push_str(&format!("         {}\n", reason.description()));
+            // Acceptance scenario 3: reported *because* suppression is off, and annotated with what would
+            // otherwise have hidden it. This is how a reader tells which findings the heuristic disagrees
+            // with them about without running the scan twice.
+            if let Some(context) = reason.suppressed_by() {
+                out.push_str(&format!(
+                    "         would be suppressed: {}\n",
+                    context_label(Some(context))
+                ));
+            }
             if !reason.chain().is_empty() {
                 let steps: Vec<String> = reason
                     .chain()
@@ -58,6 +74,10 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
 
     if v.reasons_truncated() {
         out.push_str("\n  (more reasons were found than the limit reports)\n");
+    }
+
+    if explain {
+        suppressed(out, v);
     }
 
     // Coverage gaps are printed for every non-clean verdict, not only inconclusive ones. A risk-found
@@ -84,6 +104,60 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         v.ruleset().version,
         v.ruleset().digest
     ));
+}
+
+/// What quoting suppression hid, under `--explain` (T069, SC-110).
+///
+/// Behind `--explain` rather than always shown, because the default output is what a hook prints on a denial
+/// and a list of things that were deliberately *not* acted on would bury the finding that was. Under
+/// `--explain` the reader has asked why, and this is most of the answer.
+///
+/// Excerpts here were neutralised by finalization on the way in, like every other excerpt — the same
+/// discipline as the rest of this module: sanitise the payload, then style it.
+fn suppressed(out: &mut String, v: &Verdict) {
+    if v.suppressed().is_empty() {
+        return;
+    }
+
+    out.push_str(&format!(
+        "\n  suppressed by quoting ({} not reported):\n",
+        v.suppressed().len()
+    ));
+    for reason in v.suppressed() {
+        out.push_str(&format!(
+            "    {:<34} bytes {}–{}  [{}]\n",
+            reason.rule_id(),
+            reason.span().start,
+            reason.span().end,
+            context_label(reason.suppressed_by()),
+        ));
+        out.push_str(&format!("         {:?}\n", reason.matched()));
+    }
+    if v.suppressions_truncated() {
+        out.push_str("    (more were suppressed than the limit reports)\n");
+    }
+    out.push_str(
+        "    Re-run with --no-suppress-in-quotes to report these. Suppressed content WAS examined; \
+         this is a reporting choice, not a gap in coverage.\n",
+    );
+}
+
+/// Why an observation was suppressed, in the words a reader would use.
+///
+/// `Debug` on the enum would print `FencedCode`, which is a Rust identifier rather than an explanation. This
+/// is output a person reads while deciding whether the tool is wrong.
+fn context_label(context: Option<QuotingContext>) -> &'static str {
+    match context {
+        Some(QuotingContext::FencedCode) => "inside a fenced code block",
+        Some(QuotingContext::InlineCode) => "inside inline code",
+        Some(QuotingContext::BlockQuote) => "inside a block quote",
+        Some(QuotingContext::QuotedString) => "inside a quoted string",
+        Some(QuotingContext::AttributiveMarker) => "after a phrase introducing an example",
+        // `QuotingContext` is `non_exhaustive`, so a context added later lands here rather than failing to
+        // compile. Naming it honestly beats guessing.
+        Some(_) => "inside a quoting context",
+        None => "unknown context",
+    }
 }
 
 /// Summary line for a multi-target run.

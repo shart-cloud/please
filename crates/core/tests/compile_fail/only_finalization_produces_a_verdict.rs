@@ -17,10 +17,16 @@ use please_core::verdict::{
 };
 
 fn main() {
+    // Every argument is correct and the arity matches. That is deliberate: the ONLY thing preventing this
+    // from compiling must be the privacy of `new`. If a wrong argument count were also present, making `new`
+    // public by accident would leave this case still failing — on arity — and the test would keep passing
+    // while the guarantee was gone.
     let _verdict = Verdict::new(
         Outcome::Clean,
         0,
         RiskLevel::None,
+        Vec::new(),
+        false,
         Vec::new(),
         false,
         Vec::new(),

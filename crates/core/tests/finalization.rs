@@ -32,7 +32,7 @@ use please_core::finalize::plan::Bounds;
 use please_core::finalize::{finalize, Attribution};
 use please_core::ruleset::Bands;
 use please_core::verdict::{
-    IncompleteCause, Outcome, RiskLevel, RulesetId, Span, TargetRef, Verdict,
+    IncompleteCause, Outcome, QuotingContext, RiskLevel, RulesetId, Span, TargetRef, Verdict,
 };
 use please_core::DetectionClass;
 
@@ -77,6 +77,7 @@ fn an_observation(rule_id: &str, start: usize, severity: u8) -> Observation {
         severity,
         description: "test rule".to_string(),
         chain: Vec::new(),
+        suppressed_by: None,
     }
 }
 
@@ -438,6 +439,146 @@ fn a_gap_recorded_after_the_last_observation_is_still_reported() {
         2,
         "both gaps must be reported regardless of when they were recorded"
     );
+}
+
+// ── FR-128: suppression is evidence, not a discard ─────────────────────────────────────────────
+
+#[test]
+fn a_suppressed_observation_is_retained_with_the_context_that_suppressed_it() {
+    // Acceptance scenario 1. 001 computed the suppressed list and dropped it on the floor with
+    // `let _ = suppressed;`, so the principal lever on the false-positive problem had no observable effect
+    // in a single run.
+    let mut evidence = Evidence::new();
+    evidence.suppress(
+        an_observation("override.disregard_prior", 20, 85),
+        QuotingContext::QuotedString,
+    );
+
+    let v = verdict_from(evidence);
+    assert_eq!(
+        v.suppressed().len(),
+        1,
+        "the suppressed observation must be retained"
+    );
+    let hidden = &v.suppressed()[0];
+    assert_eq!(hidden.rule_id(), "override.disregard_prior");
+    assert_eq!(
+        hidden.suppressed_by(),
+        Some(QuotingContext::QuotedString),
+        "and it must say WHICH context hid it — 'something was suppressed' is not actionable"
+    );
+}
+
+#[test]
+fn a_suppressed_observation_is_not_a_finding() {
+    // The invariant that makes retention safe. A suppressed observation must not reach the score, must not
+    // make the outcome `RiskFound`, and must not appear among the reported reasons — otherwise "retained as
+    // evidence" would silently mean "reported after all", and every security-prose document would go back
+    // to being a false positive.
+    let mut evidence = Evidence::new();
+    evidence.suppress(
+        an_observation("override.disregard_prior", 20, 95),
+        QuotingContext::FencedCode,
+    );
+
+    let v = verdict_from(evidence);
+    assert_eq!(
+        v.outcome(),
+        Outcome::Clean,
+        "nothing was reported and nothing went unexamined, so the verdict is clean"
+    );
+    assert_eq!(v.score(), 0, "a suppressed observation must not score");
+    assert!(v.reasons().is_empty());
+    assert_eq!(v.suppressed().len(), 1, "but it is still on the record");
+}
+
+#[test]
+fn suppression_is_not_a_coverage_gap() {
+    // Deliberate, and worth stating because the opposite is tempting. Suppressed content WAS examined; a
+    // policy chose not to report it. Recording it as incompleteness would turn every document that quotes a
+    // payload — which is every threat model and advisory — into `Inconclusive`, and that is the exact
+    // population suppression exists to serve.
+    let mut evidence = Evidence::new();
+    evidence.suppress(
+        an_observation("override.disregard_prior", 0, 85),
+        QuotingContext::BlockQuote,
+    );
+    let v = verdict_from(evidence);
+    assert!(
+        v.incomplete().is_empty(),
+        "suppression is a reporting decision, not a gap in coverage: {:?}",
+        v.incomplete()
+    );
+}
+
+#[test]
+fn a_suppressed_excerpt_is_neutralised_like_any_other() {
+    // `--explain` prints these, so FR-021 applies to them exactly as it does to reported reasons. A payload
+    // that could forge output from the suppressed list would be a payload that benefits from being quoted.
+    let mut observation = an_observation("override.x", 0, 80);
+    observation.matched = "ignore\u{1b}[2J\u{202e}".to_string();
+
+    let mut evidence = Evidence::new();
+    evidence.suppress(observation, QuotingContext::InlineCode);
+
+    let v = verdict_from(evidence);
+    let matched = v.suppressed()[0].matched();
+    assert!(!matched.contains('\u{1b}'), "escape survived: {matched:?}");
+    assert!(!matched.contains('\u{202e}'), "bidi survived: {matched:?}");
+}
+
+#[test]
+fn suppressions_are_ordered_and_bounded_like_reasons() {
+    // Bounded for the same reason reasons are (FR-007): a document quoting ten thousand payloads must not
+    // produce a ten-thousand-entry report. Ordered for the same reason too — byte-identical output.
+    let mut evidence = Evidence::new();
+    for i in (0..10).rev() {
+        evidence.suppress(
+            an_observation(&format!("r.{i}"), i * 8, 50),
+            QuotingContext::QuotedString,
+        );
+    }
+
+    let limited = Bounds {
+        max_reasons: 3,
+        ..bounds()
+    };
+    let v = finalize(evidence, limited, attribution());
+
+    let ids: Vec<&str> = v.suppressed().iter().map(|r| r.rule_id()).collect();
+    assert_eq!(ids, ["r.0", "r.1", "r.2"], "earliest by offset, truncated");
+    assert!(v.suppressions_truncated());
+    assert!(
+        v.incomplete().is_empty(),
+        "truncating the suppressed list is still not a coverage gap"
+    );
+    assert_eq!(
+        v.outcome(),
+        Outcome::Clean,
+        "and it must not flip the outcome — this is the case suppression exists for"
+    );
+}
+
+#[test]
+fn an_observation_annotated_but_not_suppressed_is_reported_with_its_context() {
+    // Acceptance scenario 3: `--no-suppress-in-quotes`. The observation is reported, and it carries the
+    // context that WOULD have hidden it — so a reader can tell which findings the heuristic disagrees with
+    // them about, in the same run.
+    let mut observation = an_observation("override.disregard_prior", 20, 85);
+    observation.suppressed_by = Some(QuotingContext::FencedCode);
+
+    let mut evidence = Evidence::new();
+    evidence.observe(observation);
+
+    let v = verdict_from(evidence);
+    assert_eq!(v.outcome(), Outcome::RiskFound, "it is reported");
+    assert_eq!(v.score(), 85, "and it scores");
+    assert_eq!(
+        v.reasons()[0].suppressed_by(),
+        Some(QuotingContext::FencedCode),
+        "annotated with what would have hidden it"
+    );
+    assert!(v.suppressed().is_empty(), "nothing was actually suppressed");
 }
 
 // ── The invariant holds for arbitrary evidence ─────────────────────────────────────────────────

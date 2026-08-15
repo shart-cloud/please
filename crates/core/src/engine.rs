@@ -208,23 +208,34 @@ impl Engine {
         // obfuscation is itself the evidence of intent. It also removes a whole class of trivial evasion:
         // wrapping an encoded payload in a code fence.
         let rules = plan.rules();
-        let (mut kept, suppressed) = if plan.suppress_in_quotes() {
-            detect::apply_suppression(direct, &quoting, |rule_id| {
-                rules
-                    .iter()
-                    .find(|r| r.id == rule_id)
-                    .map(|r| r.fires_in_quotes)
-                    .unwrap_or(false)
-            })
-        } else {
-            (direct, Vec::new())
-        };
+        let (mut kept, quoted) = detect::apply_suppression(direct, &quoting, |rule_id| {
+            rules
+                .iter()
+                .find(|r| r.id == rule_id)
+                .map(|r| r.fires_in_quotes)
+                .unwrap_or(false)
+        });
 
-        // Suppressed observations are dropped rather than retained. That is the state US4 changes: FR-128
-        // wants them recorded with the context that suppressed them, because suppression is the main lever
-        // on the false-positive problem and its effect currently cannot be measured from one run. T066 and
-        // T067 replace this discard.
-        let _ = suppressed;
+        // The quoting context is computed either way, and only the *action* depends on policy (T067).
+        //
+        // 001 skipped `apply_suppression` entirely when suppression was off, which is why the third US4
+        // acceptance scenario was unreachable: with the heuristic disabled there was no context to annotate a
+        // reported observation with, so a reader could not tell which findings the heuristic disagreed with
+        // them about without running the scan a second time.
+        //
+        // And when suppression was on, the list was discarded — `let _ = suppressed;`, with a comment noting
+        // that dropping was simpler than reporting-with-a-flag. It was. The cost was that the principal lever
+        // on the false-positive problem had no observable effect in a single run (FR-128, SC-110).
+        if plan.suppress_in_quotes() {
+            for (observation, context) in quoted {
+                evidence.suppress(observation, context);
+            }
+        } else {
+            kept.extend(quoted.into_iter().map(|(mut observation, context)| {
+                observation.suppressed_by = Some(context);
+                observation
+            }));
+        }
 
         // ── Structural detectors ────────────────────────────────────────────────────────────────
         //
@@ -313,6 +324,7 @@ impl Engine {
                     severity: rule.severity,
                     description: rule.description.clone(),
                     chain: Vec::new(),
+                    suppressed_by: None,
                 });
             }
         }
@@ -368,6 +380,7 @@ impl Engine {
                     severity: rule.severity,
                     description: format!("{} Recovered by decoding.", rule.description),
                     chain: candidate.chain.clone(),
+                    suppressed_by: None,
                 });
             }
         }
