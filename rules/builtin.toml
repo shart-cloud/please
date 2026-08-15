@@ -62,7 +62,7 @@ id = "override.disregard_prior"
 class = "override"
 severity = 85
 literals = ["ignore", "disregard", "forget", "override", "bypass"]
-pattern = '(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any)\b[^.\n]{0,25}\b(instruction|prompt|rule|direction|guideline|constraint|context)s?\b'
+pattern = '(?i)\b(ignore|disregard|forget|override|bypass)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|any|your)\b[^.\n]{0,25}\b(instruction|prompt|rule|direction|guideline|constraint|context)s?\b'
 description = "Instruction directed at a reading agent to disregard its prior instructions."
 
 [[rule]]
