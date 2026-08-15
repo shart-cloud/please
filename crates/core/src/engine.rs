@@ -21,15 +21,10 @@ use crate::finalize::types::{DetectionClass, RulesetId, TargetRef, Verdict};
 use crate::finalize::{self, Attribution};
 use crate::policy::ScanPolicy;
 use crate::prefilter::Prefilter;
-use crate::ruleset::{Ruleset, RulesetError, RulesetLimits};
+use crate::prepare::{self, PreparedRuleset};
+use crate::ruleset::{Bands, Ruleset, RulesetError, RulesetLimits};
 use crate::sanitize::sanitize_bytes;
 use crate::structure::QuotingMap;
-
-/// The built-in rule set, embedded at compile time.
-///
-/// Embedded rather than read from disk so that a first run needs no configuration, no filesystem, and
-/// no network (FR-025, FR-031) — and so the same rule set works unchanged in a browser.
-const BUILTIN_RULES: &str = include_str!("../../../rules/builtin.toml");
 
 /// A compiled rule set, ready to scan.
 ///
@@ -40,45 +35,61 @@ const BUILTIN_RULES: &str = include_str!("../../../rules/builtin.toml");
 #[derive(Debug)]
 pub struct Engine {
     ruleset: Ruleset,
+    /// Identity covering content, provenance, and validation state (FR-111). Distinct from
+    /// `ruleset.id()`, which covers content alone, and this is the one reported in every verdict — so a
+    /// verdict can tell an auditor whether caller-supplied rules were involved.
+    id: RulesetId,
     prefilter: Prefilter,
     patterns: PatternSet,
     limits: RulesetLimits,
+    bands: Bands,
 }
 
 impl Engine {
+    /// Build a scanner from a prepared rule set. **The only constructor** (FR-102, FR-103).
+    ///
+    /// Infallible, and that is the point: everything that could fail happened during preparation, so
+    /// holding a [`PreparedRuleset`] *is* the proof. There is no path from rule text to a scanner that does
+    /// not pass through validation, and therefore no call order for a caller to get wrong.
+    ///
+    /// 001 had `from_ruleset(Ruleset, RulesetLimits)`, which accepted anything that had parsed. Compiled
+    /// validation was a separate public method a caller was asked to remember, and no caller did.
+    pub fn prepared(prepared: PreparedRuleset) -> Self {
+        let (ruleset, id, retained, limits) = prepared.into_parts();
+        let prefilter = Prefilter::build(ruleset.all_rules());
+        // The compiled patterns validation already paid for, carried straight into the matcher rather than
+        // discarded and re-derived on first match (FR-109, SC-106).
+        let patterns = PatternSet::prefilled(retained, limits.clone());
+        let bands = *ruleset.bands();
+        Self {
+            ruleset,
+            id,
+            prefilter,
+            patterns,
+            limits,
+            bands,
+        }
+    }
+
     /// The built-in rule set.
     ///
-    /// Returns `Err` only if the embedded rule set is itself invalid, which is a build-time defect
-    /// rather than a runtime condition — hence the accompanying test that loads it.
+    /// Returns `Err` only if the embedded rule set is itself invalid, which is a build-time defect rather
+    /// than a runtime condition — hence the CI check that establishes it (FR-106).
     pub fn builtin() -> Result<Self, RulesetError> {
-        Ok(Self::from_ruleset(
-            Ruleset::from_toml(BUILTIN_RULES)?,
-            RulesetLimits::default(),
-        ))
+        Ok(Self::prepared(prepare::builtin()?))
     }
 
     /// A rule set from TOML source, replacing the built-in entirely.
     ///
-    /// Loading runs the cheap validation tier. A caller accepting a rule set it did not ship should also
-    /// call [`Ruleset::validate_compiled`] — that is where a counted-repetition size bomb is caught
-    /// (research D17).
+    /// **Every rule is validated, including disabled ones.** This is a behaviour change from 001, where
+    /// loading ran only the cheap syntax tier and a counted-repetition size bomb was accepted — the caller
+    /// was expected to call `Ruleset::validate_compiled` afterwards, and none did. A rule set that used to
+    /// load and now returns `PatternTooComplex` was never safe to scan with.
     pub fn from_toml(source: &str) -> Result<Self, RulesetError> {
-        Ok(Self::from_ruleset(
-            Ruleset::from_toml(source)?,
+        Ok(Self::prepared(prepare::from_source(
+            source,
             RulesetLimits::default(),
-        ))
-    }
-
-    /// Build the matching machinery for an already-validated rule set.
-    fn from_ruleset(ruleset: Ruleset, limits: RulesetLimits) -> Self {
-        let prefilter = Prefilter::build(ruleset.all_rules());
-        let patterns = PatternSet::new(ruleset.all_rules().len(), limits.clone());
-        Self {
-            ruleset,
-            prefilter,
-            patterns,
-            limits,
-        }
+        )?))
     }
 
     /// Start from the built-in set and layer caller additions and suppressions on top.
@@ -90,9 +101,26 @@ impl Engine {
         &self.ruleset
     }
 
-    /// Identity of the resolved rule set, recorded in every verdict (FR-005, SC-012).
+    /// Identity of the prepared rule set, recorded in every verdict (FR-005, FR-111, SC-012).
+    ///
+    /// Covers provenance and validation state as well as content, so two engines built from identical rules
+    /// — one embedded, one handed in by a caller — report different identities. That is the difference an
+    /// auditor needs when someone disputes a finding.
     pub fn ruleset_id(&self) -> &RulesetId {
-        self.ruleset.id()
+        &self.id
+    }
+
+    /// Whether a rule's pattern is compiled. Test and diagnostic use.
+    ///
+    /// Exposed because "was this compiled twice?" is the claim SC-106 makes and there is no way to observe
+    /// it from the outside otherwise. Answers `false` for an unknown id, which is the honest answer: an
+    /// absent rule has no compiled pattern.
+    pub fn pattern_is_compiled(&self, rule_id: &str) -> bool {
+        self.ruleset
+            .all_rules()
+            .iter()
+            .position(|rule| rule.id == rule_id)
+            .is_some_and(|index| self.patterns.is_compiled(index))
     }
 
     /// Non-fatal observations from loading — a rule with no literal gate, a built-in replaced by an
@@ -143,7 +171,7 @@ impl Engine {
                 bounds.max_input_bytes,
                 input.len(),
                 target,
-                self.ruleset.id().clone(),
+                self.id.clone(),
             );
         }
 
@@ -309,7 +337,7 @@ impl Engine {
         let severities: Vec<(u8, DetectionClass)> =
             kept.iter().map(|hit| (hit.severity, hit.class)).collect();
         let score = aggregate(&severities);
-        let risk = self.ruleset.bands().band(score);
+        let risk = self.bands.band(score);
 
         for hit in kept {
             evidence.observe(hit);
@@ -322,7 +350,7 @@ impl Engine {
                 score,
                 risk,
                 target,
-                ruleset: self.ruleset.id().clone(),
+                ruleset: self.id.clone(),
             },
         )
     }
@@ -377,13 +405,22 @@ impl EngineBuilder {
         self
     }
 
+    /// Resolve the layers, validate the caller's rules, and build the engine.
+    ///
+    /// Delegates to [`crate::prepare::layered`] rather than resolving here (T041). The builder used to
+    /// resolve and construct directly, which made it a fourth way into an `Engine` — and the one a caller
+    /// reaches for when adding their own rules, so precisely the path that most needed validating and
+    /// didn't have it.
+    ///
+    /// Validation is delta only: an addition costs what its own rules cost, not what the built-in eighty
+    /// cost (SC-105).
     pub fn build(self) -> Result<Engine, RulesetError> {
-        let base = match self.base {
-            Some(ruleset) => ruleset,
-            None => Ruleset::from_toml_with_limits(BUILTIN_RULES, &self.limits)?,
-        };
-        let ruleset = Ruleset::resolve(base, self.additions, &self.suppress, &self.limits)?;
-        Ok(Engine::from_ruleset(ruleset, self.limits))
+        Ok(Engine::prepared(prepare::layered(
+            self.base,
+            self.additions,
+            &self.suppress,
+            self.limits,
+        )?))
     }
 }
 

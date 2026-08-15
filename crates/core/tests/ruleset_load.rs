@@ -283,15 +283,22 @@ fn an_oversized_pattern_source_is_rejected() {
 }
 
 #[test]
-fn a_counted_repetition_bomb_survives_loading_but_fails_compiled_validation() {
+fn a_counted_repetition_bomb_still_parses_cleanly() {
     // Twenty bytes of source, an enormous automaton. This is the one that makes a shared rule set a
-    // memory-exhaustion path — and it is well-formed TOML containing a pattern that PARSES fine, so
-    // only compilation catches it.
+    // memory-exhaustion path — and it is well-formed TOML containing a pattern that PARSES fine, so only
+    // compilation catches it.
     //
-    // Loading deliberately does not compile: 44 ms for 80 rules against a 25 ms cold-start budget
-    // (research D17). So the bomb loads, and `validate_compiled` is what rejects it. Any caller
-    // accepting a rule set it did not ship must call that — which is exactly what the CLI does for
-    // `--rules`.
+    // What this test asserts is the *limitation*, not the protection: `Ruleset::from_toml` runs the cheap
+    // tier only, so a bomb gets a `Ruleset`. That is fine, and stating it is useful, because a `Ruleset` is
+    // no longer a scanning capability — `Engine` can only be built from a `PreparedRuleset`, and every
+    // route to one validates (FR-102, FR-103).
+    //
+    // 001 asserted the same parse and then called `Ruleset::validate_compiled`, a public optional method
+    // whose doc comment said "call this for any rule set you did not ship" and which nothing in the tree
+    // called. The comment here even claimed "which is exactly what the CLI does for `--rules`"; the CLI has
+    // no `--rules` flag. That method is gone from the public surface.
+    //
+    // The rejection is asserted in tests/preparation.rs, across every construction path (SC-101, SC-102).
     let body = valid_rule().replace(
         r"pattern = '(?i)\bignore\b'",
         "pattern = 'a{1000}{1000}{1000}'",
@@ -301,21 +308,23 @@ fn a_counted_repetition_bomb_survives_loading_but_fails_compiled_validation() {
         ..RulesetLimits::default()
     };
 
-    let set = Ruleset::from_toml_with_limits(&with_rule(&body), &limits)
+    Ruleset::from_toml_with_limits(&with_rule(&body), &limits)
         .expect("a size bomb parses cleanly — that is the whole point of the second tier");
+}
 
-    let err = set.validate_compiled(&limits).unwrap_err();
+#[test]
+fn a_bomb_that_parsed_cannot_become_a_scanner() {
+    // The other half, here rather than only in tests/preparation.rs because this file is where someone
+    // reading about rule-set loading will look for it. Parsing and capability are now different things.
+    let body = valid_rule().replace(
+        r"pattern = '(?i)\bignore\b'",
+        "pattern = 'a{1000}{1000}{1000}'",
+    );
+    let err = please_core::Engine::from_toml(&with_rule(&body)).unwrap_err();
     assert!(
         matches!(err, RulesetError::PatternTooComplex { .. }),
         "got {err:?}"
     );
-}
-
-#[test]
-fn compiled_validation_accepts_ordinary_rules() {
-    let set = Ruleset::from_toml(&with_rule(valid_rule())).unwrap();
-    set.validate_compiled(&RulesetLimits::default())
-        .expect("a legitimate rule must pass the expensive tier too");
 }
 
 #[test]

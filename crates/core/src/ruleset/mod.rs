@@ -31,6 +31,7 @@ mod parse;
 mod validate;
 
 use crate::finalize::types::{DetectionClass, RiskLevel, RulesetId};
+use crate::prepare::Provenance;
 
 /// Resource limits enforced when a rule set is loaded.
 ///
@@ -44,6 +45,19 @@ pub struct RulesetLimits {
     pub max_compiled_bytes: usize,
     /// Maximum rules in one resolved set.
     pub max_rules: usize,
+}
+
+impl RulesetLimits {
+    /// True when these limits allow everything `other` allows, and possibly more.
+    ///
+    /// The comparison a validation record needs (FR-108). Every field is a ceiling, so "at least as
+    /// permissive" is a field-wise `>=` — and every field has to be checked, because a caller can raise one
+    /// while lowering another and that combination is not covered by a record established at either.
+    pub fn permits_at_least(&self, other: &RulesetLimits) -> bool {
+        self.max_pattern_bytes >= other.max_pattern_bytes
+            && self.max_compiled_bytes >= other.max_compiled_bytes
+            && self.max_rules >= other.max_rules
+    }
 }
 
 impl Default for RulesetLimits {
@@ -134,6 +148,16 @@ pub struct Rule {
     /// lookup — an unexplained finding is one a user cannot act on, and it is the first thing that
     /// erodes trust in a scanner.
     pub description: String,
+    /// Where this rule came from (FR-105).
+    ///
+    /// Set when the rule is parsed, from the *source* rather than from anything in the rule, and carried
+    /// through resolution unchanged. Per-rule rather than per-set, which is the whole point: after
+    /// layering a caller's additions onto the built-in set you must still be able to say which half is
+    /// untrusted, or delta validation collapses into validating everything.
+    ///
+    /// The field is public and that is safe, because the unforgeable thing is the *value*: a caller can
+    /// write `provenance` freely and still cannot obtain a [`Provenance`] that reports `is_builtin`.
+    pub provenance: Provenance,
 }
 
 /// A versioned, identified collection of rules.
@@ -202,22 +226,24 @@ impl Ruleset {
         &self.bands
     }
 
-    /// The expensive validation tier: compile every pattern under the size limit.
+    /// Set every rule's provenance.
     ///
-    /// **Call this for any rule set you did not ship.** Loading runs a cheap syntax-only check that
-    /// rejects malformed patterns, look-around, and backreferences, but a counted-repetition size bomb
-    /// parses fine in microseconds and only explodes when compiled — so this is where
-    /// `a{1000}{1000}{1000}` is caught.
+    /// The expensive validation tier used to live here, as `validate_compiled`, and it is **gone from the
+    /// public surface** (FR-103). It is now `crate::prepare`, which is reachable only by routes that run it
+    /// — because while it existed as a separate call, some caller was always going to omit it, and in 001
+    /// every caller did.
     ///
-    /// It is separate because it is expensive: ~44 ms for 80 rules, against a 25 ms cold-start budget
-    /// for the whole process (research D17). Paying it on every invocation would spend the budget
-    /// re-establishing a guarantee the built-in set already holds via a CI test. Paying it once, when a
-    /// caller supplies `--rules`, puts the cost where the untrusted input is.
-    pub fn validate_compiled(&self, limits: &RulesetLimits) -> Result<(), RulesetError> {
-        for rule in &self.rules {
-            validate::compiled_check(&rule.id, &rule.pattern, limits)?;
+    /// This method is safe to expose despite what it does, and the reason is worth stating: it takes a
+    /// [`Provenance`] the caller must already hold, and a caller cannot construct the trusted one. So the
+    /// only stamp available outside `crate::prepare` is the stamp that causes *more* validation.
+    ///
+    /// Does not recompute the identity digest, and must not: content identity deliberately excludes
+    /// provenance, so that "were these the same rules?" stays answerable independently of "did we trust
+    /// them?". Trust enters identity one level up, in `PreparedRuleset::id` (FR-111).
+    pub fn stamp_provenance(&mut self, provenance: Provenance) {
+        for rule in &mut self.rules {
+            rule.provenance = provenance;
         }
-        Ok(())
     }
 
     /// Non-fatal observations from loading, e.g. a rule with no literals, or an addition replacing a
@@ -243,6 +269,12 @@ impl Ruleset {
     /// as a warning. Suppressing an unknown id is an **error**, not a silent no-op: the overwhelmingly
     /// common cause is a typo, and a typo that quietly leaves a rule enabled defeats the entire point
     /// of disabling it.
+    ///
+    /// **Provenance survives** (FR-105), and it survives by being a field of [`Rule`] rather than a
+    /// property of the set: replacement swaps whole rules, so the surviving rule brings its own origin
+    /// with it. That is what makes a caller replacing a built-in rule own the replacement — overriding a
+    /// built-in id is not a way to inherit its trust — and it is what lets T039 validate the caller's
+    /// half of the resolved set and leave the rest alone.
     pub fn resolve(
         base: Ruleset,
         additions: Vec<Ruleset>,
@@ -519,6 +551,7 @@ mod tests {
             fires_in_quotes: false,
             enabled: true,
             description: "d".into(),
+            provenance: Provenance::supplied(),
         };
         let one = digest_of("n", "1", std::slice::from_ref(&rule), &Bands::default());
         let same = digest_of("n", "1", std::slice::from_ref(&rule), &Bands::default());

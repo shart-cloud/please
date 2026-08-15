@@ -10,6 +10,12 @@
 //! This matters for reproducibility as much as convenience: a test that only passes when run from one
 //! directory is a test that will fail in CI for reasons nobody can reproduce locally.
 
+#![allow(dead_code)]
+// Shared by several test binaries, each of which uses a different subset. `tests/fixtures.rs` reads every
+// field of `Case`; `tests/preparation.rs` wants only the fixture path helpers. Rust compiles this module
+// separately into each binary, so anything one binary does not touch is dead code from its point of view —
+// which makes the warning structural rather than a signal about this file.
+
 use std::path::{Path, PathBuf};
 
 /// Absolute path to the repository root.

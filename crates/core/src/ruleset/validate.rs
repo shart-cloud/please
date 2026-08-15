@@ -32,6 +32,7 @@
 use super::parse::{RawRule, RawRuleset};
 use super::{Rule, Ruleset, RulesetError, RulesetLimits};
 use crate::finalize::types::DetectionClass;
+use crate::prepare::Provenance;
 
 pub(super) fn validate(raw: RawRuleset, limits: &RulesetLimits) -> Result<Ruleset, RulesetError> {
     raw.bands.validate()?;
@@ -126,6 +127,12 @@ fn validate_rule(
         fires_in_quotes: raw.fires_in_quotes,
         enabled: raw.enabled,
         description: raw.description,
+        // Anything reaching this function came from TOML a caller handed us, so it is `Supplied`
+        // (FR-105). The embedded rule set goes through here too and is re-stamped `Builtin` afterwards,
+        // by preparation, which is the only thing that can. Defaulting the other way round -- stamp
+        // trusted, downgrade later -- would mean any new loading path that forgot to downgrade would
+        // silently skip validation.
+        provenance: Provenance::supplied(),
     })
 }
 
@@ -146,31 +153,10 @@ pub(super) fn syntax_check(id: &str, pattern: &str) -> Result<(), RulesetError> 
         })
 }
 
-/// Compile the pattern under a size limit, discarding the result. The expensive tier.
-///
-/// This is where the counted-repetition expansion case is caught: `a{5}{5}{5}{5}{5}{5}` is twenty
-/// bytes of source and an enormous automaton, so without a compiled-size limit a rule set copied from
-/// an untrusted source is a memory-exhaustion path into the scanner.
-pub(super) fn compiled_check(
-    id: &str,
-    pattern: &str,
-    limits: &RulesetLimits,
-) -> Result<(), RulesetError> {
-    match regex::RegexBuilder::new(pattern)
-        .size_limit(limits.max_compiled_bytes)
-        .build()
-    {
-        Ok(_) => Ok(()),
-        Err(regex::Error::CompiledTooBig(_)) => Err(RulesetError::PatternTooComplex {
-            rule: id.to_string(),
-            limit: limits.max_compiled_bytes,
-        }),
-        Err(e) => Err(RulesetError::PatternInvalid {
-            rule: id.to_string(),
-            detail: e.to_string(),
-        }),
-    }
-}
+// The expensive tier used to live here as `compiled_check`, discarding the compiled result. It is now
+// `crate::prepare::validate::compile_within`, which keeps it (T038, FR-109). The move is not tidying: while
+// it lived beside the cheap tier it was reachable as an optional public call, and the whole US1 defect is
+// that being reachable-but-optional means being skipped.
 
 /// `^[a-z0-9_]+(\.[a-z0-9_]+)+$` — checked by hand so rule loading needs no regex of its own.
 fn is_valid_id(id: &str) -> bool {
@@ -263,16 +249,7 @@ mod tests {
         );
     }
 
-    #[test]
-    fn counted_repetition_bomb_exceeds_the_size_limit() {
-        let limits = RulesetLimits {
-            max_compiled_bytes: 4096,
-            ..RulesetLimits::default()
-        };
-        let err = compiled_check("t.t", "a{100}{100}{100}", &limits).unwrap_err();
-        assert!(
-            matches!(err, RulesetError::PatternTooComplex { .. }),
-            "expected PatternTooComplex, got {err:?}"
-        );
-    }
+    // `counted_repetition_bomb_exceeds_the_size_limit` moved with the expensive tier, to
+    // prepare::validate::tests::a_counted_repetition_bomb_exceeds_the_size_limit (T038). Recorded in
+    // docs/002-test-inventory-before.txt.
 }

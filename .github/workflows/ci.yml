@@ -66,6 +66,29 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --manifest-path crates/eval/Cargo.toml
 
+  # FR-106. The built-in fast path skips compiled resource validation at default limits, on the grounds
+  # that this check has already established it. Everything about that shortcut — a ~489 µs cold start
+  # instead of ~5.75 ms — rests on this job existing.
+  #
+  # It is its own job rather than a line in `test` deliberately. In 001 the expensive validation tier was
+  # never invoked by anything, on any rule set, including the embedded one, and the fast path's safety
+  # therefore rested on nothing at all. A guarantee that a whole design decision depends on should be a
+  # check you can point at and watch go red, not a test whose absence would look like a passing suite.
+  #
+  # If this fails, `Engine::builtin()` is returning an unvalidated scanner and the fix is the rule set,
+  # not this job.
+  builtin-validation:
+    name: built-in rule set validates (FR-106)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: >
+          cargo test -p please-core --test preparation
+          the_builtin_rule_set_passes_compiled_validation_at_default_limits
+          -- --exact --nocapture
+
   # Principle V has two halves and needs two checks. The allow-list covers a *dependency* reaching the
   # network or the filesystem; the isolation check covers the engine's own code doing it, which an
   # allow-list is blind to because `std::net` needs no dependency at all.

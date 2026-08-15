@@ -84,28 +84,28 @@ the same paths with a legitimate rule set and assert each succeeds.
 
 ### Tests for User Story 1
 
-- [ ] T025 [P] [US1] Create `tests/fixtures/rules/bomb.toml` containing a counted-repetition expansion that parses cleanly and exceeds the compiled budget
-- [ ] T026 [US1] Write failing test enumerating **every** public construction path and asserting none accepts `bomb.toml`, in `crates/core/tests/preparation.rs` (SC-101, SC-102)
-- [ ] T027 [US1] Write failing test asserting a rule set whose only defective rule is `enabled = false` is still rejected, in `crates/core/tests/preparation.rs` (FR-107)
-- [ ] T028 [US1] Write failing test asserting the built-in rule set passes compiled validation at default limits, in `crates/core/tests/preparation.rs` — **the check FR-106 requires and that has never existed**
-- [ ] T029 [US1] Write failing test asserting limits stricter than a validation record force revalidation, in `crates/core/tests/preparation.rs` (FR-108)
-- [ ] T030 [P] [US1] Write failing test asserting a caller-supplied pattern is compiled exactly once, in `crates/core/tests/preparation.rs` (FR-109, SC-106)
-- [ ] T031 [P] [US1] Write failing test asserting validation cost is proportional to caller rules rather than to the resolved set, in `crates/core/benches/preparation.rs` (SC-105)
-- [ ] T032 [P] [US1] Write failing compile-fail case asserting a caller cannot mint built-in provenance, in `crates/core/tests/compile_fail/provenance_cannot_be_forged.rs` (FR-104)
+- [x] T025 [P] [US1] Create `tests/fixtures/rules/bomb.toml` containing a counted-repetition expansion that parses cleanly and exceeds the compiled budget
+- [x] T026 [US1] Write failing test enumerating **every** public construction path and asserting none accepts `bomb.toml`, in `crates/core/tests/preparation.rs` (SC-101, SC-102)
+- [x] T027 [US1] Write failing test asserting a rule set whose only defective rule is `enabled = false` is still rejected, in `crates/core/tests/preparation.rs` (FR-107)
+- [x] T028 [US1] Write failing test asserting the built-in rule set passes compiled validation at default limits, in `crates/core/tests/preparation.rs` — **the check FR-106 requires and that has never existed**
+- [x] T029 [US1] Write failing test asserting limits stricter than a validation record force revalidation, in `crates/core/tests/preparation.rs` (FR-108)
+- [x] T030 [P] [US1] Write failing test asserting a caller-supplied pattern is compiled exactly once, in `crates/core/tests/preparation.rs` (FR-109, SC-106)
+- [x] T031 [P] [US1] Write failing test asserting validation cost is proportional to caller rules rather than to the resolved set, in `crates/core/benches/preparation.rs` (SC-105)
+- [x] T032 [P] [US1] Write failing compile-fail case asserting a caller cannot mint built-in provenance, in `crates/core/tests/compile_fail/provenance_cannot_be_forged.rs` (FR-104)
 
 ### Implementation for User Story 1
 
-- [ ] T033 [US1] Implement `Provenance` as a public type wrapping a private discriminant, with `Builtin` minted only inside preparation, in `crates/core/src/prepare/provenance.rs` (research P1)
-- [ ] T034 [US1] Add `provenance` to `Rule` and set it at parse time from the source, in `crates/core/src/ruleset/parse.rs` and `crates/core/src/ruleset/mod.rs` (FR-105)
-- [ ] T035 [US1] Preserve per-rule provenance through resolution, including replacement, in `crates/core/src/ruleset/mod.rs` (FR-105 — this is what makes delta validation possible)
-- [ ] T036 [US1] Implement `ValidationRecord` carrying the limits validation was performed against, in `crates/core/src/prepare/prepared.rs` (FR-108)
-- [ ] T037 [US1] Implement `PreparedRuleset` with a private field and constructors that all validate, in `crates/core/src/prepare/prepared.rs` (FR-102, research P2 — newtype rather than type-state)
-- [ ] T038 [US1] Move the cheap and expensive validation tiers from `crates/core/src/ruleset/validate.rs` into `crates/core/src/prepare/validate.rs`, and make the expensive tier **retain** each compiled pattern rather than discard it (FR-109)
-- [ ] T039 [US1] Implement delta validation — validate caller-supplied rules only, treating built-in rules under a default-limit record as already covered — in `crates/core/src/prepare/validate.rs` (SC-105)
-- [ ] T040 [US1] Implement the three preparation entry points (built-in, from source, layered), each validating, in `crates/core/src/prepare/mod.rs` per [contracts/preparation.md](./contracts/preparation.md)
-- [ ] T041 [US1] Make `Engine` constructible only from a `PreparedRuleset`, and remove `Ruleset::validate_compiled` from the public surface, in `crates/core/src/engine.rs` and `crates/core/src/ruleset/mod.rs` (FR-103)
-- [ ] T042 [US1] Include provenance and validation state in the rule-set identity digest, in `crates/core/src/prepare/prepared.rs` (FR-111)
-- [ ] T043 [US1] Add the built-in validation check to `.github/workflows/ci.yml` so FR-106's guarantee is established rather than assumed
+- [x] T033 [US1] Implement `Provenance` as a public type wrapping a private discriminant, with `Builtin` minted only inside preparation, in `crates/core/src/prepare/provenance.rs` (research P1)
+- [x] T034 [US1] Add `provenance` to `Rule` and set it at parse time from the source, in `crates/core/src/ruleset/parse.rs` and `crates/core/src/ruleset/mod.rs` (FR-105)
+- [x] T035 [US1] Preserve per-rule provenance through resolution, including replacement, in `crates/core/src/ruleset/mod.rs` (FR-105 — this is what makes delta validation possible)
+- [x] T036 [US1] Implement `ValidationRecord` carrying the limits validation was performed against, in `crates/core/src/prepare/prepared.rs` (FR-108)
+- [x] T037 [US1] Implement `PreparedRuleset` with a private field and constructors that all validate, in `crates/core/src/prepare/prepared.rs` (FR-102, research P2 — newtype rather than type-state)
+- [x] T038 [US1] Move the cheap and expensive validation tiers from `crates/core/src/ruleset/validate.rs` into `crates/core/src/prepare/validate.rs`, and make the expensive tier **retain** each compiled pattern rather than discard it (FR-109)
+- [x] T039 [US1] Implement delta validation — validate caller-supplied rules only, treating built-in rules under a default-limit record as already covered — in `crates/core/src/prepare/validate.rs` (SC-105)
+- [x] T040 [US1] Implement the three preparation entry points (built-in, from source, layered), each validating, in `crates/core/src/prepare/mod.rs` per [contracts/preparation.md](./contracts/preparation.md)
+- [x] T041 [US1] Make `Engine` constructible only from a `PreparedRuleset`, and remove `Ruleset::validate_compiled` from the public surface, in `crates/core/src/engine.rs` and `crates/core/src/ruleset/mod.rs` (FR-103)
+- [x] T042 [US1] Include provenance and validation state in the rule-set identity digest, in `crates/core/src/prepare/prepared.rs` (FR-111)
+- [x] T043 [US1] Add the built-in validation check to `.github/workflows/ci.yml` so FR-106's guarantee is established rather than assumed
 
 **Checkpoint**: A resource bomb cannot produce a scanner by any route. Run quickstart Scenarios 1, 3, 4, 5.
 
@@ -218,6 +218,7 @@ assert no rule position appears.
 ## Phase 8: Polish & Amendments
 
 - [ ] T077 Amend FR-024 in `specs/001-structural-detection-cli/spec.md` to require rule-set resource limits (FR-150) — carried over from 001 and still open
+- [ ] T077a Record the **`plz --rules` gap** found at the Phase 3 checkpoint: quickstart Scenario 1 and 4 both invoke a CLI flag that does not exist, and 001's `ruleset_load.rs` documented it as already working. US1's guarantee is established at the library level across all seven construction paths; the CLI cannot yet load a caller's rule set at all. Amend `specs/001-structural-detection-cli/spec.md` where it implies otherwise, and note the flag as unbuilt in `docs/limits.md`
 - [ ] T078 Amend SC-004 in `specs/001-structural-detection-cli/spec.md` to state warm per-scan and cold-start budgets separately (FR-151)
 - [ ] T079 [P] Correct `specs/001-structural-detection-cli/contracts/core-api.md` where it no longer matches the implementation, including the cloneability claim and the two-tier validation split (FR-152)
 - [ ] T080 [P] Update `docs/limits.md` if any declared gap changed; this feature should add none

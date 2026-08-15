@@ -1,0 +1,55 @@
+# A rule set that PARSES CLEANLY and must never produce a scanner.
+#
+# Authored at T025 for feature 002. Nothing here is malformed: the document is well-formed TOML, every
+# field is present and correctly typed, the identifier is well shaped, the severity is in range, and the
+# pattern is valid regular-expression syntax that `regex_syntax::parse` accepts in microseconds.
+#
+# What it is, is `a{1000}{1000}{1000}` — nineteen bytes of source describing an automaton with on the
+# order of 10^9 states. The expansion happens at COMPILE time, which is why the cheap validation tier
+# cannot see it and why the expensive tier exists.
+#
+# 001 would load this and hand back an `Engine`. The bomb would then detonate lazily, inside
+# `Engine::scan`, the first time an input contained the literal `boom` — at which point the failure is a
+# coverage gap in a verdict rather than a rejected configuration, and the memory has already been asked
+# for. `Ruleset::validate_compiled` existed and would have caught it, and nothing called it.
+#
+# Every construction path is asserted against this file in crates/core/tests/preparation.rs (SC-101,
+# SC-102). If any of them ever returns Ok, that is the shipped defect back again.
+
+[ruleset]
+name = "test.bomb"
+version = "1.0.0"
+
+# The bomb. Deliberately the FIRST rule, so a loader that stops at the first failure and one that
+# collects every failure both have to reject it.
+[[rule]]
+id = "bomb.counted_repetition"
+class = "override"
+severity = 90
+literals = ["boom"]
+pattern = 'a{1000}{1000}{1000}'
+description = "A counted-repetition expansion that parses in microseconds and compiles to gigabytes."
+
+# A perfectly ordinary rule, second. Rejection is whole-set (contract: preparation), so the presence of
+# a legitimate rule must not buy the file a partial load — a half-loaded rule set is indistinguishable
+# from a deliberately weakened one.
+[[rule]]
+id = "bomb.innocent_bystander"
+class = "override"
+severity = 50
+literals = ["ignore"]
+pattern = '(?i)\bignore\b'
+description = "A legitimate rule sharing a file with the bomb, to prove rejection is whole-set."
+
+# The same bomb again, but switched OFF. It will never match, so validating it looks like waste — and it
+# is exactly what FR-107 requires, because `enabled` is a field in a file. If validation skipped this,
+# an operator flipping it to `true` would turn a validated rule set into an unvalidated one with no
+# construction occurring, and the validation state would go stale in silence.
+[[rule]]
+id = "bomb.disabled_but_still_a_bomb"
+class = "override"
+severity = 90
+literals = ["quiet"]
+pattern = 'b{1000}{1000}{1000}'
+enabled = false
+description = "A disabled bomb. Validated anyway, because `enabled` is flippable data (FR-107)."

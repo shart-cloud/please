@@ -24,6 +24,18 @@ differing only by the trybuild subtree.
 
 ci/check-dependencies.sh at baseline: exact match (27 crates)
 
+CONFIRMED at end of Phase 3: shipping graph still an exact 27-crate match. Dev graph differs from the
+baseline below by exactly four entries, all of them trybuild's subtree:
+
+    + glob 0.3.4
+    + target-triple 1.0.1
+    + termcolor 1.4.1
+    + trybuild 1.0.120
+
+Phase 3 declared a `[[bench]]` target (crates/core/benches/preparation.rs) and added NO dependency to
+do it: criterion was already a declared dev-dependency of please-core, so it was already in the
+resolved graph and only became reachable from a build target.
+
 Shipping graph — please-core, --edges normal, 27 crates
 ------------------------------------------------------
 

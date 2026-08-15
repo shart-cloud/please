@@ -1,0 +1,10 @@
+error[E0624]: associated function `builtin` is private
+ --> tests/compile_fail/provenance_cannot_be_forged.rs
+  |
+  |     let _forged = Provenance::builtin();
+  |                               ^^^^^^^ private associated function
+  |
+ ::: src/prepare/provenance.rs
+  |
+  |     pub(super) fn builtin() -> Self {
+  |     ------------------------------- private associated function defined here

@@ -51,6 +51,33 @@ impl PatternSet {
         }
     }
 
+    /// Build with slots already filled by validation (FR-109, SC-106).
+    ///
+    /// Proving a caller-supplied pattern safe compiles it, and 001 threw that compiled form away and paid
+    /// for it again lazily on first match. `retained` carries it across: `Some` slots are sealed here and
+    /// never recompiled, `None` slots stay lazy, which is what keeps the eighty built-in rules a given
+    /// input does not mention out of the cold-start path.
+    ///
+    /// The two kinds of slot are why this is one structure with a mixed fill rather than two structures.
+    /// Whether a pattern arrives pre-compiled is a property of where its rule came from, not of how the
+    /// matcher works, and the matcher should not have to care.
+    pub fn prefilled(retained: Vec<Option<Regex>>, limits: RulesetLimits) -> Self {
+        let slots: Vec<OnceLock<Result<Regex, String>>> = retained
+            .into_iter()
+            .map(|compiled| {
+                let slot = OnceLock::new();
+                if let Some(regex) = compiled {
+                    // Cannot fail: a fresh `OnceLock` is empty. `let _` rather than `expect` because the
+                    // error case would hand back the `Regex` we just tried to store, and there is nothing
+                    // useful to say about a branch that cannot be taken.
+                    let _ = slot.set(Ok(regex));
+                }
+                slot
+            })
+            .collect();
+        Self { slots, limits }
+    }
+
     /// Compile on first use; return the memoised result afterwards.
     fn regex_for(&self, index: usize, rule: &Rule) -> Result<&Regex, &String> {
         self.slots[index]
@@ -171,6 +198,7 @@ mod tests {
             fires_in_quotes: false,
             enabled: true,
             description: "test".to_string(),
+            provenance: crate::prepare::Provenance::supplied(),
         }
     }
 

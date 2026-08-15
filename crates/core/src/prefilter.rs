@@ -142,6 +142,7 @@ mod tests {
             fires_in_quotes: false,
             enabled: true,
             description: "test".to_string(),
+            provenance: crate::prepare::Provenance::supplied(),
         }
     }
 

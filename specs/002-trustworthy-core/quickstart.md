@@ -42,11 +42,33 @@ plz scan --rules /tmp/bomb.toml /dev/null; echo "exit=$?"
 **Expected after**: exit `64`, stderr names `bomb.expansion` and the limit it exceeded, nothing on stdout. The
 rule set is rejected as a whole.
 
-**Then the negative control** — enumerate every public construction path and assert none accepts it. A single
-path that does is the whole feature failing, so this is an enumeration test rather than a spot check.
+> **⚠ Not runnable as written. `plz` has no `--rules` flag.**
+>
+> Discovered at the Phase 3 checkpoint. This scenario was written assuming a flag that 001 never built —
+> the same assumption `ruleset_load.rs` carried in a comment reading "which is exactly what the CLI does
+> for `--rules`". Both were describing an intention.
+>
+> Feature 002 does not add it: no task in `tasks.md` covers the CLI surface for rule loading, and adding a
+> flag, its file I/O, and its exit-code mapping is a feature rather than part of closing this defect.
+> Carried as an open item — see the amendments in Phase 8.
+>
+> **What is established instead**, at the library level and across a wider surface than one flag: every
+> public construction path is enumerated and asserted to reject `tests/fixtures/rules/bomb.toml`. That
+> covers seven routes in, of which a `--rules` flag would be a caller of one.
+
+**The negative control** — enumerate every public construction path and assert none accepts it. A single path
+that does is the whole feature failing, so this is an enumeration test rather than a spot check.
 
 ```sh
-cargo test -p please-core --test preparation -- --nocapture no_construction_path_accepts_unvalidated_rules
+cargo test -p please-core --test preparation -- --nocapture \
+  every_public_construction_path_rejects_a_resource_bomb
+```
+
+And the positive control, because a gate that rejected everything would pass the test above:
+
+```sh
+cargo test -p please-core --test preparation -- --nocapture \
+  every_public_construction_path_accepts_a_legitimate_rule_set
 ```
 
 ---
@@ -91,24 +113,52 @@ hyperfine --warmup 3 'plz scan tests/fixtures/handcrafted-benign.jsonl'
 **Expected**: within the cold-start budget from Feature 001. The built-in set must still not compile its
 patterns at startup.
 
+Measured at the Phase 3 checkpoint without `hyperfine` (not installed): three runs of the release binary over
+the benign fixture, each under 10 ms wall clock. `prepare/builtin` in the bench above is the isolated figure —
+489 µs, compiling nothing.
+
 ## Scenario 4 — Validation cost is proportional to caller rules (SC-105)
 
+Also not runnable through the CLI, for the `--rules` reason above. Measured directly instead, which is better
+evidence anyway: the bench separates the cost of validating the caller's rules from everything else the CLI
+does on the way to a verdict.
+
 ```sh
-# One added rule, against a built-in set of ~10.
-hyperfine 'plz scan --rules tests/fixtures/rules/acme.toml /dev/null'
+cargo bench -p please-core --bench preparation
 ```
 
-**Expected**: measurably cheaper than validating the whole resolved set. If delta validation is not working,
-this and Scenario 3 converge — which is the observable symptom.
+**Expected**: `prepare/layered/N` tracks N — the caller's rule count — and stays nowhere near
+`prepare/builtin_revalidated`, which is what validating the whole resolved set would cost. Measured at the
+Phase 3 checkpoint:
+
+```text
+prepare/builtin                    489 µs      compiles nothing
+prepare/builtin_revalidated       5.75 ms      compiles all 80: limits were tightened, so the CI record
+                                               no longer applies
+prepare/layered/1                 1.72 ms      NOT 5.75 ms + one rule, which is the whole point
+prepare/layered/4                 6.84 ms
+prepare/layered/16                25.2 ms
+```
+
+If delta validation stops working, `layered/1` climbs to roughly `builtin_revalidated` plus one rule. The
+mechanical assertion is a count rather than a duration, because a timing test is flaky on a shared runner:
+
+```sh
+cargo test -p please-core --test preparation -- \
+  validation_cost_is_proportional_to_the_caller_s_rules_not_the_resolved_set
+```
 
 ## Scenario 5 — No rule is compiled twice (SC-106)
 
 ```sh
-cargo test -p please-core --test preparation -- compiled_patterns_are_retained_not_discarded
+cargo test -p please-core --test preparation -- \
+  a_caller_supplied_pattern_is_compiled_exactly_once \
+  a_builtin_pattern_is_not_compiled_until_it_is_needed
 ```
 
-**Expected**: a caller-supplied rule's pattern is compiled exactly once, and the match path finds it already
-present. The current implementation compiles it in validation, drops it, and compiles it again on first match.
+**Expected**: a caller-supplied rule's pattern is compiled exactly once, during validation, and the match path
+finds it already present. A built-in pattern is *not* compiled until an input hits its literal gate. 001
+compiled a caller's pattern in validation, dropped it, and compiled it again on first match.
 
 ---
 

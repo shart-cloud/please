@@ -80,6 +80,36 @@ PHASE 2 (T007-T024) — 244 -> 258 tests. No test lost. Every line below is a mo
 
   DELETED — none.
 
+PHASE 3 (T025-T043) — 258 -> 290 tests. No test lost.
+
+  MOVED — 1 test
+      ruleset::validate::tests::counted_repetition_bomb_exceeds_the_size_limit
+        -> prepare::validate::tests::a_counted_repetition_bomb_exceeds_the_size_limit   (T038)
+        Moved with the expensive validation tier it tests. Renamed only to read as a sentence.
+
+  REWRITTEN IN PLACE, renamed — 1 test
+      ruleset_load.rs::a_counted_repetition_bomb_survives_loading_but_fails_compiled_validation
+        -> ruleset_load.rs::a_counted_repetition_bomb_still_parses_cleanly              (T041)
+        It called `Ruleset::validate_compiled`, which is gone from the public surface -- that method
+        being public and optional IS the US1 defect. What survives asserts the LIMITATION (the cheap
+        tier does not catch a bomb, so a `Ruleset` is not a capability); the protection is asserted
+        across every construction path in tests/preparation.rs.
+
+  DELETED — 1 test
+      ruleset_load.rs::compiled_validation_accepts_ordinary_rules                       (T041)
+        It asserted that `validate_compiled` accepts a legitimate rule set. The method no longer
+        exists. Replaced, with wider coverage, by
+        preparation.rs::every_public_construction_path_accepts_a_legitimate_rule_set.
+
+  ADDED — 33 tests
+      tests/preparation.rs                                            19   (T026-T031, T035-T042)
+      tests/ruleset_load.rs::a_bomb_that_parsed_cannot_become_a_scanner 1   (T041)
+      prepare::provenance::tests::*                                    3   (T033)
+      prepare::validate::tests::*                                     5   (T038, T039)
+      prepare::tests::*                                               4   (T040)
+      ruleset::tests / detect / prefilter provenance fixups            0   (existing tests, new field)
+      compile_fail/provenance_cannot_be_forged.rs                      1   (T032, under the harness)
+
 (T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
 
 Verbatim listing
