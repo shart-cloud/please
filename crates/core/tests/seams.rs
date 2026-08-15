@@ -210,3 +210,173 @@ fn only_finalization_turns_a_coverage_gap_into_a_reported_one() {
         "no conversion found at all; the search pattern is broken"
     );
 }
+
+// ── SC-111, FR-140: the rule position space does not leave the matcher ─────────────────────────
+
+#[test]
+fn no_component_outside_the_matcher_indexes_the_rule_slice() {
+    // SC-111. 001 identified a rule by its POSITION in the resolved slice, and that position crossed three
+    // seams: the prefilter returned candidate indices, the pattern store keyed compiled patterns by index,
+    // and the engine indexed back into the slice to read a rule's metadata. Three components agreeing on an
+    // ordering is a coupling no type checks — insert a rule, or resolve an override differently, and every
+    // index means something else while everything still compiles.
+    //
+    // Positions are a fine way to key a cache and a terrible thing to put in an interface. The matcher owns
+    // all three together, so the index space is real but unobservable.
+    // Two locations may index a rule slice, and the difference between them is the whole requirement.
+    //
+    //   matcher/       — owns the slice, the prefilter, and the compiled slots, so an index here is an
+    //                    internal address that nothing outside can observe.
+    //   ruleset/mod.rs — `Ruleset::resolve` replaces a rule by `position()` and then `rules[index] = rule`.
+    //                    The index is created and consumed inside one function, over a `Vec` that function
+    //                    owns, and never reaches a caller. That is not a seam; it is a local variable.
+    //
+    // FR-140 forbids EXCHANGING a position between components, not computing one. A test that forbade both
+    // would be asking for `retain`-and-rebuild in `resolve` for no benefit to anyone.
+    const MAY_INDEX: &[&str] = &["matcher/", "ruleset/mod.rs"];
+
+    let found = occurrences("rules[");
+    let outside: Vec<_> = found
+        .iter()
+        .filter(|(file, _, _)| !MAY_INDEX.iter().any(|allowed| file.contains(allowed)))
+        .cloned()
+        .collect();
+    assert!(
+        outside.is_empty(),
+        "{}",
+        report("indexing into the rule slice, outside the two places that may", &outside)
+            + "\nA rule is identified by its id. A position is the matcher's private business, and any \
+               new entry in this test's allow-list needs the same argument the two existing ones have."
+    );
+    assert!(
+        !found.is_empty(),
+        "no rule-slice indexing found anywhere; the search pattern is broken and this test is vacuous"
+    );
+}
+
+#[test]
+fn the_prefilters_candidate_indices_do_not_leave_the_matcher() {
+    // The first of the three seams. `Prefilter::candidates` returns positions, which is the right thing for
+    // it to do and the wrong thing for anyone else to see.
+    let found = occurrences(".candidates(");
+    let outside: Vec<_> = found
+        .iter()
+        .filter(|(file, _, _)| !file.contains("matcher/"))
+        .cloned()
+        .collect();
+    assert!(
+        outside.is_empty(),
+        "{}",
+        report("`.candidates(` outside matcher/", &outside)
+    );
+    assert!(!found.is_empty(), "search pattern is broken");
+}
+
+#[test]
+fn the_matchers_public_interface_exchanges_no_position() {
+    // The interface itself, read rather than inferred. Every `pub fn` in the matcher's own module must be
+    // free of `usize` — no index in, no index out. `Span` carries `usize` fields, but it is a location in the
+    // INPUT, which is a coordinate the caller already has and can act on; a rule position is a coordinate
+    // only the matcher can interpret.
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/matcher/mod.rs");
+    let text = std::fs::read_to_string(&dir).expect("matcher/mod.rs must exist");
+
+    let offenders: Vec<&str> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| l.starts_with("pub fn") || l.starts_with("pub const fn"))
+        .filter(|l| l.contains("usize"))
+        .collect();
+
+    assert!(
+        offenders.is_empty(),
+        "the matcher's public interface mentions `usize`, which is how a position escapes:\n  {}",
+        offenders.join("\n  ")
+    );
+    assert!(
+        text.contains("pub fn"),
+        "no public interface found at all; this test would pass vacuously"
+    );
+}
+
+// ── FR-141: an observation carries an identity, and identity does not move ─────────────────────
+
+/// A rule set containing `extra` filler rules that all sort BEFORE `z.target`.
+///
+/// Sorting matters: resolution orders rules by id, so adding rules whose ids precede `z.target` shifts its
+/// position in the resolved slice. If any part of the pipeline identified it positionally, the reported
+/// identity would move with it.
+fn ruleset_with_filler(extra: usize) -> String {
+    let mut source = String::from("[ruleset]\nname = \"test.identity\"\nversion = \"1.0.0\"\n");
+    for i in 0..extra {
+        source.push_str(&format!(
+            "\n[[rule]]\nid = \"a.filler_{i}\"\nclass = \"boundary\"\nseverity = 10\n\
+             literals = [\"zzzz_no_match_{i}\"]\npattern = 'zzzz_no_match_{i}'\n\
+             description = \"Filler that sorts before the target and never matches.\"\n"
+        ));
+    }
+    source.push_str(
+        "\n[[rule]]\nid = \"z.target\"\nclass = \"override\"\nseverity = 85\n\
+         literals = [\"needle\"]\npattern = 'needle'\ndescription = \"The rule under test.\"\n",
+    );
+    source
+}
+
+#[test]
+fn a_reported_identity_does_not_move_when_a_rules_position_does() {
+    // FR-141 behaviourally rather than by grep. Three rule sets in which `z.target` sits at position 0, 5,
+    // and 20 of the resolved slice. Every scan must report the same id, the same span, and the same class.
+    //
+    // **This test passes on the day it is written, and that is correct.** 001 already reported identity as a
+    // string — `Hit` carried `rule_id: String` — so the *reported* half of FR-141 was never broken. What was
+    // broken is FR-140: positions were exchanged BETWEEN components, which the three grep tests above catch
+    // and which were red before T072–T076. This one exists to hold the reported half still while the
+    // components underneath it are rearranged, which is what a regression test is for.
+    use please_core::policy::ScanPolicy;
+    use please_core::verdict::TargetRef;
+    use please_core::{DetectionClass, Engine};
+
+    let input = "please find the needle here";
+    let mut seen = Vec::new();
+
+    for extra in [0usize, 5, 20] {
+        let engine = Engine::from_toml(&ruleset_with_filler(extra))
+            .unwrap_or_else(|e| panic!("rule set with {extra} filler rules must prepare: {e}"));
+
+        // The target really does move: filler ids sort before `z.target`.
+        assert_eq!(
+            engine
+                .ruleset()
+                .all_rules()
+                .iter()
+                .position(|r| r.id == "z.target"),
+            Some(extra),
+            "the fixture must actually shift the position, or this test proves nothing"
+        );
+
+        let verdict = engine.scan(
+            input.as_bytes(),
+            &ScanPolicy::default(),
+            TargetRef::buffer("t", input.len()),
+        );
+        assert_eq!(verdict.reasons().len(), 1, "one rule matches");
+        let reason = &verdict.reasons()[0];
+        seen.push((
+            reason.rule_id().to_string(),
+            reason.span().start,
+            reason.span().end,
+            reason.class(),
+            verdict.score(),
+        ));
+    }
+
+    let first = &seen[0];
+    assert_eq!(first.0, "z.target", "reported by id, not by position");
+    assert_eq!(first.3, DetectionClass::Override);
+    for other in &seen[1..] {
+        assert_eq!(
+            first, other,
+            "the same rule at a different position must produce an identical finding: {seen:?}"
+        );
+    }
+}

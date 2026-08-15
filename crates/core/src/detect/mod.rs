@@ -7,7 +7,8 @@
 //!
 //! * **Rule-driven** (override, boundary, solicitation, and anything matching decoded content). These are
 //!   patterns from the rule set, gated by the literal prefilter and subject to quoting suppression. What
-//!   they detect is data, so it changes without a release.
+//!   they detect is data, so it changes without a release. They live in [`crate::matcher`], which owns the
+//!   rules, the prefilter, and the compiled patterns together — `detect::pattern` moved there at T073.
 //! * **Structural** (concealment, confusables). These recognise a *mechanism* rather than a phrase, so
 //!   they are code. A run of tag-block characters means the same thing regardless of what it decodes to,
 //!   and no rule corpus could express it.
@@ -34,7 +35,6 @@
 
 pub mod concealment;
 pub mod confusable;
-pub mod pattern;
 
 use crate::finalize::evidence::Observation;
 use crate::finalize::types::{DetectionClass, QuotingContext};

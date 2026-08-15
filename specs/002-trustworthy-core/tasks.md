@@ -200,16 +200,16 @@ assert no rule position appears.
 
 ### Tests for User Story 5
 
-- [ ] T070 [P] [US5] Write failing test enumerating the matcher's interface and asserting no positional identifier is exchanged, in `crates/core/tests/seams.rs` (SC-111)
-- [ ] T071 [P] [US5] Write failing test asserting an observation carries a rule identity rather than a position, in `crates/core/tests/seams.rs` (FR-141)
+- [x] T070 [P] [US5] Write failing test enumerating the matcher's interface and asserting no positional identifier is exchanged, in `crates/core/tests/seams.rs` (SC-111)
+- [x] T071 [P] [US5] Write failing test asserting an observation carries a rule identity rather than a position, in `crates/core/tests/seams.rs` (FR-141)
 
 ### Implementation for User Story 5
 
-- [ ] T072 [US5] Move `crates/core/src/prefilter.rs` to `crates/core/src/matcher/prefilter.rs` and make it private to the matcher
-- [ ] T073 [US5] Move `crates/core/src/detect/pattern.rs` to `crates/core/src/matcher/patterns.rs` and make it private to the matcher
-- [ ] T074 [US5] Have the matcher own the rule slice, the prefilter, and the compiled-pattern slots, exposing an interface that yields observations carrying a rule reference, in `crates/core/src/matcher/mod.rs` (FR-140)
-- [ ] T075 [US5] Accept pre-filled compiled patterns from preparation into the matcher's slots, in `crates/core/src/matcher/patterns.rs` (FR-109, research P5)
-- [ ] T076 [US5] Remove index-based rule access from `crates/core/src/engine.rs`
+- [x] T072 [US5] Move `crates/core/src/prefilter.rs` to `crates/core/src/matcher/prefilter.rs` and make it private to the matcher
+- [x] T073 [US5] Move `crates/core/src/detect/pattern.rs` to `crates/core/src/matcher/patterns.rs` and make it private to the matcher
+- [x] T074 [US5] Have the matcher own the rule slice, the prefilter, and the compiled-pattern slots, exposing an interface that yields observations carrying a rule reference, in `crates/core/src/matcher/mod.rs` (FR-140)
+- [x] T075 [US5] Accept pre-filled compiled patterns from preparation into the matcher's slots, in `crates/core/src/matcher/patterns.rs` (FR-109, research P5) — *begun early at T041*: `PatternSet::prefilled` landed in Phase 3, because retaining compiled patterns that nothing consumed would have been the same discard T038 set out to remove. Phase 7 moved it behind the matcher's interface and made `PatternSet::new` test-only, since preparation is now the only production route in
+- [x] T076 [US5] Remove index-based rule access from `crates/core/src/engine.rs`
 
 **Checkpoint**: The rule position space is unobservable outside one module.
 

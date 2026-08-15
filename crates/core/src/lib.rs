@@ -27,7 +27,6 @@ pub mod engine;
 pub mod finalize;
 pub mod matcher;
 pub mod policy;
-pub mod prefilter;
 pub mod prepare;
 pub mod ruleset;
 pub mod sanitize;

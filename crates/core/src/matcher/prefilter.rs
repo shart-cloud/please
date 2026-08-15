@@ -26,7 +26,7 @@ use crate::ruleset::Rule;
 
 /// Which rules a given input could possibly match.
 #[derive(Debug)]
-pub struct Prefilter {
+pub(super) struct Prefilter {
     /// `None` when no rule declares any literal, in which case there is nothing to gate on.
     matcher: Option<AhoCorasick>,
     /// For each literal in the automaton, the rule indices that declared it. A literal is frequently
@@ -43,7 +43,7 @@ impl Prefilter {
     ///
     /// `rules` must be indexed consistently with whatever the caller later passes to
     /// [`Prefilter::candidates`] — in practice, the slice returned by `Ruleset::all_rules`.
-    pub fn build(rules: &[Rule]) -> Self {
+    pub(super) fn build(rules: &[Rule]) -> Self {
         let mut literals: Vec<&str> = Vec::new();
         let mut owners: Vec<Vec<usize>> = Vec::new();
         let mut always: Vec<usize> = Vec::new();
@@ -95,7 +95,7 @@ impl Prefilter {
     ///
     /// One linear pass over the input. The result is a superset of the rules that will actually match —
     /// that is the point of a gate.
-    pub fn candidates(&self, haystack: &[u8]) -> Vec<usize> {
+    pub(super) fn candidates(&self, haystack: &[u8]) -> Vec<usize> {
         let mut enabled = vec![false; self.rule_count];
         for &index in &self.always {
             enabled[index] = true;
@@ -116,13 +116,9 @@ impl Prefilter {
             .collect()
     }
 
-    /// True when no rule declares a literal, so the gate cannot filter anything.
-    pub fn is_ungated(&self) -> bool {
-        self.matcher.is_none() && !self.always.is_empty()
-    }
-
     /// Rules evaluated against every input regardless of content.
-    pub fn always_evaluated(&self) -> &[usize] {
+    #[cfg(test)]
+    pub(super) fn always_evaluated(&self) -> &[usize] {
         &self.always
     }
 }

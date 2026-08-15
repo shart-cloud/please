@@ -218,7 +218,36 @@ PHASE 6 (T064-T069) — 316 -> 327 tests. No test lost.
 
   DELETED — none.
 
-(T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
+PHASE 7 (T070-T076) — 327 -> 337 tests. No test lost.
+
+  MOVED, file only (names unchanged) — 21 tests
+      prefilter::tests::*        (7)  ->  matcher::prefilter::tests::*        (T072)
+      detect::pattern::tests::* (14)  ->  matcher::patterns::tests::*         (T073)
+        Both modules moved into matcher/ and became PRIVATE to it. Their unit tests moved with them and
+        are unchanged; the module path in the test name is the only difference.
+
+  DELETED — 1 method, 0 tests
+      Prefilter::is_ungated was unused by production code AND by its own tests, so it went rather than
+      getting a #[cfg(test)] gate. Gating dead code only hides it.
+
+  ADDED — 10 tests
+      tests/seams.rs, four for SC-111/FR-140/FR-141                              (T070, T071)
+        no_component_outside_the_matcher_indexes_the_rule_slice
+        the_prefilters_candidate_indices_do_not_leave_the_matcher
+        the_matchers_public_interface_exchanges_no_position
+        a_reported_identity_does_not_move_when_a_rules_position_does
+      matcher::tests::*, six through the new interface                           (T074)
+
+  Note on the first three: they were RED before T072-T076 (13 `.candidates(` sites and 4 `rules[` sites
+  outside matcher/). The fourth passes on write and says so in its own comment -- 001 already reported
+  identity as a string, so the reported half of FR-141 was never broken; what was broken was FR-140,
+  positions crossing seams. It is a regression test holding the reported half still while the components
+  underneath it were rearranged.
+
+  `no_component_outside_the_matcher_indexes_the_rule_slice` carries a two-entry allow-list: matcher/ and
+  ruleset/mod.rs. The latter is `Ruleset::resolve` doing `rules[index] = rule` after `position()`, over a
+  Vec it owns, inside one function -- created and consumed without reaching a caller. FR-140 forbids
+  exchanging a position between components, not computing one.
 
 Verbatim listing
 ----------------

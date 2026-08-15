@@ -21,7 +21,6 @@
 
 use crate::finalize::types::DetectionClass;
 use crate::policy::ScanPolicy;
-use crate::ruleset::Rule;
 
 /// The resolved bounds for one scan.
 ///
@@ -44,17 +43,19 @@ pub struct Bounds {
 #[derive(Debug, Clone, Copy)]
 pub struct ScanPlan<'a> {
     classes: &'a [DetectionClass],
-    rules: &'a [Rule],
     bounds: Bounds,
     suppress_in_quotes: bool,
 }
 
 impl<'a> ScanPlan<'a> {
-    /// Resolve a policy and a rule set into a plan.
-    pub fn resolve(policy: &'a ScanPolicy, rules: &'a [Rule]) -> Self {
+    /// Resolve a policy into a plan.
+    ///
+    /// Carries no rules, since T074. It held a slice in order to hand it to the matching loops in
+    /// `Engine::scan`, and [`crate::matcher`] now owns the rule set outright — a plan holding one too would
+    /// make two holders of the thing FR-140 says has exactly one.
+    pub fn resolve(policy: &'a ScanPolicy) -> Self {
         Self {
             classes: &policy.classes,
-            rules,
             bounds: Bounds {
                 max_input_bytes: policy.max_input_bytes,
                 max_decode_depth: policy.max_decode_depth,
@@ -79,16 +80,6 @@ impl<'a> ScanPlan<'a> {
         self.classes.contains(&class)
     }
 
-    /// Every rule in the resolved set.
-    ///
-    /// Not filtered by class, and deliberately so since T051: filtering the slice would break its alignment
-    /// with the prefilter's candidate indices and the matcher's compiled slots, which are the one place a
-    /// rule position is load-bearing. The class filter is applied to observations instead, once. Phase 7's
-    /// matcher owns all three together and can offer a participating view without that hazard.
-    pub fn rules(&self) -> &'a [Rule] {
-        self.rules
-    }
-
     pub fn bounds(&self) -> Bounds {
         self.bounds
     }
@@ -105,7 +96,7 @@ mod tests {
     #[test]
     fn a_plan_carries_the_policys_bounds_verbatim() {
         let policy = ScanPolicy::default();
-        let plan = ScanPlan::resolve(&policy, &[]);
+        let plan = ScanPlan::resolve(&policy);
         assert_eq!(plan.bounds().max_input_bytes, policy.max_input_bytes);
         assert_eq!(plan.bounds().max_decode_depth, policy.max_decode_depth);
         assert_eq!(plan.bounds().max_reasons, policy.max_reasons);
@@ -120,7 +111,7 @@ mod tests {
             classes: vec![DetectionClass::Override],
             ..Default::default()
         };
-        let plan = ScanPlan::resolve(&policy, &[]);
+        let plan = ScanPlan::resolve(&policy);
         assert!(plan.admits(DetectionClass::Override));
         assert!(!plan.admits(DetectionClass::Concealment));
         assert!(!plan.admits(DetectionClass::Confusable));
@@ -134,7 +125,7 @@ mod tests {
             classes: Vec::new(),
             ..Default::default()
         };
-        let plan = ScanPlan::resolve(&policy, &[]);
+        let plan = ScanPlan::resolve(&policy);
         for class in crate::policy::ALL_CLASSES {
             assert!(!plan.admits(class), "{class:?} must not be admitted");
         }

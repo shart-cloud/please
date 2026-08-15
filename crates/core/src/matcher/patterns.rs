@@ -33,7 +33,7 @@ use crate::ruleset::{Rule, RulesetLimits};
 /// Compilation is memoised and **never invalidated**, so a scan's result cannot depend on how many
 /// scans preceded it — which FR-020 requires and FR-030 makes observable.
 #[derive(Debug)]
-pub struct PatternSet {
+pub(super) struct PatternSet {
     /// One slot per rule, indexed to match the rule slice this was built from.
     ///
     /// `OnceLock` rather than a lock around a map: initialisation happens at most once per rule, reads
@@ -44,7 +44,13 @@ pub struct PatternSet {
 }
 
 impl PatternSet {
-    pub fn new(rule_count: usize, limits: RulesetLimits) -> Self {
+    /// An empty store, one lazy slot per rule.
+    ///
+    /// Test-only since T074. Production always arrives through [`prefilled`](Self::prefilled), because
+    /// preparation always has something to say about what it compiled — even when the answer is "nothing, the
+    /// CI record covers these". A second production constructor would be a second answer to that.
+    #[cfg(test)]
+    pub(super) fn new(rule_count: usize, limits: RulesetLimits) -> Self {
         Self {
             slots: (0..rule_count).map(|_| OnceLock::new()).collect(),
             limits,
@@ -61,7 +67,7 @@ impl PatternSet {
     /// The two kinds of slot are why this is one structure with a mixed fill rather than two structures.
     /// Whether a pattern arrives pre-compiled is a property of where its rule came from, not of how the
     /// matcher works, and the matcher should not have to care.
-    pub fn prefilled(retained: Vec<Option<Regex>>, limits: RulesetLimits) -> Self {
+    pub(super) fn prefilled(retained: Vec<Option<Regex>>, limits: RulesetLimits) -> Self {
         let slots: Vec<OnceLock<Result<Regex, String>>> = retained
             .into_iter()
             .map(|compiled| {
@@ -108,7 +114,7 @@ impl PatternSet {
     /// Returns the spans found; an empty vector for a rule that could not be compiled. There is no `Err`
     /// for a caller to translate, because the gap is already recorded — and no way to treat an
     /// uncompilable rule as a rule that found nothing, because those two now differ in the evidence.
-    pub fn matches(
+    pub(super) fn matches(
         &self,
         index: usize,
         rule: &Rule,
@@ -158,16 +164,8 @@ impl PatternSet {
     ///
     /// Exposed for tests that assert the gate actually prevents compilation, which is the claim the
     /// latency budget rests on.
-    pub fn is_compiled(&self, index: usize) -> bool {
+    pub(super) fn is_compiled(&self, index: usize) -> bool {
         self.slots[index].get().is_some()
-    }
-
-    pub fn len(&self) -> usize {
-        self.slots.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.slots.is_empty()
     }
 }
 
