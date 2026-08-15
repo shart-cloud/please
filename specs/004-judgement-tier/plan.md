@@ -94,16 +94,51 @@ wanted, and adopting it for a future that may not arrive is how a 27-crate graph
 | `ANTHROPIC_API_KEY` | `x-api-key: …` | The general default |
 
 `ANTHROPIC_BASE_URL` overrides the endpoint, defaulting to `https://api.anthropic.com`. Every request also
-sends `anthropic-version`.
+sends `anthropic-version`. `ANTHROPIC_MODEL` selects the model if set, over a pinned default — see D7 on why
+the resolved model id is recorded in the verdict.
+
+### Precedence is load-bearing, not hypothetical
+
+Checked against a real Claude Code session, values never read:
+
+```text
+SET    ANTHROPIC_AUTH_TOKEN
+SET    ANTHROPIC_API_KEY
+SET    ANTHROPIC_BASE_URL
+unset  CLAUDE_CODE_OAUTH_TOKEN
+```
+
+**Two credentials live at once, and a non-default endpoint.** So "use whichever is set" is not a rule — it
+does not resolve, and the two want different headers. Having several set is the normal case rather than the
+edge case, because tools export their own and nothing cleans up after them.
+
+### Picking wrong is a credential-disclosure bug, not a compatibility bug
+
+The reason `ANTHROPIC_AUTH_TOKEN` is first is not that it is likelier to work. It is that the alternative
+sends the wrong secret to the wrong host.
+
+In the session above, ordering `ANTHROPIC_API_KEY` first would take a real Anthropic API key and send it as
+`x-api-key` to whatever `ANTHROPIC_BASE_URL` points at. A proxy the user trusts to relay a *proxy token* has
+not thereby been trusted with their *upstream account credential*, and the two are not interchangeable just
+because both authenticate.
+
+So the order encodes a preference for the **most specifically-scoped** credential available, and the
+consequence of getting it wrong is disclosure rather than a 401.
+
+**A warning follows from this.** If the endpoint is non-default and the only credential available is
+`ANTHROPIC_API_KEY`, `plz` warns before the request: *you are about to send an Anthropic API key to a host
+that is not Anthropic.* That may be entirely intended — it is the user's proxy — but it should be a decision
+rather than a default, and it costs one line on stderr.
 
 **Three rules that matter more than the order:**
 
 1. **No credential ever reaches a verdict, a log line, or an error message.** A judge failure must say
    *which variable was consulted*, never what it contained. Worth a test, because the natural way to write
    the error is to include the response body and the body of a 401 can echo a token.
-2. **Resolution is reported, not guessed at.** `plz` must be able to say which variable it used and which
-   endpoint it resolved, without making a request. Chasing "why is it hitting the wrong host" through four
-   environment variables is otherwise a bad afternoon.
+2. **Resolution is reported, not guessed at.** `plz` must be able to say which variable it selected, which
+   it ignored, and which endpoint it resolved — **without making a request**. With several set at once and a
+   proxy in the path, "why is it hitting the wrong host with the wrong header" is otherwise a bad afternoon,
+   and the diagnostic is a handful of lines.
 3. **A configured-but-unreachable judge is `TierUnavailable`, not silence.** See D5.
 
 ## D4 — The judge reports observations. **We** compute the score.
@@ -248,8 +283,9 @@ exit code 2 — distinguishable from both clean and risk-found, which is the poi
 ## Open questions for the examiner
 
 1. ~~`ureq` or `reqwest`?~~ **Resolved: `ureq`.**
-2. **Is the auth order in D3 right for your proxy setup?** I put `ANTHROPIC_AUTH_TOKEN` first on the reasoning
-   that a proxy token is the most deliberate signal. Still open.
+2. ~~Is the auth order right?~~ **Resolved.** Confirmed against a live session where `ANTHROPIC_AUTH_TOKEN`
+   and `ANTHROPIC_API_KEY` are both set with a custom `ANTHROPIC_BASE_URL` — the case where the order decides
+   whether an upstream account credential goes to a third-party host.
 4. **How should the features combine into a score?** Deliberately unanswered here. It is a calibration
    question and calibration needs the corpus, so the first implementation should hold the function trivial
    and obvious — `span_role: description_of_an_instruction` plus a corroborating framing field demotes,
