@@ -81,8 +81,8 @@ repository root under `tests/`.
 - [x] T031 Implement score aggregation as `min(100, max_severity + min(15, 5 × (distinct_classes − 1)))`, computed over all matches before reason truncation, plus banding, in `crates/core/src/score.rs` (makes T030 pass)
 - [x] T032 Implement `Engine::scan` assembling the pipeline (size gate → decode → structure → prefilter → patterns → suppression → score → verdict), returning `Verdict` and never `Result`, in `crates/core/src/lib.rs`
 - [x] T033 [P] Add `#![forbid(unsafe_code)]` and crate-level documentation stating the no-clock, no-filesystem, no-network contract to `crates/core/src/lib.rs`
-- [ ] T034 [P] Add dependency guard test asserting the default build's resolved dependency set matches a committed allow-list, in `tests/dep_guard.rs`
-- [ ] T035 [P] Configure a static gate denying networking and filesystem interfaces inside the core crate in `clippy.toml`, and enforce it as a CI job in `.github/workflows/ci.yml`
+- [x] T034 [P] Add dependency guard test asserting the default build's resolved dependency set matches a committed allow-list, in `tests/dep_guard.rs`
+- [x] T035 [P] Configure a static gate denying networking and filesystem interfaces inside the core crate in `clippy.toml`, and enforce it as a CI job in `.github/workflows/ci.yml`
 - [x] T036 [P] Add a `cargo build -p please-core --target wasm32-unknown-unknown` job to `.github/workflows/ci.yml`
 
 **Checkpoint**: Verdict model, rule loading, scoring, and the scan pipeline exist. Detection classes can now be built in parallel.
@@ -101,24 +101,24 @@ the reported risk level and reasons. No harness, no configuration, no network.
 
 > **Write these FIRST and confirm they FAIL before implementing**
 
-- [ ] T037 [P] [US1] Create positive fixtures for instruction override in `tests/fixtures/override/` including `ignore_previous.md`
-- [ ] T038 [P] [US1] Create positive fixtures for concealment in `tests/fixtures/concealment/` including `tag_block_payload.txt`, `zero_width.txt`, and `bidi_reversed.txt`
-- [ ] T039 [P] [US1] Create positive fixtures for confusables in `tests/fixtures/confusable/` including a Cyrillic-substituted keyword
-- [ ] T040 [P] [US1] Create positive fixtures for encoding in `tests/fixtures/encoding/` including `base64_override.txt`, `hex_override.txt`, `rot13_override.txt`, `reversed_override.txt`, and `leetspeak_override.txt`
-- [ ] T041 [P] [US1] Create positive fixtures for boundary forgery in `tests/fixtures/boundary/` including forged role markers and tool-result impersonation
-- [ ] T042 [P] [US1] Create positive fixtures for solicitation in `tests/fixtures/solicitation/` including system-prompt extraction requests
+- [x] T037 [P] [US1] Create positive fixtures for instruction override in `tests/fixtures/override/` including `ignore_previous.md`
+- [x] T038 [P] [US1] Create positive fixtures for concealment in `tests/fixtures/concealment/` including `tag_block_payload.txt`, `zero_width.txt`, and `bidi_reversed.txt`
+- [x] T039 [P] [US1] Create positive fixtures for confusables in `tests/fixtures/confusable/` including a Cyrillic-substituted keyword
+- [x] T040 [P] [US1] Create positive fixtures for encoding in `tests/fixtures/encoding/` including `base64_override.txt`, `hex_override.txt`, `rot13_override.txt`, `reversed_override.txt`, and `leetspeak_override.txt`
+- [x] T041 [P] [US1] Create positive fixtures for boundary forgery in `tests/fixtures/boundary/` including forged role markers and tool-result impersonation
+- [x] T042 [P] [US1] Create positive fixtures for solicitation in `tests/fixtures/solicitation/` including system-prompt extraction requests
 - [ ] T043 [US1] Create **at least 200** hard-negative fixtures in `tests/fixtures/benign/` including `threat_model_excerpt.md`, advisories discussing injection, `certificate_block.pem`, content-hash listings, non-English prose, and `plain.md` — the 200 minimum is part of SC-003, not a suggestion
-- [ ] T044 [US1] Write failing per-class detection tests asserting every positive fixture is detected and every benign control is silent, in `crates/core/tests/fixtures.rs` (SC-002)
+- [x] T044 [US1] Write failing per-class detection tests asserting every positive fixture is detected and every benign control is silent, in `crates/core/tests/fixtures.rs` (SC-002)
 - [ ] T045 [US1] Write failing test asserting the false-positive rate over `tests/fixtures/benign/` is at most 1% at the default threshold, and failing the run if the set holds fewer than 200 examples, in `crates/core/tests/fixtures.rs` (SC-003)
-- [ ] T046 [US1] Write failing test asserting every `risk_found` verdict carries rule identity, class, location, excerpt, and description, in `crates/core/tests/fixtures.rs` (SC-001, SC-008)
-- [ ] T047 [P] [US1] Write failing tests asserting an encoded blob whose decoded content matches no rule produces no finding, in `crates/core/tests/decode.rs` (D5)
+- [x] T046 [US1] Write failing test asserting every `risk_found` verdict carries rule identity, class, location, excerpt, and description, in `crates/core/tests/fixtures.rs` (SC-001, SC-008)
+- [x] T047 [P] [US1] Write failing tests asserting an encoded blob whose decoded content matches no rule produces no finding, in `crates/core/tests/decode.rs` (D5)
 
 ### Implementation for User Story 1
 
 - [ ] T048 [US1] Implement the linear-time structural pre-pass classifying fenced code, inline code, block quotes, quoted strings, and attributive-marker spans, in `crates/core/src/structure.rs`
-- [ ] T049 [US1] Implement quoting suppression honouring each rule's `fires_in_quotes` and recording the `QuotingContext` that suppressed a match, in `crates/core/src/detect/mod.rs` (depends on T048)
-- [ ] T050 [P] [US1] Implement the concealment scanner covering C0/C1, U+200B–U+200F, U+2060–U+2064, U+202A–U+202E, U+2066–U+2069, U+FEFF, U+180E, the Tags block U+E0000–U+E007F, and variation selectors, in `crates/core/src/detect/concealment.rs`
-- [ ] T051 [P] [US1] Implement Tags-block decoding (subtract U+E0000 to recover ASCII) and variation-selector decoding, feeding recovered text back into the decode pipeline, in `crates/core/src/decode/unicode.rs`
+- [x] T049 [US1] Implement quoting suppression honouring each rule's `fires_in_quotes` and recording the `QuotingContext` that suppressed a match, in `crates/core/src/detect/mod.rs` (depends on T048)
+- [x] T050 [P] [US1] Implement the concealment scanner covering C0/C1, U+200B–U+200F, U+2060–U+2064, U+202A–U+202E, U+2066–U+2069, U+FEFF, U+180E, the Tags block U+E0000–U+E007F, and variation selectors, in `crates/core/src/detect/concealment.rs`
+- [x] T051 [P] [US1] Implement Tags-block decoding (subtract U+E0000 to recover ASCII) and variation-selector decoding, feeding recovered text back into the decode pipeline, in `crates/core/src/decode/unicode.rs`
 - [ ] T052 [P] [US1] Implement per-token confusable analysis using UTS #39 skeleton, mixed-script, and restriction level, explicitly not flagging whole-document script mixing, in `crates/core/src/detect/confusable.rs` (D7)
 - [ ] T053 [P] [US1] Implement the base-64 decoder with charset, length, and decoded-printability gating in `crates/core/src/decode/base64.rs`
 - [ ] T054 [P] [US1] Implement hexadecimal, rotation-cipher, reversal, and glyph-substitution decoders in `crates/core/src/decode/hex.rs`, `rot13.rs`, `reversed.rs`, and `leetspeak.rs`

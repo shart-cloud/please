@@ -66,11 +66,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --manifest-path crates/eval/Cargo.toml
 
+  # Principle V has two halves and needs two checks. The allow-list covers a *dependency* reaching the
+  # network or the filesystem; the isolation check covers the engine's own code doing it, which an
+  # allow-list is blind to because `std::net` needs no dependency at all.
+  boundaries:
+    name: dependency and isolation gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ./ci/check-dependencies.sh
+      - run: ./ci/check-core-isolation.sh
+
 # Jobs arriving with later tasks, listed so their absence is deliberate rather than forgotten:
 #
-#   T034  dependency allow-list check — compares the default build's resolved dependency set against
-#         ci/dependency-allowlist.txt. See that file for why this is a CI step rather than a Rust test.
-#   T035  static gate denying networking and filesystem interfaces inside please-core (FR-031).
 #   T095  per-change fuzz smoke and the benchmark growth-exponent gate (SC-005, SC-006).
 #   T096  scheduled fuzz campaign accumulating past 1M inputs (separate workflow, self-hosted).
 #   T109  MSRV verification against the pinned floor.

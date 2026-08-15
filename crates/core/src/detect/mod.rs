@@ -7,4 +7,5 @@
 //! Class-specific detectors — concealment, confusables — and the quoting pre-pass arrive with User
 //! Story 1 (T044–T052). Pattern evaluation, which every rule-driven class is built on, is here now.
 
+pub mod concealment;
 pub mod pattern;

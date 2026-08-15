@@ -19,6 +19,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod decode;
 pub mod detect;
 pub mod engine;
 pub mod policy;
@@ -26,6 +27,7 @@ pub mod prefilter;
 pub mod ruleset;
 pub mod sanitize;
 pub mod score;
+pub mod structure;
 pub mod verdict;
 
 pub use engine::{Engine, EngineBuilder};
