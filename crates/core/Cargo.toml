@@ -39,6 +39,10 @@ serde = { workspace = true, optional = true }
 proptest = { workspace = true }
 criterion = { workspace = true }
 tempfile = { workspace = true }
+# Reading the labelled JSONL fixture corpus. A dev-dependency only: the CI allow-list check inspects
+# `cargo tree --edges normal`, which excludes dev-dependencies, so this cannot reach the default build
+# whose dependency set Principle V constrains.
+serde_json = { workspace = true }
 
 # The `scaling` benchmark target is declared at T087, when benches/scaling.rs exists. Declaring a
 # bench target whose file is absent is a hard build error, not a warning.

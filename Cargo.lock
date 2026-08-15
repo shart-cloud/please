@@ -522,6 +522,7 @@ dependencies = [
  "proptest",
  "regex",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "unicode-normalization",
