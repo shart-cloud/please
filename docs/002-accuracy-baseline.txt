@@ -103,6 +103,29 @@ entry names what moved, why it was unavoidable, and what did NOT move.
 
   These numbers are 12 benign cases, not 200. Read docs/limits.md before quoting them anywhere.
 
+--- DETECTION WORK AFTER 002 ---------------------------------------------------------------------
+
+  Landed at the examiner's direction, as a group, after 002 closed. Each is its own commit with its own
+  measurement. Cumulative from the 002 baseline:
+
+      positives        24/41 -> 31/41
+      false positives   8/12 -> 1/17   (benign-tool-001, the shell transcript)
+      benign corpus       12 -> 17 cases
+
+      +3  "your" added to the override scope list. Three payloads phrased the way an injection
+          actually addresses an agent supplied verb + noun and no scope word.
+      +2  JSON quotes stop attributing. tool_result is the primary attack context and JSON its
+          primary format, so quoting suppression was blinding the scanner over the whole surface.
+      +2  the agent_directed class. Content that addresses the reading agent.
+      -7  the leetspeak evidence gate, plus the apostrophe mis-pairing fix.
+
+  benign-tool-001 remains, and is the case docs/limits.md records as structurally unfixable in this
+  tier: a shell transcript whose payload lines are indistinguishable from indirect-tool-003's.
+
+  Ten positives remain missed. They are not a rule-coverage problem of the kind the four changes above
+  solved -- authority spoofing, paradoxical denial, YAML metadata, capability escalation. They are the
+  judgement tier's work.
+
 Verbatim capture
 ----------------
 

@@ -182,6 +182,7 @@ fn parse_class(name: &str) -> Option<DetectionClass> {
         "confusable" => DetectionClass::Confusable,
         "boundary" => DetectionClass::Boundary,
         "solicitation" => DetectionClass::Solicitation,
+        "agent_directed" => DetectionClass::AgentDirected,
         _ => return None,
     })
 }

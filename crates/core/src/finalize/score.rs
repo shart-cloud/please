@@ -12,7 +12,7 @@
 //!   engineering document accumulates innocuous matches until it crosses any threshold — the tool would
 //!   behave worst on exactly the large, important files a team most wants scanned.
 //! * **Insensitive to match count.** Twenty matches of one rule score exactly as one. Only *distinct
-//!   classes* add, and there are at most five, so the bonus is bounded by construction rather than by a
+//!   classes* add, and there are at most six, so the bonus is bounded by construction rather than by a
 //!   cap somebody has to tune.
 //! * **Rewards corroboration.** An override phrase plus concealment plus a forged role marker is genuinely
 //!   more suspicious than any alone, and this is the term that says so. Pure maximum discards it.
@@ -61,7 +61,7 @@ pub fn aggregate(hits: &[(u8, DetectionClass)]) -> u8 {
         .max()
         .unwrap_or(0);
 
-    // Count distinct classes without allocating a set: there are at most five, so a fixed-size flag
+    // Count distinct classes without allocating a set: there are at most six, so a fixed-size flag
     // array is both smaller and deterministic — a hash set would introduce iteration order that
     // byte-identical output cannot afford (SC-011).
     let mut present = [false; CLASS_COUNT];
@@ -79,9 +79,10 @@ pub fn aggregate(hits: &[(u8, DetectionClass)]) -> u8 {
 
 /// Number of detection classes, and the width of the corroboration array.
 ///
-/// Five since T048. This constant and [`class_index`] below are why removing a `DetectionClass` variant is a
-/// compile error rather than a silent change in scoring — see the note on the wildcard arm.
-const CLASS_COUNT: usize = 5;
+/// Six. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile error
+/// rather than a silent change in scoring — see the note on the wildcard arm. It has now caught the guard
+/// twice: 002 removing `Encoding`, and 003 adding `AgentDirected`.
+const CLASS_COUNT: usize = 6;
 
 /// Stable index for the fixed-size presence array.
 ///
@@ -97,6 +98,7 @@ fn class_index(class: DetectionClass) -> usize {
         DetectionClass::Confusable => 2,
         DetectionClass::Boundary => 3,
         DetectionClass::Solicitation => 4,
+        DetectionClass::AgentDirected => 5,
     }
 }
 

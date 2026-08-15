@@ -20,7 +20,8 @@
 # a payload recovered by decoding carries the class of the rule that matched it, not a class naming how it
 # arrived. How it arrived is in the finding's transformation chain.
 #
-# There are five detection classes. Three are declarable here: `override`, `boundary`, `solicitation`.
+# There are six detection classes. Four are declarable here: `override`, `boundary`, `solicitation`,
+# `agent_directed`.
 # `concealment` and `confusable` are detected structurally, in code, because they recognise a mechanism
 # rather than a phrase — a run of tag-block characters means the same thing regardless of what it decodes
 # to, and no pattern could express it.
@@ -155,3 +156,38 @@ severity = 85
 literals = ["system override", "system_override", "system-override"]
 pattern = '(?i)\bsystem[ _-]?override\b'
 description = "Forged system-authority directive, impersonating a control-plane instruction."
+
+# ── Agent-directed content ──────────────────────────────────────────────────────────────────────
+#
+# The newest class, and the one with the cleanest argument behind it. In indirect injection the agent is
+# meant to be PROCESSING content — summarising an email, reading a tool result, following a skill file — so
+# content that ADDRESSES the agent is anomalous by construction. Nothing in the legitimate workflow has any
+# reason to talk to it.
+#
+# That also predicts an unusually good false-positive profile. Every false positive this project has fought
+# is security prose QUOTING a payload, and prose about attacks quotes constantly and addresses never. A
+# threat model containing "NOTE TO AI ASSISTANT:" has it in a fence or a quote, where suppression already
+# applies. The `benign-addressed-00N` fixtures exist to keep that claim honest.
+#
+# The apostrophe in "you're" is written `\x27` rather than literally. A TOML *literal* string (single
+# quotes) has no escape sequences at all, so it cannot contain a single quote — and switching this to a basic
+# string would mean escaping every backslash in the pattern, which is how regexes become unreadable. The
+# curly apostrophe `\x{2019}` is included because real text uses it.
+#
+# Address, not mention (003 FR-307). "our AI assistant summarises these" must never fire; a document is
+# allowed to talk ABOUT an assistant. What is anomalous is talking TO one.
+
+[[rule]]
+id = "agent_directed.addressed_marker"
+class = "agent_directed"
+severity = 80
+literals = [
+    "note to", "note for", "message to", "notes to",
+    "dear ai", "dear assistant", "dear agent",
+    "attention ai", "attention assistant", "attention agent",
+    "ai note", "ai-note", "ai_note", "assistant note", "agent note", "llm note",
+    "ai directive", "assistant directive", "ai instruction", "assistant instruction",
+    "you are an ai", "you're an ai", "you are a language model", "you are an assistant",
+]
+pattern = '(?i)\b(?:(?:note|message|instruction|reminder)s?\s+(?:to|for)\s+(?:the|any|your|this|processing)?\s*(?:ai|a\.i\.|assistant|llm|agent|model|bot|copilot|chatbot)\b|(?:ai|assistant|llm|agent)[ _-]?(?:note|notice|directive|instruction)s?\s*:|(?:dear|attention)\s+(?:ai|assistant|agent|llm)\b|(?:if\s+)?you(?:[\x27\x{2019}]re|\s+are)\s+(?:an?\s+)?(?:ai|assistant|llm|language\s+model)\b)'
+description = "Content addressed to the reading agent rather than to the document's human recipient."

@@ -130,6 +130,7 @@ one carries an accuracy criterion.
 | `confusable` | Characters chosen to resemble others, evaluated per token | FR-010 |
 | `boundary` | Forged role markers, system-instruction or tool-result impersonation, delimiter breakout | FR-012 |
 | `solicitation` | Requests for an agent's instructions, configuration, or credentials | FR-013 |
+| `agent_directed` | Content addressing the reading agent rather than the document's human recipient | 003 FR-301 |
 
 > **Amended by feature 002 (FR-130, FR-131, T054).** A sixth class, `encoding` — "payloads recovered by
 > bounded decoding", FR-011 — has been **removed**.
@@ -148,6 +149,16 @@ one carries an accuracy criterion.
 > A payload recovered by decoding now carries the class its rule declares, and FR-011's subject matter lives
 > where it always belonged: in the finding's `chain`. Disabling decoding is `max_decode_depth`, which is what
 > it always was.
+
+> **Amended by feature 003 (FR-301).** A sixth class, `agent_directed`, has been **added**.
+>
+> It passes the test `encoding` failed: it names a kind of finding rather than a delivery mechanism, and rules
+> can declare it. It is distinct from `boundary` in the way that matters — forging is a claim about **who is
+> speaking**, addressing is a claim about **who is listening**. A forged `SYSTEM:` marker claims the
+> platform's authority; `NOTE TO AI ASSISTANT:` claims nothing, and simply assumes the reader is a machine.
+>
+> The semantic: in indirect injection the agent is meant to be *processing* content, so content that addresses
+> it is anomalous by construction — nothing in the legitimate workflow has a reason to talk to it.
 
 ---
 

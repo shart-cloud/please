@@ -37,14 +37,15 @@ pub const DEFAULT_MAX_EXCERPT_BYTES: u32 = 256;
 
 /// Every detection class, in a stable order.
 ///
-/// Five since T048 removed `Encoding`, which named a delivery mechanism rather than a kind of finding and
-/// was the reason class selection did not work — see [`DetectionClass`].
-pub const ALL_CLASSES: [DetectionClass; 5] = [
+/// Six. Five after 002's T048 removed `Encoding`, which named a delivery mechanism rather than a kind of
+/// finding; six again after 003 added `AgentDirected`, which names one. See [`DetectionClass`].
+pub const ALL_CLASSES: [DetectionClass; 6] = [
     DetectionClass::Override,
     DetectionClass::Concealment,
     DetectionClass::Confusable,
     DetectionClass::Boundary,
     DetectionClass::Solicitation,
+    DetectionClass::AgentDirected,
 ];
 
 /// Configuration governing one scan.
@@ -123,7 +124,7 @@ mod tests {
         for class in ALL_CLASSES {
             assert!(p.is_active(class), "{class:?} should be active by default");
         }
-        assert_eq!(p.classes.len(), 5, "ALL_CLASSES must cover every variant");
+        assert_eq!(p.classes.len(), 6, "ALL_CLASSES must cover every variant");
     }
 
     #[test]

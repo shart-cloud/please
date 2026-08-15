@@ -101,6 +101,18 @@ pub enum DetectionClass {
     Boundary,
     /// Requests for an agent's instructions, configuration, or credentials (FR-013).
     Solicitation,
+    /// Content that **addresses the reading agent** rather than the human the document is for
+    /// (003 FR-301) — `NOTE TO AI ASSISTANT:`, `Dear assistant,`, `if you are an AI reading this`.
+    ///
+    /// Distinct from [`Boundary`](Self::Boundary), and the distinction is the reason it is its own class:
+    /// forging is a claim about **who is speaking**, addressing is a claim about **who is listening**. A
+    /// forged `SYSTEM:` marker claims the platform's authority; `NOTE TO AI:` claims nothing at all — it
+    /// simply assumes the reader is a machine.
+    ///
+    /// In indirect injection the agent is meant to be *processing* content — summarising an email, reading a
+    /// tool result, following a skill file. Content that addresses it is anomalous by construction, because
+    /// nothing in the legitimate workflow has any reason to talk to it.
+    AgentDirected,
 }
 
 impl DetectionClass {
@@ -112,6 +124,7 @@ impl DetectionClass {
             Self::Confusable => "confusable",
             Self::Boundary => "boundary",
             Self::Solicitation => "solicitation",
+            Self::AgentDirected => "agent_directed",
         }
     }
 }

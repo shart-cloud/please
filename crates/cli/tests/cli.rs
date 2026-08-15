@@ -325,6 +325,7 @@ fn every_remaining_class_is_accepted_by_the_flag() {
         "confusable",
         "boundary",
         "solicitation",
+        "agent-directed",
     ] {
         let out = plz()
             .args(["scan", "--classes", class, "/dev/null"])

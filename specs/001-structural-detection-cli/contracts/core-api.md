@@ -158,6 +158,11 @@ and the first addition should not break every embedder.
 > anyway, because it named a delivery mechanism rather than a kind of finding and was the cause of a shipped
 > defect in class selection — `docs/limits.md` and 002's data model carry the argument. Stating it here so the
 > compatibility cost is on the record next to the compatibility claim.
+>
+> **Correction 6 (003).** The set has now changed twice — `Encoding` removed, `AgentDirected` added — which is
+> the pattern worth naming rather than the individual edits. `non_exhaustive` makes the addition compatible
+> for `match`, and does nothing for either change to an embedder comparing `class.as_str()` against a literal.
+> Anyone doing that should be reading `policy::ALL_CLASSES` instead.
 
 ---
 

@@ -101,6 +101,7 @@ pub enum Class {
     Confusable,
     Boundary,
     Solicitation,
+    AgentDirected,
 }
 
 impl From<Class> for DetectionClass {
@@ -111,6 +112,7 @@ impl From<Class> for DetectionClass {
             Class::Confusable => DetectionClass::Confusable,
             Class::Boundary => DetectionClass::Boundary,
             Class::Solicitation => DetectionClass::Solicitation,
+            Class::AgentDirected => DetectionClass::AgentDirected,
         }
     }
 }
