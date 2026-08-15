@@ -203,10 +203,11 @@ impl Engine {
 
         for index in candidates {
             let rule = &rules[index];
-            if !plan.is_active(rule.class) {
-                continue;
-            }
 
+            // No class check here. There used to be one, and its twin below is what made class selection
+            // wrong (T051, FR-133) — the filter is applied once, to the class each observation carries, at
+            // the single funnel where observations are recorded.
+            //
             // Saturation and uncompilable patterns are recorded by the matcher itself (T022), so there is
             // no longer an `Err` here for this loop to interpret.
             for span in self.patterns.matches(
@@ -250,9 +251,6 @@ impl Engine {
             let bytes = candidate.text.as_bytes();
             for index in self.prefilter.candidates(bytes) {
                 let rule = &rules[index];
-                if !plan.is_active(rule.class) {
-                    continue;
-                }
                 let spans = self.patterns.matches(
                     index,
                     rule,
@@ -272,11 +270,11 @@ impl Engine {
                 );
                 decoded_hits.push(Observation {
                     rule_id: rule.id.clone(),
-                    // Still relabelled from the rule's own class, which is the US2 defect: this
-                    // observation had to satisfy the class filter above as its rule's class and then
-                    // arrived carrying another. T050 makes it carry `rule.class`; changing it here would
-                    // be a behaviour change, and Phase 2 is not where behaviour changes.
-                    class: DetectionClass::Encoding,
+                    // The class the RULE declares (T050, FR-131). 001 wrote `DetectionClass::Encoding`
+                    // here, which is the US2 defect in one line: the observation was gated on `rule.class`
+                    // a few lines up and then arrived carrying a different class, so it had to satisfy two
+                    // filters and no single selection satisfied both. How it arrived is in `chain`.
+                    class: rule.class,
                     span: candidate.origin,
                     matched: excerpt,
                     severity: rule.severity,
@@ -313,16 +311,27 @@ impl Engine {
         //
         // Added after suppression because none of these are suppressed. Concealment and confusables detect
         // a mechanism rather than a phrase, and decoded content carries its own evidence of intent.
-        for hit in detect::structural::scan(input) {
-            if plan.is_active(hit.class) {
-                kept.push(hit);
-            }
-        }
-        for hit in decoded_hits {
-            if plan.is_active(hit.class) {
-                kept.push(hit);
-            }
-        }
+        kept.extend(detect::structural::scan(input));
+        kept.extend(decoded_hits);
+
+        // ── The class filter, applied once ──────────────────────────────────────────────────────
+        //
+        // **The single application site** (T051, FR-133). Every observation from every source arrives here,
+        // each carrying exactly one class, and each is admitted or dropped once.
+        //
+        // 001 applied this in four places — before matching a rule, before matching a rule against decoded
+        // content, and again to each of the structural and decoded observation lists. Four sites is not
+        // itself the bug; the bug is that a decoded observation passed through two of them with its class
+        // *changed* in between, so `--classes override` failed the second gate and `--classes encoding`
+        // failed the first. One site cannot disagree with itself.
+        //
+        // The cost of moving the gate here rather than keeping it in front of the matcher: a deselected
+        // class's patterns may now be compiled before their observations are dropped. That is bounded by the
+        // literal prefilter, which already gates compilation on a literal being present, and it buys the
+        // property the defect was about. Phase 7's matcher takes ownership of the rule slice and can restore
+        // the pre-gate as a view over participating rules — one gate that also filters, rather than two
+        // gates that must agree.
+        kept.retain(|observation| plan.admits(observation.class));
 
         // ── Score, then hand over ───────────────────────────────────────────────────────────────
         //

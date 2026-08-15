@@ -44,7 +44,29 @@ fn main() {
 }
 
 fn run() -> i32 {
-    let args = Args::parse();
+    // `try_parse` rather than `parse`, because `parse` exits the process itself with clap's default code of
+    // 2 — which is this CLI's code for INCONCLUSIVE. A caller branching on the status would read "you passed
+    // an unrecognised `--classes` value" as "analysis did not complete", and the doc comment above promises
+    // exactly the opposite: that a hook can never mistake "the tool did not run" for a scan outcome.
+    //
+    // Found at 002 T047, by removing a `--classes` value and asserting the rejection. It predates this
+    // feature — every invalid argument has always exited 2 — and was invisible because
+    // `every_documented_exit_code_is_distinct` asserts distinctness over a literal array of the six numbers
+    // rather than over what the binary actually returns.
+    //
+    // `use_stderr()` separates a real error from `--help` and `--version`, which clap also delivers as
+    // `Err` and which are a successful run of what the user asked for.
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(e) => {
+            let _ = e.print();
+            return if e.use_stderr() {
+                EXIT_USAGE
+            } else {
+                EXIT_CLEAN
+            };
+        }
+    };
     let Command::Scan(scan_args) = args.command;
     let policy = scan_args.policy();
 

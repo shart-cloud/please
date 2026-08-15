@@ -99,7 +99,6 @@ pub enum Class {
     Override,
     Concealment,
     Confusable,
-    Encoding,
     Boundary,
     Solicitation,
 }
@@ -110,7 +109,6 @@ impl From<Class> for DetectionClass {
             Class::Override => DetectionClass::Override,
             Class::Concealment => DetectionClass::Concealment,
             Class::Confusable => DetectionClass::Confusable,
-            Class::Encoding => DetectionClass::Encoding,
             Class::Boundary => DetectionClass::Boundary,
             Class::Solicitation => DetectionClass::Solicitation,
         }

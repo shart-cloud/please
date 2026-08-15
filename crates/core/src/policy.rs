@@ -36,11 +36,13 @@ pub const DEFAULT_MAX_REASONS: u32 = 64;
 pub const DEFAULT_MAX_EXCERPT_BYTES: u32 = 256;
 
 /// Every detection class, in a stable order.
-pub const ALL_CLASSES: [DetectionClass; 6] = [
+///
+/// Five since T048 removed `Encoding`, which named a delivery mechanism rather than a kind of finding and
+/// was the reason class selection did not work — see [`DetectionClass`].
+pub const ALL_CLASSES: [DetectionClass; 5] = [
     DetectionClass::Override,
     DetectionClass::Concealment,
     DetectionClass::Confusable,
-    DetectionClass::Encoding,
     DetectionClass::Boundary,
     DetectionClass::Solicitation,
 ];
@@ -121,7 +123,7 @@ mod tests {
         for class in ALL_CLASSES {
             assert!(p.is_active(class), "{class:?} should be active by default");
         }
-        assert_eq!(p.classes.len(), 6, "ALL_CLASSES must cover every variant");
+        assert_eq!(p.classes.len(), 5, "ALL_CLASSES must cover every variant");
     }
 
     #[test]

@@ -110,6 +110,44 @@ PHASE 3 (T025-T043) — 258 -> 290 tests. No test lost.
       ruleset::tests / detect / prefilter provenance fixups            0   (existing tests, new field)
       compile_fail/provenance_cannot_be_forged.rs                      1   (T032, under the harness)
 
+PHASE 4 (T044-T054) — 290 -> 301 tests. No test lost. One test's assertion was replaced entirely.
+
+  REWRITTEN IN PLACE, same name — 1 test
+      cli.rs::every_documented_exit_code_is_distinct                                    (T047)
+        It built a literal array of the six documented exit codes and asserted they differed from each
+        other -- true of any six distinct literals, and it never touched the binary. It passed for all
+        of 001 while `plz scan --classes nonsense` exited 2, colliding with INCONCLUSIVE, because clap's
+        default parse-failure code is 2 and `Args::parse()` exits the process itself. It now drives the
+        binary into each outcome and asserts the codes it actually returns. The collision is fixed in
+        crates/cli/src/main.rs.
+
+  REWRITTEN IN PLACE, same names — 4 tests
+      score.rs::score_is_bracketed_by_the_worst_finding                                 (T049)
+      score.rs::duplicating_hits_does_not_change_the_score
+      score.rs::adding_a_hit_never_lowers_the_score
+        Three proptests indexed a class array with a hardcoded `0usize..6`. Now `0usize..ALL.len()`, so
+        the class count cannot drift out from under them a second time.
+      score.rs::the_bonus_is_capped
+        Reads the same `ALL`, now five entries. The cap is still reachable: 5 classes x 5 per class = 20,
+        above the cap of 15.
+
+  ADDED — 13 tests
+      tests/classes.rs                                                 8   (T044-T046)
+      tests/classes.rs::the_two_structural_classes_..._encoded_route   1   (#[ignore]d, see below)
+      cli.rs::the_removed_encoding_class_is_rejected_rather_than_silently_accepted (T047)
+      cli.rs::every_remaining_class_is_accepted_by_the_flag            1   (T047)
+      finalize::plan::tests / policy::tests adjustments                0   (existing tests, five classes)
+
+  IGNORED — 1 test, deliberately, and the only #[ignore] in the suite
+      classes.rs::the_two_structural_classes_are_not_yet_addressable_by_the_encoded_route
+        SC-103 asks for 10 of 10 combinations; this feature delivers 8. `Concealment / encoded` and
+        `Confusable / encoded` -- a zero-width run or a homoglyph carried inside a base-64 payload --
+        need structural detection over decoded candidates, which is a detection-capability addition
+        rather than a class-selection fix. Ignored rather than deleted so `cargo test` prints
+        `1 ignored` and the gap is greppable. The test's own doc comment carries the full argument.
+
+  DELETED — none.
+
 (T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
 
 Verbatim listing

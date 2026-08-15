@@ -17,11 +17,15 @@
 use please_core::score::{aggregate, BONUS_CAP, BONUS_PER_CLASS};
 use please_core::verdict::DetectionClass;
 
-const ALL: [DetectionClass; 6] = [
+/// Every class, five since T048 removed `Encoding`.
+///
+/// Kept as a local constant rather than reading `policy::ALL_CLASSES` so that a change to the class set is a
+/// visible edit to this file: the corroboration cap depends on how many classes exist, and it should not
+/// change silently underneath a test asserting the cap is reachable.
+const ALL: [DetectionClass; 5] = [
     DetectionClass::Override,
     DetectionClass::Concealment,
     DetectionClass::Confusable,
-    DetectionClass::Encoding,
     DetectionClass::Boundary,
     DetectionClass::Solicitation,
 ];
@@ -62,12 +66,12 @@ fn score_is_insensitive_to_input_length() {
     // and a one-line snippet with the same worst finding and the same class mix must score identically.
     let short = aggregate(&hits(&[
         (70, DetectionClass::Override),
-        (40, DetectionClass::Encoding),
+        (40, DetectionClass::Boundary),
     ]));
     let mut long = Vec::new();
     for _ in 0..500 {
         long.push((70, DetectionClass::Override));
-        long.push((40, DetectionClass::Encoding));
+        long.push((40, DetectionClass::Boundary));
     }
     assert_eq!(short, aggregate(&long));
 }
@@ -84,7 +88,7 @@ fn additional_distinct_classes_raise_the_score() {
     let three = aggregate(&hits(&[
         (60, DetectionClass::Override),
         (30, DetectionClass::Concealment),
-        (20, DetectionClass::Encoding),
+        (20, DetectionClass::Boundary),
     ]));
     assert!(two > one, "corroboration from a second class must count");
     assert!(three > two, "and from a third");
@@ -125,7 +129,7 @@ fn a_zero_severity_hit_still_counts_as_a_class() {
     assert_eq!(alone, 0);
     let with_other = aggregate(&hits(&[
         (0, DetectionClass::Override),
-        (50, DetectionClass::Encoding),
+        (50, DetectionClass::Boundary),
     ]));
     assert_eq!(with_other, 50 + BONUS_PER_CLASS);
 }
@@ -139,10 +143,10 @@ fn score_is_independent_of_hit_order() {
     let forward = aggregate(&hits(&[
         (30, DetectionClass::Concealment),
         (70, DetectionClass::Override),
-        (50, DetectionClass::Encoding),
+        (50, DetectionClass::Boundary),
     ]));
     let reverse = aggregate(&hits(&[
-        (50, DetectionClass::Encoding),
+        (50, DetectionClass::Boundary),
         (70, DetectionClass::Override),
         (30, DetectionClass::Concealment),
     ]));
@@ -158,7 +162,7 @@ proptest::proptest! {
     /// retuned during calibration.
     #[test]
     fn score_is_bracketed_by_the_worst_finding(
-        raw in proptest::collection::vec((0u8..=100, 0usize..6), 0..40),
+        raw in proptest::collection::vec((0u8..=100, 0usize..ALL.len()), 0..40),
     ) {
         let pairs: Vec<(u8, DetectionClass)> =
             raw.iter().map(|(sev, idx)| (*sev, ALL[*idx])).collect();
@@ -183,7 +187,7 @@ proptest::proptest! {
     /// Duplicating every hit changes nothing. The count-insensitivity property, over arbitrary input.
     #[test]
     fn duplicating_hits_does_not_change_the_score(
-        raw in proptest::collection::vec((0u8..=100, 0usize..6), 1..20),
+        raw in proptest::collection::vec((0u8..=100, 0usize..ALL.len()), 1..20),
     ) {
         let pairs: Vec<(u8, DetectionClass)> =
             raw.iter().map(|(sev, idx)| (*sev, ALL[*idx])).collect();
@@ -196,8 +200,8 @@ proptest::proptest! {
     /// caller must not be able to reduce a verdict's risk by finding more wrong with the input.
     #[test]
     fn adding_a_hit_never_lowers_the_score(
-        raw in proptest::collection::vec((0u8..=100, 0usize..6), 0..20),
-        extra in (0u8..=100, 0usize..6),
+        raw in proptest::collection::vec((0u8..=100, 0usize..ALL.len()), 0..20),
+        extra in (0u8..=100, 0usize..ALL.len()),
     ) {
         let pairs: Vec<(u8, DetectionClass)> =
             raw.iter().map(|(sev, idx)| (*sev, ALL[*idx])).collect();

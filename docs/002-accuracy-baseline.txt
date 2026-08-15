@@ -30,6 +30,41 @@ The suite is RED at baseline and 002 does not make it green. Feature 001 shipped
 feature that needs the eval harness, and it is not this one. What T084 verifies is that these
 exact numbers, and the exact set of missed and false-positive case ids, are unchanged at the end.
 
+AUTHORISED DEVIATIONS
+---------------------
+
+T084 compares against the verbatim capture below. Everything not listed here must match exactly. Each
+entry names what moved, why it was unavoidable, and what did NOT move.
+
+--- Phase 4 (T048, removing the `Encoding` detection class) -------------------------------------
+
+  TWO SCORES CHANGED. No outcome changed.
+
+      benign-security-prose-003    90 -> 85
+      benign-tool-001              95 -> 90
+
+  What did not move: 24/41 positives detected, the same 17 missed case ids, the same 8 false-positive
+  case ids, and every per-context and per-difficulty count. Both affected cases were false positives
+  before and are false positives after; both are still at or above the Low detection floor. The two
+  failing tests fail identically.
+
+  Why it is unavoidable rather than a tuning change. The score adds a corroboration bonus of 5 per
+  DISTINCT detection class beyond the highest-scoring one. Removing a class necessarily changes what
+  "distinct" counts, and both of these cases contained an override phrase together with an encoded copy
+  of one:
+
+      benign-security-prose-003   override + encoding = 2 classes -> +5     now 1 class  -> +0
+      benign-tool-001             boundary + override + encoding = 3 -> +10 now 2 classes -> +5
+
+  The bonus these two lost was double-counting. The same finding, delivered by two routes, contributed
+  two classes to a term whose whole purpose is to reward breadth of independent evidence — so a payload
+  scored higher for having been obfuscated, in a design that states an encoding is never itself a
+  finding. The obfuscation is still evidence and is still recorded, in the transformation chain.
+
+  Both movements are downward and both are on false positives, which is the helpful direction. That is a
+  coincidence of which cases the fixture set contains, not a reason the change was made, and it must not
+  be read as false-positive progress: the FP count is 8 before and 8 after.
+
 Verbatim capture
 ----------------
 

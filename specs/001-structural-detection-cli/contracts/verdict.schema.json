@@ -51,8 +51,8 @@
           "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$"
         },
         "class": {
-          "description": "Detection family. Independently reportable and disableable.",
-          "enum": ["override", "concealment", "confusable", "encoding", "boundary", "solicitation"]
+          "description": "Detection family: the KIND of finding, never how it was delivered. A payload recovered by decoding carries the class of the rule that matched it; the delivery is in `chain`. AMENDED by feature 002 (FR-131): `encoding` was removed. It named a delivery mechanism, no rule could declare it, and it was applied only by the decode path — so a decoded finding had to satisfy two different class filters and no single selection satisfied both.",
+          "enum": ["override", "concealment", "confusable", "boundary", "solicitation"]
         },
         "span": { "$ref": "#/$defs/span" },
         "matched": {

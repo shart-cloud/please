@@ -73,8 +73,21 @@ pub enum RiskLevel {
 
 /// A named family of related payload techniques (FR-015).
 ///
-/// `non_exhaustive` from the outset: the set of things an attacker does grows, and adding the seventh
-/// class should not break every embedder's `match`.
+/// **A class names a kind of finding, never a delivery mechanism** (FR-130). That distinction is not
+/// pedantry: 001 had a sixth variant, `Encoding`, and it is the reason class selection did not work.
+///
+/// No rule could declare `Encoding`. It was applied only by the decode path, to observations produced by
+/// `override`, `boundary`, and `solicitation` rules — so a decoded finding was gated on its rule's class and
+/// then relabelled, and had to satisfy two different filters to be reported. `--classes override` missed an
+/// encoded override payload; `--classes encoding` matched nothing at all, because the first gate rejected
+/// every rule. The class also contradicted a design statement 001 made explicitly, that an encoding is never
+/// itself a finding.
+///
+/// The delivery mechanism lives in [`Reason::chain`] instead, which is where it was already recorded
+/// (FR-132). Disabling decoding is the depth bound, which is what it always was (FR-135).
+///
+/// `non_exhaustive` from the outset: the set of things an attacker does grows, and adding a sixth class
+/// should not break every embedder's `match`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum DetectionClass {
@@ -84,8 +97,6 @@ pub enum DetectionClass {
     Concealment,
     /// Characters chosen to resemble others, evaluated per token (FR-010).
     Confusable,
-    /// Payloads recovered by bounded decoding (FR-011).
-    Encoding,
     /// Forged role markers, system-instruction or tool-result impersonation (FR-012).
     Boundary,
     /// Requests for an agent's instructions, configuration, or credentials (FR-013).
@@ -99,7 +110,6 @@ impl DetectionClass {
             Self::Override => "override",
             Self::Concealment => "concealment",
             Self::Confusable => "confusable",
-            Self::Encoding => "encoding",
             Self::Boundary => "boundary",
             Self::Solicitation => "solicitation",
         }

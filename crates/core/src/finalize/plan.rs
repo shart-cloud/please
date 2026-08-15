@@ -15,8 +15,9 @@
 //! and it is a defect of arithmetic on classes happening between two filter applications rather than of
 //! either filter.
 //!
-//! One resolution, in one place, read by everything, removes the possibility of two answers. T051
-//! finishes the job by making this the only *application* site as well.
+//! One resolution, in one place, applied once per observation to the one class that observation carries
+//! (T051). Four sites reading a resolved answer was not itself the bug — the bug was that two of them saw
+//! different classes for the same finding. A single application cannot disagree with itself.
 
 use crate::finalize::types::DetectionClass;
 use crate::policy::ScanPolicy;
@@ -65,19 +66,25 @@ impl<'a> ScanPlan<'a> {
         }
     }
 
-    /// True when `class` is selected for this scan.
+    /// True when an observation of `class` is reported by this scan.
     ///
-    /// The **single** resolution of the active set. Still read from more than one place in `engine.rs`
-    /// until T051 collapses those into the participating-rule list — but reading one resolved answer
-    /// twice cannot produce two answers, which is what the defect required.
-    pub fn is_active(&self, class: DetectionClass) -> bool {
+    /// The **single** resolution of the active set, and since T051 the single *application* of it too: it is
+    /// called once per observation, in `Engine::scan`, on the one class that observation carries. 001 called
+    /// the equivalent from four places and changed an observation's class between two of them.
+    ///
+    /// Named `admits` rather than `is_active` deliberately. "Is this class active?" is a question anywhere in
+    /// the pipeline can reasonably ask, and four places did; "does this scan admit this observation?" is a
+    /// question with one natural asking point — the boundary where observations are recorded.
+    pub fn admits(&self, class: DetectionClass) -> bool {
         self.classes.contains(&class)
     }
 
-    /// Every rule in the resolved set, whether or not its class is selected.
+    /// Every rule in the resolved set.
     ///
-    /// The class filter is applied by the caller for now; T051 replaces this with a participating-rules
-    /// view that has already applied it.
+    /// Not filtered by class, and deliberately so since T051: filtering the slice would break its alignment
+    /// with the prefilter's candidate indices and the matcher's compiled slots, which are the one place a
+    /// rule position is load-bearing. The class filter is applied to observations instead, once. Phase 7's
+    /// matcher owns all three together and can offer a participating view without that hazard.
     pub fn rules(&self) -> &'a [Rule] {
         self.rules
     }
@@ -114,9 +121,9 @@ mod tests {
             ..Default::default()
         };
         let plan = ScanPlan::resolve(&policy, &[]);
-        assert!(plan.is_active(DetectionClass::Override));
-        assert!(!plan.is_active(DetectionClass::Concealment));
-        assert!(!plan.is_active(DetectionClass::Confusable));
+        assert!(plan.admits(DetectionClass::Override));
+        assert!(!plan.admits(DetectionClass::Concealment));
+        assert!(!plan.admits(DetectionClass::Confusable));
     }
 
     #[test]
@@ -129,7 +136,7 @@ mod tests {
         };
         let plan = ScanPlan::resolve(&policy, &[]);
         for class in crate::policy::ALL_CLASSES {
-            assert!(!plan.is_active(class), "{class:?} must not be active");
+            assert!(!plan.admits(class), "{class:?} must not be admitted");
         }
     }
 }

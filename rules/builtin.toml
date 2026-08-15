@@ -16,11 +16,19 @@
 # accepted rule linear-time, so the guarantee is structural rather than a review habit.
 #
 # Rules are matched against decoded content too, so a base-64 or tag-block payload is caught by the same
-# rule that catches it in the clear. There is no separate corpus of "encoded" rules to keep in sync.
+# rule that catches it in the clear. There is no separate corpus of "encoded" rules to keep in sync — and
+# a payload recovered by decoding carries the class of the rule that matched it, not a class naming how it
+# arrived. How it arrived is in the finding's transformation chain.
 #
-# Two classes are absent by design: `concealment` and `confusable` are detected structurally, in code,
-# because they recognise a mechanism rather than a phrase. A run of tag-block characters means the same
-# thing regardless of what it decodes to, and no pattern could express it.
+# There are five detection classes. Three are declarable here: `override`, `boundary`, `solicitation`.
+# `concealment` and `confusable` are detected structurally, in code, because they recognise a mechanism
+# rather than a phrase — a run of tag-block characters means the same thing regardless of what it decodes
+# to, and no pattern could express it.
+#
+# There was a sixth, `encoding`, removed in feature 002. No rule could declare it; it was applied only by
+# the decode path, which meant a decoded finding had to satisfy two different class filters and no single
+# `--classes` selection satisfied both. It also named a delivery mechanism, contradicting the line above
+# about encodings never being findings in themselves.
 
 [ruleset]
 name = "please.builtin"

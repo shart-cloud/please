@@ -180,7 +180,6 @@ fn parse_class(name: &str) -> Option<DetectionClass> {
         "override" => DetectionClass::Override,
         "concealment" => DetectionClass::Concealment,
         "confusable" => DetectionClass::Confusable,
-        "encoding" => DetectionClass::Encoding,
         "boundary" => DetectionClass::Boundary,
         "solicitation" => DetectionClass::Solicitation,
         _ => return None,

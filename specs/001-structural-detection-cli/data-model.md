@@ -119,17 +119,35 @@ then style it, never the reverse.
 
 ## DetectionClass
 
-Named families, independently reportable and disableable (FR-015). The set is closed for this slice;
-adding a class is a spec change, because each one carries an accuracy criterion.
+Named families, independently reportable and disableable (FR-015). A class names the **kind** of finding,
+never how it was delivered. The set is closed for this slice; adding a class is a spec change, because each
+one carries an accuracy criterion.
 
 | Class | Detects | Requirement |
 |---|---|---|
 | `override` | Instructions to disregard, replace, or supersede prior instructions | FR-008 |
 | `concealment` | Text hidden by invisible, zero-width, bidi, tag-block, or variation-selector characters | FR-009 |
 | `confusable` | Characters chosen to resemble others, evaluated per token | FR-010 |
-| `encoding` | Payloads recovered by bounded decoding | FR-011 |
 | `boundary` | Forged role markers, system-instruction or tool-result impersonation, delimiter breakout | FR-012 |
 | `solicitation` | Requests for an agent's instructions, configuration, or credentials | FR-013 |
+
+> **Amended by feature 002 (FR-130, FR-131, T054).** A sixth class, `encoding` — "payloads recovered by
+> bounded decoding", FR-011 — has been **removed**.
+>
+> It was the only class that named a *delivery mechanism* rather than a kind of finding, and that
+> contradicted D5's rule, stated three sections below, that an encoding is never itself a finding. It also
+> had no members: no rule could declare it, and it was applied only by the decode path, to observations
+> produced by `override`, `boundary`, and `solicitation` rules.
+>
+> The consequence was a shipped defect. A decoded observation was gated on its *rule's* class, then
+> relabelled `encoding`, then gated again on *that* class — so it had to satisfy two different filters and no
+> single `--classes` selection satisfied both. `--classes override` reported a base-64 override payload as
+> clean; `--classes encoding` matched nothing at all. FR-015's promise of independent addressability did not
+> hold.
+>
+> A payload recovered by decoding now carries the class its rule declares, and FR-011's subject matter lives
+> where it always belonged: in the finding's `chain`. Disabling decoding is `max_decode_depth`, which is what
+> it always was.
 
 ---
 
@@ -146,6 +164,9 @@ One link in a decoding chain (FR-011, D5).
 
 A Transform never appears alone. It exists only inside a Reason whose rule fired on decoded
 content — the structural encoding of D5's rule that an encoding is not itself a finding.
+
+Since feature 002 this is also the **only** place a delivery mechanism is recorded, the `encoding` detection
+class having been removed for contradicting the same rule this paragraph states.
 
 ---
 

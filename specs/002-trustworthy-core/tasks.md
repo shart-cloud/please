@@ -122,20 +122,20 @@ detected when only its class is active.
 
 ### Tests for User Story 2
 
-- [ ] T044 [US2] Write failing test covering all ten class × delivery combinations, in `crates/core/tests/classes.rs` (SC-103)
-- [ ] T045 [P] [US2] Write failing test asserting deselecting a class does not affect findings of other classes, in `crates/core/tests/classes.rs` (FR-134)
-- [ ] T046 [P] [US2] Write failing test asserting a decoded finding carries its rule's class and records the transformation in its chain, in `crates/core/tests/classes.rs` (FR-131, FR-132)
-- [ ] T047 [P] [US2] Write failing CLI test asserting `--classes encoding` is now rejected as an unknown value rather than silently accepted, in `crates/cli/tests/cli.rs`
+- [x] T044 [US2] Write failing test covering all ten class × delivery combinations, in `crates/core/tests/classes.rs` (SC-103)
+- [x] T045 [P] [US2] Write failing test asserting deselecting a class does not affect findings of other classes, in `crates/core/tests/classes.rs` (FR-134)
+- [x] T046 [P] [US2] Write failing test asserting a decoded finding carries its rule's class and records the transformation in its chain, in `crates/core/tests/classes.rs` (FR-131, FR-132)
+- [x] T047 [P] [US2] Write failing CLI test asserting `--classes encoding` is now rejected as an unknown value rather than silently accepted, in `crates/cli/tests/cli.rs`
 
 ### Implementation for User Story 2
 
-- [ ] T048 [US2] Remove the `Encoding` variant from `DetectionClass` in `crates/core/src/finalize/types.rs`, and from `ALL_CLASSES` in `crates/core/src/policy.rs` (FR-131)
-- [ ] T049 [US2] Update the corroboration-bonus slot mapping for five classes in `crates/core/src/finalize/score.rs` — the exhaustive match will fail to compile until it is updated, which is the intended guard
-- [ ] T050 [US2] Make decoded observations carry the class declared by the rule that matched, in `crates/core/src/engine.rs` (FR-131)
-- [ ] T051 [US2] Apply the active-class filter exactly once, in `ScanPlan`, and remove both existing filter sites from `crates/core/src/engine.rs` (FR-133 — the double gate is the defect)
-- [ ] T052 [P] [US2] Remove the `encoding` value from the CLI class enumeration in `crates/cli/src/args.rs`
-- [ ] T053 [P] [US2] Update `rules/builtin.toml`'s header comment, which documents six classes
-- [ ] T054 [P] [US2] Update `specs/001-structural-detection-cli/contracts/verdict.schema.json` and `data-model.md` to five classes, noting the amendment and its reason
+- [x] T048 [US2] Remove the `Encoding` variant from `DetectionClass` in `crates/core/src/finalize/types.rs`, and from `ALL_CLASSES` in `crates/core/src/policy.rs` (FR-131)
+- [x] T049 [US2] Update the corroboration-bonus slot mapping for five classes in `crates/core/src/finalize/score.rs` — the exhaustive match will fail to compile until it is updated, which is the intended guard
+- [x] T050 [US2] Make decoded observations carry the class declared by the rule that matched, in `crates/core/src/engine.rs` (FR-131)
+- [x] T051 [US2] Apply the active-class filter exactly once, in `ScanPlan`, and remove both existing filter sites from `crates/core/src/engine.rs` (FR-133 — the double gate is the defect)
+- [x] T052 [P] [US2] Remove the `encoding` value from the CLI class enumeration in `crates/cli/src/args.rs`
+- [x] T053 [P] [US2] Update `rules/builtin.toml`'s header comment, which documents six classes
+- [x] T054 [P] [US2] Update `specs/001-structural-detection-cli/contracts/verdict.schema.json` and `data-model.md` to five classes, noting the amendment and its reason
 
 **Checkpoint**: Ten of ten combinations detected. Run quickstart Scenario 2.
 
