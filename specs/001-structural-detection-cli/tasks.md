@@ -58,15 +58,15 @@ repository root under `tests/`.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T011 [P] Define `Span`, `RiskLevel`, and `DetectionClass` (six variants, non-exhaustive) in `crates/core/src/verdict.rs`
-- [ ] T012 Define `Outcome`, `Verdict`, `Reason`, `Incompleteness` (with its nine discriminated causes), `Transform`, `TargetRef`, `EngineId`, and `QuotingContext` in `crates/core/src/verdict.rs` per [data-model.md](./data-model.md) (depends on T011)
-- [ ] T013 [P] Define `ScanPolicy` with the documented defaults (1 MiB input, depth 3, 16 matches/rule, 64 reasons, 256-byte excerpts, `high` threshold) in `crates/core/src/policy.rs`
-- [ ] T014 Write failing test asserting `Outcome::Clean` is produced only when `reasons` AND `incomplete` are both empty, in `crates/core/tests/invariants.rs`
-- [ ] T015 Write failing property test asserting no generated input yields `Clean` when any `Incompleteness` was recorded, in `crates/core/tests/invariants.rs`
-- [ ] T016 Write failing test asserting outcome precedence `risk_found` > `inconclusive` > `clean`, including the case where a payload is found and a bound is also hit, in `crates/core/tests/invariants.rs`
-- [ ] T017 Implement `Verdict` assembly enforcing the FR-004 invariant and FR-032b precedence at a single point, in `crates/core/src/verdict.rs` (makes T014–T016 pass)
-- [ ] T018 [P] Write failing tests for excerpt neutralisation covering C0/C1 controls, bidi overrides, zero-width characters, the Unicode Tags block, and variation selectors, in `crates/core/tests/sanitize.rs`
-- [ ] T019 Implement excerpt neutralisation and length capping in `crates/core/src/sanitize.rs` (makes T018 pass)
+- [x] T011 [P] Define `Span`, `RiskLevel`, and `DetectionClass` (six variants, non-exhaustive) in `crates/core/src/verdict.rs`
+- [x] T012 Define `Outcome`, `Verdict`, `Reason`, `Incompleteness` (with its nine discriminated causes), `Transform`, `TargetRef`, `EngineId`, and `QuotingContext` in `crates/core/src/verdict.rs` per [data-model.md](./data-model.md) (depends on T011)
+- [x] T013 [P] Define `ScanPolicy` with the documented defaults (1 MiB input, depth 3, 16 matches/rule, 64 reasons, 256-byte excerpts, `high` threshold) in `crates/core/src/policy.rs`
+- [x] T014 Write failing test asserting `Outcome::Clean` is produced only when `reasons` AND `incomplete` are both empty, in `crates/core/tests/invariants.rs`
+- [x] T015 Write failing property test asserting no generated input yields `Clean` when any `Incompleteness` was recorded, in `crates/core/tests/invariants.rs`
+- [x] T016 Write failing test asserting outcome precedence `risk_found` > `inconclusive` > `clean`, including the case where a payload is found and a bound is also hit, in `crates/core/tests/invariants.rs`
+- [x] T017 Implement `Verdict` assembly enforcing the FR-004 invariant and FR-032b precedence at a single point, in `crates/core/src/verdict.rs` (makes T014–T016 pass)
+- [x] T018 [P] Write failing tests for excerpt neutralisation covering C0/C1 controls, bidi overrides, zero-width characters, the Unicode Tags block, and variation selectors, in `crates/core/tests/sanitize.rs`
+- [x] T019 Implement excerpt neutralisation and length capping in `crates/core/src/sanitize.rs` (makes T018 pass)
 - [ ] T020 [P] Define `Rule`, `Ruleset`, and `RulesetId` in `crates/core/src/ruleset/mod.rs` per [contracts/ruleset.md](./contracts/ruleset.md)
 - [ ] T021 Write failing tests for rule-set rejection — unknown key, malformed id, duplicate id, unknown class, out-of-range severity, uncompilable pattern, look-around usage, oversized pattern source, oversized compiled program, excess rule count — in `crates/core/tests/ruleset_load.rs`
 - [ ] T022 Implement TOML deserialisation of rule sets in `crates/core/src/ruleset/parse.rs`

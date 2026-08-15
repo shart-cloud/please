@@ -19,6 +19,17 @@
 
 #![forbid(unsafe_code)]
 
+pub mod policy;
+pub mod sanitize;
+pub mod verdict;
+
+pub use policy::ScanPolicy;
+pub use verdict::{
+    DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, QuotingContext, Reason,
+    RiskLevel, RulesetId, Span, TargetKind, TargetRef, Transform, TransformKind, Verdict,
+    VerdictParts,
+};
+
 /// Engine name reported in every verdict's `engine` field (FR-005).
 pub const ENGINE_NAME: &str = "please-core";
 
