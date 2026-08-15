@@ -74,6 +74,13 @@ proptest = "1"
 criterion = "0.5"
 insta = "1"
 tempfile = "3"
+# Compile-fail tests. FR-121 and SC-108 assert what code *cannot* be written — that a detector cannot
+# construct a Verdict, and that a caller cannot mint built-in provenance. No test that compiles can
+# verify either claim, because the claim is that it does not compile. This is the only new test
+# category feature 002 introduces, and the only permitted movement in the dev-dependency graph
+# (docs/002-dependency-baseline.txt). It reaches the shipping graph through nothing: the CI allow-list
+# check inspects `cargo tree --edges normal`, which excludes dev-dependencies.
+trybuild = "1.0"
 
 [profile.release]
 lto = true

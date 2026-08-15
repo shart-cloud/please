@@ -1,0 +1,314 @@
+002-trustworthy-core — TEST INVENTORY BEFORE (task T002)
+========================================================
+
+SC-112 requires that no test disappear across this feature. Feature 002 moves tests between files
+several times (T024 moves all of invariants.rs into finalization.rs; T072–T073 move modules and the
+unit tests inside them), and a moved test and a deleted test look identical in a diff of counts.
+This file is the record that makes the difference checkable: T083 re-lists the suite and every name
+present here must still be present, or be recorded below as a deliberate rename/move with a reason.
+
+  commit    edf421e3f64b807cc6b5f2142873d3ad4285b8b0
+  toolchain rustc 1.96.0 (ac68faa20 2026-05-25)
+  command   cargo test --workspace -- --list
+  doctests  cargo test --workspace --doc  →  0 tests
+
+  TOTAL 244 tests across 8 test binaries. 0 benchmarks (crates/core/benches does not exist yet;
+  T031 creates it).
+
+Two of these tests FAIL at baseline — every_positive_case_is_detected and
+the_false_positive_rate_is_within_budget. See docs/002-accuracy-baseline.txt. They must still fail
+in exactly the same way at T084; presence in this inventory is about existence, not colour.
+
+SC-112 is about tests DISAPPEARING, so additions need no justification here — but two are worth
+naming so T083's diff is unambiguous rather than merely explicable:
+
+  + compile_fail::code_that_must_not_compile_does_not_compile   (T004, already landed in this phase)
+        The harness itself. It reports and returns while tests/compile_fail/ is empty; T010 and T032
+        add the cases it runs.
+  + benches/preparation.rs                                      (T031)
+        The first bench target in the crate. The inventory above records 0 benchmarks.
+
+Moves recorded during the feature
+---------------------------------
+
+(T024, T072, T073 and any other task that relocates a test appends here: old path::name →
+new path::name, and why. Empty until the first move lands.)
+
+Verbatim listing
+----------------
+
+     Running unittests src/main.rs (target/debug/deps/plz-8c3028a5ddf35854)
+0 tests, 0 benchmarks
+     Running tests/cli.rs (target/debug/deps/cli-fca43b1eaf761b92)
+a_directory_is_walked_and_each_target_reported: test
+a_finding_at_the_threshold_exits_one: test
+a_finding_below_the_threshold_exits_three: test
+a_nonexistent_target_exits_with_a_usage_error: test
+a_tag_block_payload_is_detected_and_its_content_revealed: test
+clean_input_exits_zero: test
+diagnostics_go_to_stderr_and_never_to_stdout: test
+disabling_a_class_changes_the_outcome: test
+every_documented_exit_code_is_distinct: test
+output_contains_no_raw_escape_sequences: test
+output_does_not_vary_with_the_working_directory: test
+oversized_input_exits_two_and_never_reports_clean: test
+repeated_runs_over_a_directory_produce_identical_output: test
+
+13 tests, 0 benchmarks
+     Running unittests src/lib.rs (target/debug/deps/please_core-26cae485789c67f6)
+decode::tests::a_base64_payload_is_recovered: test
+decode::tests::a_cycle_terminates_without_exhausting_the_budget: test
+decode::tests::a_tag_block_payload_is_recovered: test
+decode::tests::a_zero_depth_bound_decodes_nothing: test
+decode::tests::an_origin_span_points_into_the_original_input: test
+decode::tests::depth_is_bounded_and_the_bound_is_reported: test
+decode::tests::empty_and_tiny_inputs_terminate: test
+decode::tests::fan_out_is_bounded: test
+decode::tests::leetspeak_is_recovered: test
+decode::tests::nested_base64_is_recovered_and_the_chain_records_both_layers: test
+decode::tests::ordinary_prose_produces_few_candidates: test
+decode::tests::reversal_is_recovered: test
+decode::tests::rot13_is_recovered: test
+decode::transforms::tests::base64_handles_the_url_safe_alphabet: test
+decode::transforms::tests::base64_ignores_a_certificate_body: test
+decode::transforms::tests::base64_ignores_a_content_hash: test
+decode::transforms::tests::base64_ignores_a_short_run: test
+decode::transforms::tests::base64_recovers_a_text_payload: test
+decode::transforms::tests::decoders_terminate_on_empty_input: test
+decode::transforms::tests::hex_recovers_a_text_payload: test
+decode::transforms::tests::hex_tolerates_an_odd_trailing_nibble: test
+decode::transforms::tests::leetspeak_folds_known_substitutions: test
+decode::transforms::tests::leetspeak_is_conservative_about_letters: test
+decode::transforms::tests::reversed_round_trips_and_preserves_multibyte: test
+decode::transforms::tests::rot13_leaves_non_letters_alone: test
+decode::transforms::tests::rot13_round_trips: test
+decode::transforms::tests::the_encoded_gate_admits_a_nested_layer_but_not_a_token: test
+decode::transforms::tests::the_printability_gate_rejects_binary_and_accepts_prose: test
+decode::unicode::tests::a_single_stray_tag_character_is_ignored: test
+decode::unicode::tests::a_tag_encoded_base64_payload_survives_recovery: test
+decode::unicode::tests::a_tag_run_is_recovered_exactly: test
+decode::unicode::tests::empty_input_is_handled: test
+decode::unicode::tests::ordinary_text_has_no_runs: test
+decode::unicode::tests::separate_runs_are_reported_separately: test
+decode::unicode::tests::the_span_covers_the_tag_run_only: test
+detect::concealment::tests::a_control_character_run_is_detected: test
+detect::concealment::tests::a_long_concealed_run_is_one_finding: test
+detect::concealment::tests::bidi_overrides_are_detected: test
+detect::concealment::tests::different_kinds_do_not_merge_into_one_run: test
+detect::concealment::tests::empty_input_is_handled: test
+detect::concealment::tests::newlines_and_tabs_are_structure_not_concealment: test
+detect::concealment::tests::ordinary_text_conceals_nothing: test
+detect::concealment::tests::spans_point_at_the_original_bytes: test
+detect::concealment::tests::spans_stay_correct_after_invalid_utf8: test
+detect::concealment::tests::the_tag_block_is_detected_and_recovered: test
+detect::concealment::tests::variation_selectors_are_detected_but_not_decoded: test
+detect::concealment::tests::zero_width_runs_are_detected: test
+detect::confusable::tests::a_cyrillic_substitution_inside_an_english_word_is_flagged: test
+detect::confusable::tests::a_greek_substitution_is_flagged: test
+detect::confusable::tests::a_very_long_token_terminates: test
+detect::confusable::tests::accented_latin_is_not_flagged: test
+detect::confusable::tests::an_english_document_quoting_another_script_is_not_flagged: test
+detect::confusable::tests::emoji_and_symbols_are_not_flagged: test
+detect::confusable::tests::empty_and_whitespace_input_is_handled: test
+detect::confusable::tests::invalid_utf8_does_not_panic: test
+detect::confusable::tests::monolingual_non_english_text_is_not_flagged: test
+detect::confusable::tests::ordinary_english_is_not_flagged: test
+detect::confusable::tests::short_tokens_are_not_flagged: test
+detect::confusable::tests::the_skeleton_lets_an_existing_rule_match_without_a_second_rule: test
+detect::confusable::tests::the_span_points_at_the_token: test
+detect::pattern::tests::a_matching_rule_reports_its_spans: test
+detect::pattern::tests::a_non_matching_rule_reports_nothing: test
+detect::pattern::tests::a_size_bomb_is_reported_at_match_time_if_it_reached_here: test
+detect::pattern::tests::a_zero_cap_still_reports_saturation_when_the_rule_would_match: test
+detect::pattern::tests::an_uncompilable_pattern_is_reported_not_ignored: test
+detect::pattern::tests::collection_stops_at_the_cap_and_says_so: test
+detect::pattern::tests::compilation_is_lazy_and_memoised: test
+detect::pattern::tests::exactly_the_cap_many_matches_is_not_saturated: test
+detect::pattern::tests::matching_works_across_invalid_utf8: test
+detect::pattern::tests::repeated_evaluation_is_stable: test
+detect::tests::a_hit_in_live_text_survives: test
+detect::tests::a_hit_inside_a_code_fence_is_suppressed: test
+detect::tests::a_reason_built_from_a_hit_is_sanitised: test
+detect::tests::fires_in_quotes_opts_a_rule_out_of_suppression: test
+detect::tests::structural_detectors_report_concealment_with_recovered_text: test
+detect::tests::structural_detectors_report_confusables_with_their_skeleton: test
+detect::tests::structural_detectors_stay_quiet_on_ordinary_text: test
+engine::tests::builder_defaults_to_the_builtin_set: test
+engine::tests::builder_rejects_suppressing_an_unknown_rule: test
+engine::tests::engine_is_send_and_sync: test
+engine::tests::the_builtin_digest_is_stable_across_builds: test
+engine::tests::the_embedded_builtin_rule_set_loads: test
+policy::tests::all_classes_are_active_by_default: test
+policy::tests::defaults_match_the_documented_values: test
+policy::tests::max_input_default_exceeds_the_largest_corpus_prompt: test
+prefilter::tests::a_rule_with_no_literals_is_always_a_candidate: test
+prefilter::tests::a_shared_literal_enables_every_rule_that_declared_it: test
+prefilter::tests::an_empty_rule_set_yields_no_candidates: test
+prefilter::tests::candidates_are_ascending_and_deduplicated: test
+prefilter::tests::disabled_rules_are_never_candidates: test
+prefilter::tests::literals_match_across_invalid_utf8: test
+prefilter::tests::matching_is_case_insensitive: test
+prefilter::tests::only_rules_whose_literal_is_present_are_candidates: test
+prefilter::tests::text_matching_nothing_yields_no_candidates: test
+ruleset::tests::bands_map_scores_to_levels: test
+ruleset::tests::digest_is_stable_and_content_sensitive: test
+ruleset::tests::non_ascending_bands_are_rejected: test
+ruleset::validate::tests::counted_repetition_bomb_exceeds_the_size_limit: test
+ruleset::validate::tests::every_class_name_round_trips: test
+ruleset::validate::tests::id_shape_is_enforced: test
+ruleset::validate::tests::lookaround_is_not_expressible_and_the_cheap_tier_catches_it: test
+ruleset::validate::tests::the_cheap_tier_does_not_catch_a_size_bomb: test
+sanitize::tests::cap_of_zero_yields_empty_and_truncated: test
+sanitize::tests::dangerous_ranges_are_recognised: test
+sanitize::tests::ordinary_text_is_not_dangerous: test
+score::tests::every_class_has_a_distinct_slot_within_the_array: test
+score::tests::saturating_arithmetic_holds_at_the_extremes: test
+structure::tests::a_live_payload_after_a_quoted_example_is_still_live: test
+structure::tests::an_attributive_marker_influence_is_bounded: test
+structure::tests::an_unpaired_apostrophe_does_not_suppress_the_document: test
+structure::tests::an_unterminated_fence_suppresses_to_end_of_input: test
+structure::tests::attributive_markers_suppress_what_follows: test
+structure::tests::block_quotes_are_quoted: test
+structure::tests::empty_input_is_handled: test
+structure::tests::fenced_blocks_are_quoted_including_their_markers: test
+structure::tests::inline_code_is_quoted: test
+structure::tests::invalid_utf8_does_not_break_classification: test
+structure::tests::lookup_agrees_with_a_naive_scan: test
+structure::tests::lookup_is_correct_when_regions_are_nested: test
+structure::tests::plain_text_has_no_quoting: test
+structure::tests::quoted_strings_are_quoted: test
+structure::tests::region_count_grows_linearly_with_input: test
+tests::engine_identity_is_populated: test
+
+123 tests, 0 benchmarks
+     Running tests/fixtures.rs (target/debug/deps/fixtures-1fcc95287e30edf8)
+every_declared_expected_class_actually_fires: test
+every_finding_is_actionable: test
+every_positive_case_is_detected: test
+no_excerpt_leaks_a_raw_control_or_invisible_character: test
+report_detection_by_context_and_difficulty: test
+support::benign_case_count_is_reported_against_the_sc003_minimum: test
+support::every_case_loads_and_is_well_formed: test
+support::repository_root_resolves: test
+the_false_positive_rate_is_within_budget: test
+
+9 tests, 0 benchmarks
+     Running tests/invariants.rs (target/debug/deps/invariants-9b7d1d82828330da)
+clean_implies_nothing_found_and_nothing_missed: test
+clean_verdict_carries_zero_score: test
+clean_when_nothing_found_and_nothing_unexamined: test
+not_clean_when_a_bound_was_hit_even_with_no_reasons: test
+not_clean_when_a_target_was_unreadable: test
+not_clean_when_an_optional_tier_was_unavailable: test
+outcome_rank_orders_risk_above_inconclusive_above_clean: test
+risk_found_outranks_inconclusive: test
+risk_found_when_a_rule_fired: test
+verdict_cannot_be_constructed_outside_assemble: test
+
+10 tests, 0 benchmarks
+     Running tests/ruleset_load.rs (target/debug/deps/ruleset_load-dcc470578274399f)
+a_counted_repetition_bomb_survives_loading_but_fails_compiled_validation: test
+a_disabled_rule_is_excluded_from_matching_but_kept_in_identity: test
+a_duplicate_id_is_rejected: test
+a_malformed_id_is_rejected: test
+a_missing_description_is_rejected: test
+a_missing_required_field_is_rejected_naming_the_rule: test
+a_missing_ruleset_header_is_rejected: test
+a_rule_set_with_no_rules_loads: test
+a_rule_with_no_literals_loads_but_warns: test
+a_suppression_removes_the_rule: test
+a_well_formed_rule_set_loads: test
+a_wrongly_typed_field_is_rejected: test
+an_addition_is_merged: test
+an_addition_replacing_a_builtin_is_reported: test
+an_empty_description_is_rejected: test
+an_out_of_range_severity_is_rejected_reporting_what_was_written: test
+an_oversized_pattern_source_is_rejected: test
+an_uncompilable_pattern_is_rejected: test
+an_unknown_class_is_rejected: test
+an_unknown_top_level_section_is_rejected: test
+bands_default_when_absent_and_override_when_present: test
+compiled_validation_accepts_ordinary_rules: test
+digest_changes_when_any_field_changes: test
+digest_is_independent_of_file_order: test
+invalid_toml_is_rejected: test
+lookaround_and_backreferences_cannot_be_written: test
+non_ascending_bands_are_rejected: test
+one_bad_rule_rejects_the_whole_set: test
+optional_fields_take_their_documented_defaults: test
+resolution_changes_the_digest: test
+resolution_enforces_the_rule_count_limit: test
+suppressing_an_unknown_rule_is_an_error_not_a_no_op: test
+suppression_applies_after_additions: test
+too_many_rules_is_rejected: test
+unknown_fields_are_rejected_not_ignored: test
+
+35 tests, 0 benchmarks
+     Running tests/sanitize.rs (target/debug/deps/sanitize-b4559cf3828e967a)
+a_fully_concealed_payload_becomes_visible: test
+bidi_overrides_and_isolates_are_escaped: test
+byte_order_mark_and_mongolian_vowel_separator_are_escaped: test
+c1_range_is_escaped: test
+empty_input_is_empty_output: test
+escape_and_control_characters_become_byte_escapes: test
+invalid_utf8_bytes_are_escaped_not_rejected: test
+legitimate_international_text_is_unchanged: test
+newlines_tabs_and_carriage_returns_are_escaped: test
+output_is_capped_and_truncation_is_reported: test
+plain_ascii_is_unchanged: test
+sanitising_twice_changes_nothing_further: test
+truncated_multibyte_sequence_is_escaped: test
+truncation_never_splits_a_character: test
+truncation_never_splits_an_escape_sequence: test
+unicode_tags_block_is_escaped: test
+valid_multibyte_sequences_survive_the_byte_path: test
+variation_selectors_are_escaped: test
+word_joiner_and_invisible_operators_are_escaped: test
+zero_width_characters_are_escaped: test
+
+20 tests, 0 benchmarks
+     Running tests/scan.rs (target/debug/deps/scan-87ccea1aa7997869)
+a_matching_input_reports_risk_with_an_actionable_reason: test
+a_second_distinct_class_adds_the_corroboration_bonus: test
+an_oversized_input_is_not_analysed_at_all: test
+disabling_a_class_suppresses_its_rules: test
+empty_and_whitespace_input_is_clean: test
+every_verdict_records_the_rule_set_and_engine_that_produced_it: test
+excerpts_in_reasons_are_neutralised: test
+invalid_utf8_is_scanned_rather_than_rejected: test
+match_saturation_is_reported_as_a_coverage_gap: test
+ordinary_text_is_clean: test
+oversized_input_is_inconclusive_and_never_clean: test
+reason_truncation_is_reported: test
+reasons_are_ordered_by_input_offset: test
+repeated_matches_of_one_rule_do_not_inflate_the_score: test
+score_is_aggregated_before_truncation: test
+score_is_the_rule_severity_and_bands_from_it: test
+text_matching_no_literal_compiles_no_pattern: test
+the_builtin_engine_scans_without_configuration: test
+the_same_input_yields_the_same_verdict: test
+
+19 tests, 0 benchmarks
+     Running tests/score.rs (target/debug/deps/score-57e6e0bd3d9984d9)
+a_single_hit_scores_its_severity: test
+a_zero_severity_hit_still_counts_as_a_class: test
+adding_a_hit_never_lowers_the_score: test
+additional_distinct_classes_raise_the_score: test
+duplicating_hits_does_not_change_the_score: test
+no_hits_scores_zero: test
+repeated_matches_of_one_class_do_not_raise_the_score: test
+score_is_bracketed_by_the_worst_finding: test
+score_is_independent_of_hit_order: test
+score_is_insensitive_to_input_length: test
+score_never_exceeds_one_hundred: test
+the_bonus_is_capped: test
+
+12 tests, 0 benchmarks
+     Running tests/support.rs (target/debug/deps/support-d482918b238884af)
+benign_case_count_is_reported_against_the_sc003_minimum: test
+every_case_loads_and_is_well_formed: test
+repository_root_resolves: test
+
+3 tests, 0 benchmarks
+   Doc-tests please_core
+0 tests, 0 benchmarks

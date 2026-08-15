@@ -33,12 +33,12 @@ checkable against a baseline captured before the first edit.
 
 **Purpose**: Capture the baselines this feature is measured against, and the harness for the new test category
 
-- [ ] T001 Capture the accuracy baseline — run the fixture report and record per-context, per-difficulty, and false-positive counts verbatim in `docs/002-accuracy-baseline.txt`. **Must be the first task**: SC-113 is uncheckable without it
-- [ ] T002 Capture the test inventory — record every test name and the total count in `docs/002-test-inventory-before.txt`, so SC-112 can prove no test silently disappeared
-- [ ] T003 [P] Record the current resolved dependency set in `docs/002-dependency-baseline.txt`; this feature must not change it
-- [ ] T004 [P] Add `trybuild` as a dev-dependency in `crates/core/Cargo.toml` and create the compile-fail harness at `crates/core/tests/compile_fail.rs`
-- [ ] T005 [P] Create empty module skeletons at `crates/core/src/prepare/mod.rs`, `crates/core/src/matcher/mod.rs`, and `crates/core/src/finalize/mod.rs`, declared in `crates/core/src/lib.rs`
-- [ ] T006 [P] Record the migration order and its rationale in `docs/002-migration.md`, including why sealing constructors is last and why the two behaviour changes are separated
+- [x] T001 Capture the accuracy baseline — run the fixture report and record per-context, per-difficulty, and false-positive counts verbatim in `docs/002-accuracy-baseline.txt`. **Must be the first task**: SC-113 is uncheckable without it
+- [x] T002 Capture the test inventory — record every test name and the total count in `docs/002-test-inventory-before.txt`, so SC-112 can prove no test silently disappeared
+- [x] T003 [P] Record the current resolved dependency set in `docs/002-dependency-baseline.txt`; this feature must not change it
+- [x] T004 [P] Add `trybuild` as a dev-dependency in `crates/core/Cargo.toml` and create the compile-fail harness at `crates/core/tests/compile_fail.rs`
+- [x] T005 [P] Create empty module skeletons at `crates/core/src/prepare/mod.rs`, `crates/core/src/matcher/mod.rs`, and `crates/core/src/finalize/mod.rs`, declared in `crates/core/src/lib.rs`
+- [x] T006 [P] Record the migration order and its rationale in `docs/002-migration.md`, including why sealing constructors is last and why the two behaviour changes are separated
 
 ---
 

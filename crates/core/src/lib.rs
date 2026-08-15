@@ -1,8 +1,10 @@
 //! `please-core` — the PLEASE prompt-injection detection engine.
 //!
-//! **Phase 1 scaffold.** The verdict model, rule-set machinery, scoring, and the scan pipeline arrive
-//! in Phase 2 (tasks T011–T036). This file exists so the workspace builds and CI is green from the
-//! first commit rather than red until the engine lands.
+//! The verdict model, rule-set machinery, scoring, and the scan pipeline all landed with feature 001.
+//! Feature 002 adds three modules that concentrate decisions currently spread across the crate:
+//! [`prepare`] owns the transition from rule text to scanning capability, [`finalize`] owns the
+//! transition from evidence to verdict, and [`matcher`] owns rule identity. All three are skeletons
+//! until their phases land — see `specs/002-trustworthy-core/tasks.md`.
 //!
 //! Three properties of this crate are load-bearing and are proven mechanically rather than asserted
 //! (constitution Principle V):
@@ -22,8 +24,11 @@
 pub mod decode;
 pub mod detect;
 pub mod engine;
+pub mod finalize;
+pub mod matcher;
 pub mod policy;
 pub mod prefilter;
+pub mod prepare;
 pub mod ruleset;
 pub mod sanitize;
 pub mod score;
