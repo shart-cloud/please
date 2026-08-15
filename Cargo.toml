@@ -1,0 +1,70 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/cli",
+]
+# crates/eval is deliberately EXCLUDED (plan.md D12).
+#
+# The evaluation harness needs data-frame and query dependencies far heavier than anything the
+# shipping crates may carry, and its corpus adapters reach the network. Excluding it keeps
+# `cargo build`, `cargo test`, and `cargo clippy --workspace` over the shipping crates byte-for-byte
+# unaffected by its existence — and, more importantly, means the dependency guard in tests/dep_guard.rs
+# cannot be defeated by a transitive edge from a development tool. It carries its own lockfile.
+exclude = ["crates/eval"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Jared Gore"]
+repository = "https://github.com/jlgore/please"
+rust-version = "1.85"
+
+[workspace.dependencies]
+please-core = { path = "crates/core", version = "0.1.0" }
+
+# ── Matching engine ─────────────────────────────────────────────────────────────────────────────
+# `regex` is a finite-automaton engine: every search is worst-case O(m*n), and the syntax CANNOT
+# express look-around or backreferences. That absence is the enforcement mechanism for constitution
+# Principle II — a rule author is unable to write a catastrophically backtracking pattern, so the
+# guarantee is structural rather than a review convention (research D1).
+#
+# NB: the crate's iterators are O(m*n^2) because each match restarts a search. Bounded match
+# collection is what restores linearity (research D2) — see crates/core/src/detect/pattern.rs.
+regex = "1.13"
+# Multi-literal prefilter. Linear in haystack plus patterns, built once from every rule's required
+# literals, so text matching no literal compiles no pattern at all (research D4).
+aho-corasick = "1.1"
+
+# ── Unicode ─────────────────────────────────────────────────────────────────────────────────────
+# UTS #39: confusable skeletons, mixed-script detection, restriction levels. Applied PER TOKEN, never
+# across a document — whole-document script mixing is ordinary multilingual prose, and flagging it
+# would harm exactly the users the corpus cannot warn us about (research D7).
+unicode-security = "0.1"
+unicode-normalization = "0.1"
+
+# ── Decoding ────────────────────────────────────────────────────────────────────────────────────
+base64 = "0.23"
+
+# ── Rules as data ───────────────────────────────────────────────────────────────────────────────
+# TOML because rules are a reviewable product artifact: comments carry a rule's justification, diffs
+# are line-by-line, and it matches the policy format bee already uses (constitution Principle III).
+toml = "1"
+
+# ── Serialisation (optional in core, enabled by the CLI) ────────────────────────────────────────
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ── CLI only ────────────────────────────────────────────────────────────────────────────────────
+clap = { version = "4", features = ["derive"] }
+
+# ── Dev/test ────────────────────────────────────────────────────────────────────────────────────
+proptest = "1"
+criterion = "0.5"
+insta = "1"
+tempfile = "3"
+
+[profile.release]
+lto = true
+codegen-units = 1

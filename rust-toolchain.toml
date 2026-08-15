@@ -1,0 +1,14 @@
+# Everything ships on STABLE (constitution Principle V).
+#
+# The one exception is fuzzing: cargo-fuzz needs nightly for libFuzzer's sanitizer coverage
+# instrumentation. That is invoked explicitly as `cargo +nightly fuzz run ...` from CI and from
+# quickstart.md, so it never becomes the toolchain the crates themselves are built with. A nightly
+# requirement that leaks into the library build would make `please-core` unembeddable by anyone on
+# stable, which is the audience it exists for.
+#
+# wasm32-unknown-unknown is listed because CI proves the core builds for it on every change — that
+# build IS the mechanical evidence behind Principle V's embeddability claim, not a convenience.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]

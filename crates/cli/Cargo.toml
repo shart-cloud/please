@@ -1,0 +1,35 @@
+[package]
+name = "please-cli"
+description = "plz — scan prompts, skills, and artifacts for prompt-injection attempts."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["security", "prompt-injection", "cli", "llm", "agent"]
+categories = ["command-line-utilities", "text-processing"]
+
+# The binary is `plz`, not `please`.
+#
+# `pleaser` — a sudo alternative with ~50k downloads — already installs a binary called `please`.
+# Colliding with it would be bad on PATH and worse semantically: `please <command>` currently means
+# "run this with elevated privileges", and a prompt-injection scanner borrowing that verb invites the
+# wrong mental model. If a pre-tool hook shells out to `please`, whichever binary is first on PATH
+# wins, and a firewall that silently is not running is a bad failure mode.
+[[bin]]
+name = "plz"
+path = "src/main.rs"
+
+[dependencies]
+# `serde` is enabled here rather than in the core's defaults: machine-readable output is a CLI
+# concern, and the core stays serialisation-free for wasm and embedded callers.
+please-core = { workspace = true, features = ["serde"] }
+clap = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+# Snapshot tests for human-readable output, and a scratch tree for directory-walk tests including the
+# unreadable-target case (FR-032a).
+insta = { workspace = true }
+tempfile = { workspace = true }

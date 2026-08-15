@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  fmt:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  # Principle V's embeddability claim is only worth what proves it. This job IS that proof: the core
+  # must build for a target with no filesystem, no network, no threads, and no monotonic clock. It is
+  # not a portability nicety — a failure here means the constitution's central promise is broken.
+  wasm:
+    name: wasm32 build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p please-core --target wasm32-unknown-unknown
+
+  # The eval harness is excluded from the workspace on purpose (plan.md D12), which means
+  # `cargo test --workspace` never touches it and it could rot unnoticed. This builds it separately so
+  # the exclusion costs isolation, not correctness.
+  eval-isolated:
+    name: eval crate (out of workspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --manifest-path crates/eval/Cargo.toml
+
+# Jobs arriving with later tasks, listed so their absence is deliberate rather than forgotten:
+#
+#   T034  dependency allow-list check — compares the default build's resolved dependency set against
+#         ci/dependency-allowlist.txt. See that file for why this is a CI step rather than a Rust test.
+#   T035  static gate denying networking and filesystem interfaces inside please-core (FR-031).
+#   T095  per-change fuzz smoke and the benchmark growth-exponent gate (SC-005, SC-006).
+#   T096  scheduled fuzz campaign accumulating past 1M inputs (separate workflow, self-hosted).
+#   T109  MSRV verification against the pinned floor.

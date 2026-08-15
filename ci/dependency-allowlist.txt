@@ -1,0 +1,60 @@
+# Dependency allow-list for the DEFAULT build of please-core.
+#
+# Constitution Principle V requires optional capability to be gated so that a build selecting none of
+# it carries none of its dependencies, and requires that gating to be enforced by a check rather than
+# by review. This file is the expected set; a CI step (T034) diffs it against what
+# `cargo tree -p please-core --edges normal` actually resolves and fails on any difference.
+#
+# WHY A CI STEP RATHER THAN A RUST TEST
+# -------------------------------------
+# The plan originally placed this at `tests/dep_guard.rs` in the repository root. That does not work:
+# the workspace root is not a package, so a `tests/` directory there is never compiled. Putting it
+# inside please-core would not help either — a test cannot observe its own package's resolved default
+# feature set, because dev-dependencies have already changed it. Only the build graph, viewed from
+# outside, can answer the question. Recorded as a Phase 1 correction to plan.md.
+#
+# UPDATING THIS FILE
+# ------------------
+# A diff here is a design decision, not a chore. Adding a line means the default build grew a
+# dependency: say why in the commit message. Removing one means the graph shrank, which is usually
+# good news worth noting.
+
+# ── Direct: matching engine ─────────────────────────────────────────────────────────────────────
+aho-corasick
+regex
+regex-automata
+regex-syntax
+memchr
+
+# ── Direct: Unicode (UTS #39 confusables, normalisation) ────────────────────────────────────────
+unicode-normalization
+unicode-script
+unicode-security
+tinyvec
+tinyvec_macros
+
+# ── Direct: decoding ────────────────────────────────────────────────────────────────────────────
+base64
+
+# ── Direct: rules as data ───────────────────────────────────────────────────────────────────────
+toml
+toml_datetime
+toml_parser
+toml_writer
+winnow
+
+# ── Transitive, and worth being precise about ───────────────────────────────────────────────────
+#
+# `serde` is an OPTIONAL feature of please-core and is correctly OFF in the default build: no
+# `Serialize`/`Deserialize` impls are generated, `serde_derive` never compiles, and `serde_json` is
+# absent entirely.
+#
+# But `serde_core` and `serde_spanned` ARE present, pulled in transitively by `toml`, which needs them
+# to parse. So the accurate claim is "no derive machinery and no JSON in the default build", NOT "no
+# serde in the tree". Overstating it would be the kind of small dishonesty that makes a security
+# tool's other claims harder to trust.
+serde_core
+serde_spanned
+
+# ── The crate itself ────────────────────────────────────────────────────────────────────────────
+please-core

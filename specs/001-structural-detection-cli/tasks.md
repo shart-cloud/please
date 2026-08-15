@@ -39,16 +39,16 @@ repository root under `tests/`.
 
 **Purpose**: Workspace, toolchain, and CI skeleton
 
-- [ ] T001 Create workspace manifest at `Cargo.toml` with members `crates/core` and `crates/cli`, and `exclude = ["crates/eval"]`, plus shared `[workspace.package]` metadata
-- [ ] T002 [P] Create `rust-toolchain.toml` pinning the stable channel with `rustfmt` and `clippy` components
-- [ ] T003 [P] Create `rustfmt.toml` with the project's formatting settings
-- [ ] T004 Create `crates/core/Cargo.toml` declaring `regex`, `aho-corasick`, `unicode-security`, `unicode-normalization`, `base64`, `toml`, and optional `serde` behind a default-off `serde` feature
-- [ ] T005 Create `crates/cli/Cargo.toml` declaring `[[bin]] name = "plz"`, `please-core` with the `serde` feature, `clap`, and `serde_json`
-- [ ] T006 [P] Create `crates/eval/Cargo.toml` as a standalone package outside the workspace, with a placeholder `crates/eval/src/lib.rs` noting that corpus tooling arrives in its own feature
-- [ ] T007 [P] Create `.github/workflows/ci.yml` with jobs for `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
-- [ ] T008 [P] Create `docs/attribution.md` recording which components are agent-authored and which are human-authored, per the constitution's attribution gate
-- [ ] T009 [P] Create `docs/limits.md` stating the declared gaps — multilingual detection, the heuristic quoting pre-pass, provisional band calibration, and the structural tier's inability to detect novel phrasing
-- [ ] T010 Implement fixture-path resolution relative to `CARGO_MANIFEST_DIR` so tests in `crates/core/tests/` can read repository-root fixtures regardless of working directory, in `crates/core/tests/support.rs`
+- [x] T001 Create workspace manifest at `Cargo.toml` with members `crates/core` and `crates/cli`, and `exclude = ["crates/eval"]`, plus shared `[workspace.package]` metadata
+- [x] T002 [P] Create `rust-toolchain.toml` pinning the stable channel with `rustfmt` and `clippy` components
+- [x] T003 [P] Create `rustfmt.toml` with the project's formatting settings
+- [x] T004 Create `crates/core/Cargo.toml` declaring `regex`, `aho-corasick`, `unicode-security`, `unicode-normalization`, `base64`, `toml`, and optional `serde` behind a default-off `serde` feature
+- [x] T005 Create `crates/cli/Cargo.toml` declaring `[[bin]] name = "plz"`, `please-core` with the `serde` feature, `clap`, and `serde_json`
+- [x] T006 [P] Create `crates/eval/Cargo.toml` as a standalone package outside the workspace, with a placeholder `crates/eval/src/lib.rs` noting that corpus tooling arrives in its own feature
+- [x] T007 [P] Create `.github/workflows/ci.yml` with jobs for `cargo fmt --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
+- [x] T008 [P] Create `docs/attribution.md` recording which components are agent-authored and which are human-authored, per the constitution's attribution gate
+- [x] T009 [P] Create `docs/limits.md` stating the declared gaps — multilingual detection, the heuristic quoting pre-pass, provisional band calibration, and the structural tier's inability to detect novel phrasing
+- [x] T010 Implement fixture-path resolution relative to `CARGO_MANIFEST_DIR` so tests in `crates/core/tests/` can read repository-root fixtures regardless of working directory, in `crates/core/tests/support.rs`
 
 ---
 
@@ -83,7 +83,7 @@ repository root under `tests/`.
 - [ ] T033 [P] Add `#![forbid(unsafe_code)]` and crate-level documentation stating the no-clock, no-filesystem, no-network contract to `crates/core/src/lib.rs`
 - [ ] T034 [P] Add dependency guard test asserting the default build's resolved dependency set matches a committed allow-list, in `tests/dep_guard.rs`
 - [ ] T035 [P] Configure a static gate denying networking and filesystem interfaces inside the core crate in `clippy.toml`, and enforce it as a CI job in `.github/workflows/ci.yml`
-- [ ] T036 [P] Add a `cargo build -p please-core --target wasm32-unknown-unknown` job to `.github/workflows/ci.yml`
+- [x] T036 [P] Add a `cargo build -p please-core --target wasm32-unknown-unknown` job to `.github/workflows/ci.yml`
 
 **Checkpoint**: Verdict model, rule loading, scoring, and the scan pipeline exist. Detection classes can now be built in parallel.
 

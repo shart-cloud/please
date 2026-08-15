@@ -1,0 +1,37 @@
+# please-eval is a STANDALONE package, deliberately outside the workspace.
+#
+# It is not a workspace member (see the root Cargo.toml `exclude`) and it carries its own lockfile.
+# Two reasons, both load-bearing:
+#
+#  1. Its corpus tooling needs data-frame and query dependencies far heavier than anything the
+#     shipping crates may carry, and its adapters reach the network. Excluding it means a
+#     `cargo build --workspace` resolution over please-core and please-cli is byte-for-byte
+#     unaffected by its existence.
+#  2. tests/dep_guard.rs asserts the default build's dependency set against an allow-list. If eval
+#     were a member, a transitive edge from a development tool could defeat that guard silently —
+#     which is precisely the failure the guard exists to prevent.
+#
+# The harness itself is a SEPARATE FEATURE and is not implemented here. This manifest exists now so
+# the exclusion is real from the first commit rather than retrofitted later, when a stray dependency
+# has already crept in.
+#
+# When it is built out it will own: corpus adapters, the sampling manifest (row ids, labels, source,
+# and content hashes — NEVER prompt text, whose 41 upstream sources retain their own licences), and
+# per-source stratified metrics with the false-positive gate.
+
+[package]
+name = "please-eval"
+description = "Evaluation harness for PLEASE: corpus adapters, sampling manifests, and per-source stratified metrics."
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["Jared Gore"]
+repository = "https://github.com/jlgore/please"
+publish = false
+
+[lib]
+name = "please_eval"
+path = "src/lib.rs"
+
+[dependencies]
+# Intentionally empty. Corpus and metrics dependencies arrive with the harness feature.

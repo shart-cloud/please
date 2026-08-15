@@ -1,0 +1,44 @@
+[package]
+name = "please-core"
+description = "Prompt-injection detection engine: structural detectors, declarative rules, and a three-outcome verdict model."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+keywords = ["security", "prompt-injection", "llm", "agent", "detection"]
+categories = ["text-processing"]
+
+[lib]
+name = "please_core"
+path = "src/lib.rs"
+
+[features]
+# `serde` is OFF by default so the wasm and embedded builds do not pay for it. `please-cli` enables it.
+# A CI dependency-allow-list check asserts what the default build actually resolves, so this stays
+# true without relying on review (plan.md D11).
+#
+# Deliberately NOT enabled for this crate's own tests. Serialisation is a CLI concern, so the JSON
+# contract tests live in crates/cli/tests/ where the feature is already on. Enabling it here via a
+# dev-dependency self-reference would compile the library twice under different feature sets, which
+# produces two distinct `Verdict` types and error messages that make no sense.
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+regex = { workspace = true }
+aho-corasick = { workspace = true }
+unicode-security = { workspace = true }
+unicode-normalization = { workspace = true }
+base64 = { workspace = true }
+toml = { workspace = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+criterion = { workspace = true }
+tempfile = { workspace = true }
+
+# The `scaling` benchmark target is declared at T087, when benches/scaling.rs exists. Declaring a
+# bench target whose file is absent is a hard build error, not a warning.
