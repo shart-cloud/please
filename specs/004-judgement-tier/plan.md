@@ -65,9 +65,9 @@ crate. Today the allow-list covers core only, and the moment the CLI grows an op
 matters. Principle V requires the gating be enforced by a check, and the check does not currently exist for
 the CLI.
 
-## D2 — HTTP client: recommend `ureq`, not `reqwest`
+## D2 — HTTP client: `ureq`
 
-**Decision to confirm.** The requirement is one `POST` of JSON to one endpoint, synchronously, with a timeout.
+**Decided.** Confirmed by the examiner: no tokio for one request. The requirement is one `POST` of JSON to one endpoint, synchronously, with a timeout.
 
 `reqwest` brings `hyper` + `tokio` + `h2` + `tower` and, in blocking mode, spins a tokio runtime per client.
 `plz` has no async anywhere and the core is forbidden from requiring a runtime; adding one to the CLI for a
@@ -76,12 +76,12 @@ single request is the same weight objection that ruled out `rig.rs`, one level d
 `ureq` is blocking by design, has no executor, and its tree is materially smaller. For one POST it is the
 better fit.
 
-**We should measure rather than assume before committing** — dependency weight is a first-class concern in
-this project and the allow-list exists to keep it so. Concretely: `cargo tree` both, compare, record the
-numbers in `research.md` the way D17 recorded the validation-tier timings.
+The resolved tree is still recorded in `research.md` before the dependency is added, the way D17 recorded the
+validation-tier timings — not to reopen the choice, but because the number becomes the CLI allow-list's
+baseline and D1's new guard needs something to assert against.
 
-`reqwest` remains the right answer if streaming responses or async batching are ever wanted. Neither is
-wanted now, and adopting it for a future that may not arrive is how a 27-crate graph becomes a 120-crate one.
+`reqwest` would be the right answer if streaming responses or async batching were ever wanted. Neither is
+wanted, and adopting it for a future that may not arrive is how a 27-crate graph becomes a 120-crate one.
 
 ## D3 — Auth: four environment variables, one resolution order, stated once
 
@@ -106,22 +106,68 @@ sends `anthropic-version`.
    environment variables is otherwise a bad afternoon.
 3. **A configured-but-unreachable judge is `TierUnavailable`, not silence.** See D5.
 
-## D4 — What the judge is asked: one narrow question
+## D4 — The judge reports observations. **We** compute the score.
 
-**Decision**: the judge is not asked *"is this malicious?"*. It is asked the question the structural tier
-provably cannot answer:
+**Decision**: the model is never asked whether something is an injection, never asked for a severity, and
+never asked for a recommendation. It answers a short list of **factual questions about the text**, from
+closed option sets. Our code combines those answers into a score, deterministically.
 
-> **Is this content instructing the agent, or displaying/describing an instruction?**
+**Rationale — this is the anti-inflation decision, and it is structural rather than a prompt trick.**
 
-**Rationale**: it is the exact axis of every remaining failure in both directions. `benign-tool-001` displays
-payloads; `indirect-tool-003` carries one; they are byte-similar. `benign-addressed-00N` quote agent-addressed
-markers; `indirect-tool-001` uses one. A narrow question is also markedly harder to injection-hijack than an
-open one, and far easier to evaluate — we can build a fixture set with a known answer per case, which we
-cannot do for "is this bad".
+Ask a model to find a problem and it will find one. A null result reads as failure to be useful, so the
+model's pull is toward giving you something with meat on it — and a security context sharpens that pull,
+because overstating looks careful and understating looks negligent. Every mitigation phrased as *"be
+conservative"* or *"only flag if confident"* is an instruction competing with that pull, and instructions
+lose to incentives.
 
-Scope-limiting consequence: the judge **is not a detector**. It does not find new payloads. It arbitrates
-findings the structural tier already made. That keeps the recall problem where the rules can be measured, and
-points the tier at the precision problem it is actually good for.
+So remove the incentive rather than argue with it. **A model that is not scoring anything has nothing to
+inflate.** Asked *"who is this sentence addressed to?"* there is no impressive answer — the question has no
+severe end to drift toward.
+
+Four consequences, each worth the change on its own:
+
+1. **The scoring function is ours.** Auditable, tunable, and changeable without re-prompting or re-measuring
+   the model.
+2. **Determinism is partly recovered.** Feature extraction is non-deterministic; the function over the
+   features is not. Given the same features, the same score — see D7.
+3. **Disagreement becomes debuggable.** When the judge is wrong we can see *which feature* it got wrong,
+   instead of arguing with a number.
+4. **The prompt stops leaking the answer.** We are no longer able to write "our scanner flagged this, is it
+   real?", because that is not a question in the schema.
+
+### The questions
+
+Each is a neutral property of the text with a small closed answer set. Note what is absent: the words
+*injection*, *attack*, *malicious*, *suspicious*, *risk*. They do not appear in the prompt, because naming
+them tells the model which answer is the interesting one.
+
+| Field | Options | What it separates |
+|---|---|---|
+| `addressed_to` | `document_recipient` · `processing_agent` · `unclear` | The 003 signal, verified |
+| `imperative_source` | `document_author` · `quoted_third_party` · `none_present` | Issuing vs relaying an instruction |
+| `framing` | `presented_as_example` · `presented_as_data` · `presented_as_report` · `none` | `benign-tool-001` from `indirect-tool-003` |
+| `stated_purpose_explains_content` | `yes` · `no` · `unclear` | A CVE advisory quoting a payload |
+| `span_role` | `instruction` · `description_of_an_instruction` · `unrelated` | Per flagged span, the core question |
+
+`unclear` is present on every field where it makes sense and costs nothing to choose. Models over-commit when
+abstention is not offered, and an abstention is information — it is the honest answer for genuinely ambiguous
+text, and text this tier is asked about is often genuinely ambiguous.
+
+### The model's own opinion: recorded, never acted on
+
+The response may carry a `model_severity` field. **Nothing reads it.** It is stored beside the derived score
+so that, over a corpus, we can ask whether the model's own scoring would have agreed — and get an answer from
+data rather than from a prior.
+
+That is the cheapest possible experiment on the question *"could we have just asked it?"*, and it costs one
+unused field. If it turns out to be well calibrated, D4 can be revisited with evidence. Until then, opinion is
+logged and data is acted on.
+
+### What this does not change
+
+The judge **is not a detector**. It does not find new payloads; it arbitrates findings the structural tier
+already made. Recall stays where the rules can be measured, and the tier points at the precision problem it is
+actually good for.
 
 ## D5 — The judge writes into the suppression channel, and may never erase a finding
 
@@ -163,8 +209,10 @@ Assume the payload is trying to talk to the judge, because it is.
   evidence.
 - **Constrain the output shape** and reject anything that does not parse. A judge that replies in prose is a
   judge that has been talked to.
-- **Bound what a single response can do**: one verdict per observation, from a closed set. There is no field
-  in which a captured judge can say something interesting.
+- **Bound what a single response can do**: closed enums, no free text anywhere in the schema. D4 already
+  gives most of this — a captured judge can flip `framing` to `presented_as_example`, and that is the entire
+  extent of its influence. There is no field in which it can say something interesting, because there is no
+  field that carries prose.
 - **Never let judge output reach a shell, a path, or another prompt.** It selects from an enum. It is not
   text we act on.
 
@@ -172,6 +220,10 @@ Assume the payload is trying to talk to the judge, because it is.
 
 SC-011 requires byte-identical output for the same input. **A model breaks that**, and `temperature: 0`
 narrows it without closing it.
+
+D4 recovers half of it: the score is a deterministic function of the features, so the non-determinism is
+confined to feature extraction and is *visible* — two runs disagreeing show which field flipped, rather than
+producing two unexplained numbers.
 
 **Decision**: the structural tier keeps its determinism guarantee unchanged; the judgement tier is documented
 in `docs/limits.md` as outside it. Every judge-influenced verdict records the model id and prompt version so
@@ -195,14 +247,18 @@ exit code 2 — distinguishable from both clean and risk-found, which is the poi
 
 ## Open questions for the examiner
 
-1. **`ureq` or `reqwest`?** (D2) Recommend `ureq`, measure first. Your call, since you have used `reqwest`
-   before and familiarity is worth something.
+1. ~~`ureq` or `reqwest`?~~ **Resolved: `ureq`.**
 2. **Is the auth order in D3 right for your proxy setup?** I put `ANTHROPIC_AUTH_TOKEN` first on the reasoning
-   that a proxy token is the most deliberate signal.
-3. **Does the judge get one call per verdict, or one per observation?** Per-verdict is cheaper and gives the
-   model whole-document context, which the displayed-versus-live question probably needs. Per-observation is
-   more precise in attribution and more resistant to one injected answer contaminating every finding.
-   Leaning per-verdict with per-observation answers in the response.
+   that a proxy token is the most deliberate signal. Still open.
+4. **How should the features combine into a score?** Deliberately unanswered here. It is a calibration
+   question and calibration needs the corpus, so the first implementation should hold the function trivial
+   and obvious — `span_role: description_of_an_instruction` plus a corroborating framing field demotes,
+   anything else confirms — and leave tuning to evidence. Inventing weights now would be the same mistake as
+   the provisional band boundaries, made a second time with less excuse.
+3. ~~Per verdict or per observation?~~ **Resolved by D4.** One call per verdict carrying the document and the
+   list of flagged spans; the response carries document-level fields once and a `span_role` per span. The
+   framing questions need whole-document context, and `a_live_payload_is_reported_and_a_quoted_one_suppressed_
+   in_the_same_scan` already proves one document can contain both answers.
 
 ## What follows
 
