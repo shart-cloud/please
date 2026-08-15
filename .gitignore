@@ -1,0 +1,27 @@
+# Rust build output
+/target/
+/crates/eval/target/
+
+# Cargo.lock IS committed: this workspace ships a binary (`plz`), so a reproducible
+# dependency set is part of the deliverable. crates/eval keeps its own lockfile,
+# which is committed for the same reason.
+
+# Fuzzing artifacts — corpora and crash inputs are large and machine-specific.
+# A crash worth keeping gets promoted into tests/fixtures/adversarial/ as a
+# regression fixture instead.
+/crates/core/fuzz/target/
+/crates/core/fuzz/corpus/
+/crates/core/fuzz/artifacts/
+
+# Criterion benchmark output
+/target/criterion/
+
+# Locally cached evaluation corpora. NEVER commit corpus text: the sources retain
+# their own licences (constitution Principle IV). Only manifests belong in git.
+/.cache/
+/corpora/
+
+# Editor and OS noise
+*.swp
+*~
+.DS_Store

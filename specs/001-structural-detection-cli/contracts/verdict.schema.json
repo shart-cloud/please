@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jlgore/please/contracts/verdict.schema.json",
+  "title": "PLEASE Verdict",
+  "description": "The machine-readable result of one scan. This document is the caller-facing contract: an agent harness or pre-tool hook reads this and applies its own policy. Additive fields are a minor version change; removing or retyping a field is a breaking change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["outcome", "score", "risk", "reasons", "reasons_truncated", "incomplete", "target", "ruleset", "engine"],
+  "properties": {
+    "outcome": {
+      "description": "The three-way result. `clean` requires both an empty `reasons` array and an empty `incomplete` array. Analysis that did not complete is never reported as `clean`. Precedence: risk_found outranks inconclusive, which outranks clean.",
+      "enum": ["clean", "risk_found", "inconclusive"]
+    },
+    "score": {
+      "description": "Aggregate risk on a fixed integer scale: the highest single reason severity, plus 5 for each distinct detection class beyond the highest-scoring one, bonus capped at 15 and total capped at 100. Computed over every match found, before `reasons` is truncated. Insensitive to input length and to match count, so a long benign document cannot accrue risk by size alone. Integer rather than fractional so repeated runs are byte-identical across hosts.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "risk": {
+      "description": "Human-facing band derived from `score` by the rule set's band table.",
+      "enum": ["none", "low", "medium", "high", "critical"]
+    },
+    "reasons": {
+      "description": "Supporting observations, sorted by (span.start, rule_id) for reproducibility. Length is bounded by the policy's max_reasons independently of input length.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/reason" }
+    },
+    "reasons_truncated": {
+      "description": "True when the max_reasons bound dropped observations. A truncated list is never presented as complete.",
+      "type": "boolean"
+    },
+    "incomplete": {
+      "description": "Everything the scan did not examine, whether because a configured bound was reached or because something failed. Non-empty means coverage was incomplete. Empty (together with empty `reasons`) is the only case in which `clean` is permitted.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/incompleteness" }
+    },
+    "target": { "$ref": "#/$defs/target_ref" },
+    "ruleset": { "$ref": "#/$defs/ruleset_id" },
+    "engine": { "$ref": "#/$defs/engine_id" }
+  },
+  "$defs": {
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_id", "class", "span", "matched", "severity", "chain"],
+      "properties": {
+        "rule_id": {
+          "description": "Stable namespaced identifier. Also the handle a caller uses to suppress this rule.",
+          "type": "string",
+          "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$"
+        },
+        "class": {
+          "description": "Detection family. Independently reportable and disableable.",
+          "enum": ["override", "concealment", "confusable", "encoding", "boundary", "solicitation"]
+        },
+        "span": { "$ref": "#/$defs/span" },
+        "matched": {
+          "description": "Excerpt of the matching content, already neutralised so it cannot forge, erase, or reorder surrounding output, and truncated to the policy's max_excerpt_bytes.",
+          "type": "string"
+        },
+        "severity": {
+          "description": "This rule's contribution before aggregation.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "chain": {
+          "description": "Decoding steps that led to this match. Empty for a direct match. Non-empty means the payload was recovered by decoding, and the rule fired on the decoded content rather than on the encoding's presence.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/transform" }
+        },
+        "description": {
+          "description": "Why this rule exists, carried from the rule definition so a finding explains itself without a lookup.",
+          "type": "string"
+        },
+        "suppressed_by": {
+          "description": "Present only when a quoting context would normally have suppressed this reason and suppression was disabled by policy.",
+          "enum": ["fenced_code", "inline_code", "block_quote", "quoted_string", "attributive_marker"]
+        }
+      }
+    },
+    "span": {
+      "description": "Half-open byte range into the ORIGINAL input, never into decoded content, so a caller can always highlight bytes the user actually holds.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "depth", "input_span", "decoded_excerpt"],
+      "properties": {
+        "kind": {
+          "description": "The five transformation families labelled in the evaluation corpus, plus the two Unicode concealment channels that carry decodable payloads.",
+          "enum": ["base64", "hex", "rot13", "reversed", "leetspeak", "unicode_tags", "variation_selectors"]
+        },
+        "depth": { "type": "integer", "minimum": 1 },
+        "input_span": { "$ref": "#/$defs/span" },
+        "decoded_excerpt": {
+          "description": "The recovered content that triggered the rule. Neutralised and truncated as `matched` is.",
+          "type": "string"
+        }
+      }
+    },
+    "incompleteness": {
+      "description": "One thing the scan did not examine. Causes divide into bounds the caller configured (which carry `configured`, and can be raised) and failures in the environment (which do not, and must be fixed). One list rather than two, so the `clean` invariant remains a check on a single field.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cause"],
+      "properties": {
+        "cause": {
+          "description": "Bounds: input_size, decode_depth, max_matches_per_rule, max_reasons, excerpt_length. Failures: target_unreadable (a file in a directory walk could not be read — the walk continues and this target is inconclusive, never silently skipped), decode_failed, ruleset_unavailable, tier_unavailable (an optional detection tier was not available, which degrades to inconclusive and never to clean).",
+          "enum": [
+            "input_size",
+            "decode_depth",
+            "max_matches_per_rule",
+            "max_reasons",
+            "excerpt_length",
+            "target_unreadable",
+            "decode_failed",
+            "ruleset_unavailable",
+            "tier_unavailable"
+          ]
+        },
+        "configured": {
+          "description": "The value in force when a bound was reached, so a caller can raise it deliberately. Present for bound causes, absent for failure causes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "detail": {
+          "description": "What went unexamined — which rule saturated, which region was skipped, why a target could not be read.",
+          "type": "string"
+        }
+      }
+    },
+    "target_ref": {
+      "description": "What was scanned. Reporting metadata only: nothing here influences judgement.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "bytes"],
+      "properties": {
+        "kind": { "enum": ["path", "stdin", "buffer"] },
+        "name": {
+          "description": "Caller-supplied label or the path exactly as given. Never absolutised, so output does not vary by working directory.",
+          "type": "string"
+        },
+        "bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "ruleset_id": {
+      "description": "Identity of the resolved rule set: built-in default plus caller additions and suppressions. Two verdicts carrying the same values were produced by the same rules.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "digest"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "digest": {
+          "description": "Content digest over the resolved rule set, so an old verdict can be attributed to exact rules.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{16,64}$"
+        }
+      }
+    },
+    "engine_id": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    }
+  }
+}
