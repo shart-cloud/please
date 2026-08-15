@@ -183,19 +183,67 @@ pub fn reversed(input: &[u8]) -> String {
 /// also a legitimate character in ordinary text — so the folded result is a *candidate* for re-scanning
 /// and never a finding in itself. Folding `0` to `o` would otherwise make every version number and every
 /// hexadecimal value into an alleged payload.
-pub fn leetspeak(input: &[u8]) -> String {
-    String::from_utf8_lossy(input)
-        .chars()
-        .map(|c| match c {
-            '4' | '@' => 'a',
-            '3' => 'e',
-            '1' | '!' => 'i',
-            '0' => 'o',
-            '5' | '$' => 's',
-            '7' => 't',
-            other => other,
-        })
-        .collect()
+pub fn leetspeak(input: &[u8]) -> Option<String> {
+    let text = String::from_utf8_lossy(input);
+    if !shows_deliberate_substitution(&text) {
+        return None;
+    }
+    Some(
+        text.chars()
+            .map(|c| match c {
+                '4' | '@' => 'a',
+                '3' => 'e',
+                '1' | '!' => 'i',
+                '0' => 'o',
+                '5' | '$' => 's',
+                '7' => 't',
+                other => other,
+            })
+            .collect(),
+    )
+}
+
+/// Is there evidence the author substituted digits for letters *inside a word*?
+///
+/// The gate this transform lacked, and the reason it lacked one is that folding looks harmless: the result
+/// is only ever a candidate for re-scanning, never a finding. What that reasoning missed is that a
+/// whole-input candidate is a **copy of the entire document that quoting suppression does not apply to** —
+/// so folding turned every document containing a digit into a second, unsuppressable copy of itself. Eight
+/// of the twelve benign fixtures were false positives because of it, and every one of them was a document
+/// that quoted a payload correctly and got flagged through the fold instead.
+///
+/// The signature of deliberate leetspeak is a substituted character with letters on **both** sides within
+/// one alphanumeric run: the `0` in `1gn0r3`, the `3`s in `l33t`, the `4` in `s4y`. Ordinary text puts its
+/// digits at the edges of tokens or in tokens of their own — `Top 10`, `v2.4`, `CVE-2026`, `MD5`, `SHA256`,
+/// `base64`, `H1-2026`, `"line": 42` — and none of those qualify.
+///
+/// `@`, `!`, and `$` are deliberately **excluded** from the evidence test even though the fold still
+/// applies to them. `user@example.com` has an `@` with letters on both sides, so admitting symbols would
+/// re-admit every document containing an email address, which is most of them. A payload written `p@ssword`
+/// with no other substitution is therefore missed here; it is recorded in `docs/limits.md` rather than
+/// pretended away, and the judgement tier is where that class belongs.
+fn shows_deliberate_substitution(text: &str) -> bool {
+    for run in text.split(|c: char| !c.is_ascii_alphanumeric()) {
+        let bytes = run.as_bytes();
+        let mut first_letter = None;
+        let mut last_letter = None;
+        for (index, byte) in bytes.iter().enumerate() {
+            if byte.is_ascii_alphabetic() {
+                first_letter.get_or_insert(index);
+                last_letter = Some(index);
+            }
+        }
+        let (Some(first), Some(last)) = (first_letter, last_letter) else {
+            continue;
+        };
+        let interior = bytes.iter().enumerate().any(|(index, byte)| {
+            index > first && index < last && matches!(byte, b'0' | b'1' | b'3' | b'4' | b'5' | b'7')
+        });
+        if interior {
+            return true;
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -287,13 +335,57 @@ mod tests {
 
     #[test]
     fn leetspeak_folds_known_substitutions() {
-        assert_eq!(leetspeak(b"1gn0r3 4ll pr3v10u5"), "ignore all previous");
+        assert_eq!(
+            leetspeak(b"1gn0r3 4ll pr3v10u5").as_deref(),
+            Some("ignore all previous")
+        );
+        // Adjacent substitutions, where no single digit has a letter on both sides but the run does.
+        assert_eq!(leetspeak(b"l33t").as_deref(), Some("leet"));
+        assert_eq!(leetspeak(b"s4y PWNED").as_deref(), Some("say PWNED"));
     }
 
     #[test]
     fn leetspeak_is_conservative_about_letters() {
         // `l` is not folded to `i`: doing so would rewrite ordinary words and produce nonsense candidates.
-        assert_eq!(leetspeak(b"hello world"), "hello world");
+        // Input chosen to pass the evidence gate — `h3llo` has an interior digit — so this tests the FOLD
+        // rather than the gate. `hello world` alone would now return `None`, which would assert the wrong
+        // thing.
+        assert_eq!(leetspeak(b"h3llo world").as_deref(), Some("hello world"));
+    }
+
+    #[test]
+    fn leetspeak_declines_text_with_no_evidence_of_substitution() {
+        // The gate that fixed seven of eight false positives. Every one of these is ordinary text containing
+        // a digit, and every one used to produce a whole-document candidate that quoting suppression did not
+        // apply to — so a document quoting a payload correctly got flagged through the fold instead.
+        for ordinary in [
+            "See OWASP LLM Top 10 for the taxonomy.",
+            "Affected: FooBar Assistant v2.0-2.4",
+            "CVE-2026-31337: Prompt Injection",
+            "Slide 14: Defense Layers",
+            r#"{"file": "src/handler.rs", "line": 42}"#,
+            "Severity: High (CVSS 8.1)",
+            "review_period: H1-2026",
+            "hashed with MD5 and SHA256",
+            "decode the base64 blob",
+            "contact user@example.com for access",
+            "Deployment notes for release 2.4.",
+        ] {
+            assert_eq!(
+                leetspeak(ordinary.as_bytes()),
+                None,
+                "{ordinary:?} shows no deliberate substitution and must not produce a candidate"
+            );
+        }
+    }
+
+    #[test]
+    fn leetspeak_declines_symbol_only_substitution() {
+        // `@`, `!`, and `$` are folded but are NOT evidence, because `user@example.com` would otherwise
+        // qualify every document containing an email address. The cost is a missed `p@ssword` with no other
+        // substitution — recorded in docs/limits.md rather than pretended away.
+        assert_eq!(leetspeak(b"p@ssword"), None);
+        assert_eq!(leetspeak(b"send to admin@corp.com"), None);
     }
 
     #[test]
@@ -328,6 +420,6 @@ mod tests {
         assert!(hex(b"").is_empty());
         assert_eq!(rot13(b""), "");
         assert_eq!(reversed(b""), "");
-        assert_eq!(leetspeak(b""), "");
+        assert_eq!(leetspeak(b""), None);
     }
 }

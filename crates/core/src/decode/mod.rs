@@ -215,14 +215,20 @@ fn one_layer(bytes: &[u8], depth: u8) -> Vec<(TransformKind, Span, String)> {
     // the transformation applies to everything or not at all.
     if depth <= WHOLE_INPUT_MAX_DEPTH {
         let whole = Span::new(0, bytes.len());
-        for (kind, text) in [
-            (TransformKind::Rot13, transforms::rot13(bytes)),
-            (TransformKind::Reversed, transforms::reversed(bytes)),
+        let candidates = [
+            (TransformKind::Rot13, Some(transforms::rot13(bytes))),
+            (TransformKind::Reversed, Some(transforms::reversed(bytes))),
+            // `None` when nothing in the input looks like a deliberate substitution — see
+            // `transforms::leetspeak`. Every whole-input candidate is an unsuppressable copy of the whole
+            // document, so a transform that applies to any text containing a digit is a suppression bypass.
             (TransformKind::Leetspeak, transforms::leetspeak(bytes)),
-        ] {
+        ];
+        for (kind, text) in candidates {
             // A transform that changed nothing is not a transform.
-            if text.as_bytes() != bytes {
-                out.push((kind, whole, text));
+            if let Some(text) = text {
+                if text.as_bytes() != bytes {
+                    out.push((kind, whole, text));
+                }
             }
         }
     }

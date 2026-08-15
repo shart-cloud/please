@@ -65,6 +65,44 @@ entry names what moved, why it was unavoidable, and what did NOT move.
   coincidence of which cases the fixture set contains, not a reason the change was made, and it must not
   be read as false-positive progress: the FP count is 8 before and 8 after.
 
+--- SUPERSEDED FOR FALSE POSITIVES, from the leetspeak-gate commit onward -----------------------
+
+  Detection work has now landed alongside 002, at the examiner's direction. That is a deliberate change
+  of the thing this file pins, not a defect in a refactor, and it is recorded here so T084 stays
+  checkable: from that commit on, T084 compares against the figures below, not against the verbatim
+  capture at the end of this file.
+
+  FALSE POSITIVES: 8 -> 1.
+
+      cleared    benign-security-prose-001   benign-security-prose-002
+                 benign-security-prose-003   benign-security-prose-004
+                 benign-security-prose-005   benign-skill-001
+                 benign-tool-002
+      remains    benign-tool-001
+
+  POSITIVES: 24/41. UNCHANGED, and unchanged case-for-case -- the same 17 missed ids, and identical
+  per-context and per-difficulty counts:
+
+      email_body 10/18 · file_read 3/3 · mcp_tool_description 1/3 · skill_md 1/4 · tool_result 9/13
+      easy 3/3 · medium 13/20 · hard 8/18
+
+  Two changes produced this, and only the second moves the count:
+
+    1. The quoting pre-pass mis-paired apostrophes. A contraction consumed the opening quote of a
+       following quoted example, so the example stayed live while the prose around it was suppressed.
+       On its own this cleared nothing, because the leetspeak channel flagged every affected case
+       independently.
+    2. The leetspeak transform produced a whole-document candidate for any text containing a digit, and
+       findings on decoded content are exempt from quoting suppression -- so the fold was a suppression
+       bypass for every document. Gated on evidence of deliberate substitution. See docs/limits.md.
+
+  What did NOT change: the two fixture tests still fail. `every_positive_case_is_detected` at 24/41, and
+  `the_false_positive_rate_is_within_budget` on the one remaining case, because that test fails on ANY
+  false positive while the corpus is below the 200-case minimum. Red for the same reasons, one case
+  fewer.
+
+  These numbers are 12 benign cases, not 200. Read docs/limits.md before quoting them anywhere.
+
 Verbatim capture
 ----------------
 

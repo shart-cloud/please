@@ -169,6 +169,28 @@ PHASE 5 (T055-T063) — 301 -> 311 tests. No test lost.
 
   DELETED — none.
 
+DETECTION WORK, landed alongside 002 — 311 -> 316 tests. No test lost.
+
+  ADDED — 6 tests
+      structure::tests::a_contraction_does_not_consume_the_opening_quote_of_an_example
+      structure::tests::two_contractions_in_one_paragraph_do_not_form_a_region
+      structure::tests::a_possessive_plural_still_shifts_quote_parity
+        The apostrophe mis-pairing bug and its residual hole. The third pins current behaviour on an
+        ambiguous case rather than asserting a tautology -- an earlier draft asserted
+        `is_some() || is_none()`, which is the same anti-pattern as the old exit-code test.
+      decode::transforms::tests::leetspeak_declines_text_with_no_evidence_of_substitution
+      decode::transforms::tests::leetspeak_declines_symbol_only_substitution
+        The leetspeak evidence gate: 11 ordinary-text cases that must NOT produce a candidate, and the
+        deliberate `@`-is-not-evidence decision with the false negative it costs.
+      (a third assertion was added to leetspeak_folds_known_substitutions rather than a new test)
+
+  REWRITTEN IN PLACE, same name — 1 test
+      decode::transforms::tests::leetspeak_is_conservative_about_letters
+        `hello world` has no digits, so the gate now declines it and the old assertion would have tested
+        the gate rather than the fold. Uses `h3llo world` so it still tests what it claims.
+
+  DELETED — none.
+
 (T072 and T073 in Phase 7 relocate modules and the unit tests inside them; they append here.)
 
 Verbatim listing
