@@ -241,6 +241,15 @@ impl Engine {
         kept.extend(detect::structural::scan(input));
         kept.extend(decoded);
 
+        // ── Concealment by markup ───────────────────────────────────────────────────────────────
+        //
+        // After everything else, because it reports on what the other detectors found: an instruction inside
+        // an HTML comment is hidden from the reviewer who approved the document and read by the agent in
+        // full. Emitted as its own `Concealment` observation rather than as a severity bump, so the score
+        // rises through the corroboration term instead of a special case, and the reader is told why.
+        let concealed = detect::conceal_markup(&kept, &quoting);
+        kept.extend(concealed);
+
         // ── The class filter, applied once ──────────────────────────────────────────────────────
         //
         // **The single application site** (T051, FR-133). Every observation from every source arrives here,

@@ -160,6 +160,35 @@ pub enum QuotingContext {
     AttributiveMarker,
 }
 
+/// A region whose content is hidden from a human reader but delivered to the agent in full.
+///
+/// **The inverse of a [`QuotingContext`], and the distinction is worth stating precisely.** A quoting context
+/// says *this text is being shown, not said* — so a match inside one is probably an illustration, and is
+/// suppressed. A concealing context says *this text is invisible to the person reviewing the document, and
+/// visible to the machine processing it* — which is the opposite inference, and the opposite action.
+///
+/// An HTML comment in a `SKILL.md`, a README, or any rendered document is read by the agent and never seen by
+/// the reviewer who approved the file. That asymmetry between what a human authorises and what a machine
+/// receives is the whole shape of indirect injection.
+///
+/// Nothing in a concealing context may ever be suppressed — see
+/// `structure::QuotingMap` and the regression test that pins it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ConcealingContext {
+    /// `<!-- ... -->`. Invisible in rendered Markdown and HTML; fully present in the bytes an agent reads.
+    HtmlComment,
+}
+
+impl ConcealingContext {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::HtmlComment => "html_comment",
+        }
+    }
+}
+
 /// One transformation recognised while decoding (FR-011).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

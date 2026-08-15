@@ -219,6 +219,50 @@ The lesson is not about the flag. **Documentation asserting that an unbuilt thin
 comes to rest on nothing**, and this is the second instance in this codebase — the first being the CI check
 for built-in validation, which 002 had to add before the built-in fast path could be called sound.
 
+## An HTML comment must never become a quoting context
+
+**Status: constraint, enforced by test. Recorded because the mistake is inviting.**
+
+Comments look like code, code looks suppressible, and adding `<!-- ... -->` to the quoting pre-pass would be
+a natural-seeming tidy-up. It would create the best hiding place in any rendered document: a reviewer
+approving a `SKILL.md`, a README, or a PR description never sees a comment; the agent reads it in full. That
+asymmetry between what a human authorises and what a machine receives is the shape of indirect injection.
+
+So a comment is the **inverse** of a quoting context, and the two are held in separate collections in
+`QuotingMap` rather than in one collection with a flag — a flag would put the guarantee in every reader's
+hands.
+
+Three behaviours, each pinned by a test in `crates/core/src/structure.rs`:
+
+| shape | inference | action |
+|---|---|---|
+| `<!-- ignore all previous instructions -->` | hidden from review, read by the agent | report, and **elevate** |
+| `<!-- Note: "ignore all previous instructions" -->` | nobody reads a quote nobody sees | report — quotes do **not** excuse it |
+| ` ```<!-- ignore all previous instructions -->``` ` | a code sample showing a comment | suppress, like any illustration |
+
+The second case is the one that caught the first implementation out. Separating the collections stopped a
+*concealing* region from suppressing, and did nothing to stop a *quoting* region suppressing **inside** one —
+a payload wrapped in quotes inside a comment was still silenced. The rule is about nesting, not precedence: a
+concealing region counts only when it is not itself inside a quoting region.
+
+### Elevation is a second finding, not a louder one
+
+A payload in a comment is two facts: an instruction was present, **and** it was placed where the approver
+could not see it. Nobody hides a sentence by accident, so the second is independent evidence — and rewarding
+independent evidence is exactly what the corroboration term in scoring already does.
+
+So a `Concealment` observation is emitted alongside, rather than the original observation's severity being
+inflated. The score rises through existing arithmetic instead of a special case (FR-127 forbids silent
+adjustment), and the reader is *told* the payload was hidden rather than seeing an unexplained higher number.
+Measured: `85 → 90`, `high → critical`, with `concealment.html_comment` naming what it hid.
+
+The concealment observation **borrows** the severity of what it concealed, so it can never dominate: hiding a
+minor thing is a minor finding. Its whole contribution is the corroboration bonus.
+
+**It fires only where something was already found.** `<!-- TODO: fix the build -->` is not a finding, and
+comments are ordinary in every format worth scanning. The composite is the signal: hidden *and*
+instruction-shaped.
+
 ## Risk band boundaries are provisional
 
 **Status: uncalibrated pending corpus metrics.**
