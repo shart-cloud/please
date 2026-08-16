@@ -13,23 +13,27 @@
 //! What can still perturb it is noise, so the sizes are large enough to dwarf per-scan overhead and each
 //! point is a median of repeated runs. This is asserted unconditionally.
 //!
-//! **SC-004a is not scale-free, and half of it is currently unmet.** Measured on the machine this was
-//! written on:
+//! **SC-004a is not scale-free, and half of it is still unmet — narrowly.** Measured on the machine this
+//! was written on:
 //!
 //! ```text
-//! p95 at 4 KB      ~730 µs      budget 10 ms       met, ~14x margin
-//! sustained        ~6.5 MB/s    budget 10 MB/s     NOT MET
+//! p95 at 4 KB      ~0.5-1 ms    budget 10 ms       met, >=10x margin
+//! sustained        ~9.6 MB/s    budget 10 MB/s     NOT MET, by 4%
 //! ```
 //!
-//! The latency bound is asserted, because a fourteen-fold margin is a tripwire for a categorical
+//! The latency bound is asserted, because a tenfold margin is a tripwire for a categorical
 //! slowdown rather than a coin flip on a contended runner. The throughput figure is asserted as a
-//! **regression floor well below the criterion**, because the criterion is not met and a test that fails
+//! **regression floor below the criterion**, because the criterion is not met and a test that fails
 //! on every run is a test people learn to ignore. The gap is recorded in `docs/limits.md`, which is where
 //! an unmet criterion belongs — not in a permanently red assertion, and not nowhere.
 //!
+//! Both figures were ~730 µs and ~6.5 MB/s until the quoting pre-pass stopped searching for each of its
+//! fourteen attributive markers with a naive scan over a lowercased copy of the document. That one stage
+//! was 97% of its own cost and a third of the whole scan.
+//!
 //! `cargo bench -p please-core --bench scaling` prints the full picture, including the per-stage
-//! breakdown that shows the shortfall is three linear passes at ~21 MB/s composing to ~6.6, rather than
-//! any single stage being slow.
+//! breakdown that shows the remaining shortfall is two linear passes at ~21 MB/s — nested decoding and the
+//! structural detectors — rather than any single stage being slow.
 
 use std::time::{Duration, Instant};
 
@@ -162,30 +166,38 @@ fn fit_log_log_slope(points: &[(f64, f64)]) -> f64 {
 /// **SC-004a** — 95% of scans of inputs up to 4 KB return within 10 ms, and sustained throughput is at
 /// least 10 MB/s, with the engine already constructed.
 ///
-/// # The latency half is met. The throughput half is not.
+/// # The latency half is met. The throughput half misses by ~3%.
 ///
 /// ```text
-/// p95 at 4 KB      ~730 µs      budget 10 ms       met
-/// sustained        ~6.5 MB/s    budget 10 MB/s     MISSED by 1.5x
+/// p95 at 4 KB      ~0.5-1 ms    budget 10 ms       met
+/// sustained        ~9.6 MB/s    budget 10 MB/s     MISSED by 4%
 /// ```
 ///
-/// The shortfall is structural rather than a hot spot. A scan makes three independent linear passes over
-/// the input — quoting classification, nested decoding, and the structural detectors — each running at
-/// about 21 MB/s and each running on every scan whatever `--classes` says. Three such passes compose to
-/// 6.6 MB/s, which is the measured figure almost exactly. Rule matching does not appear at all on benign
-/// prose, because the literal prefilter finds nothing and no pattern is run. `cargo bench -p please-core
-/// --bench scaling` has the breakdown.
+/// The shortfall is structural rather than a hot spot. A scan makes two remaining independent linear
+/// passes over the input — nested decoding and the structural detectors — each running at about 21 MB/s and
+/// each running on every scan whatever `--classes` says. Together they are ~95 ms of the ~105 a megabyte
+/// costs. Rule matching does not appear at all on benign prose, because the literal prefilter finds nothing
+/// and no pattern is run. `cargo bench -p please-core --bench scaling` has the breakdown.
 ///
-/// So the honest reading is that no stage is slow and the *pipeline* is: making any single pass twice as
-/// fast buys about 15%. Recorded in `docs/limits.md` under the criterion it misses.
+/// It was **three** passes and ~6.5 MB/s until quoting classification stopped being one. That stage read as
+/// a third linear pass and was in fact fourteen naive substring scans over a lowercased copy of the
+/// document, one per attributive marker; one `aho-corasick` pass replaced them and it now costs ~4 ms
+/// rather than 47. Worth keeping in mind before fusing anything: check that each pass is a pass.
+///
+/// So the honest reading is that no stage is slow and the *pipeline* is. Recorded in `docs/limits.md` under
+/// the criterion it misses.
 ///
 /// # What is asserted, and why it is not 10 MB/s
 ///
 /// A test that fails on every run is a test people learn to ignore, and it would take the rest of this
-/// file with it. The floor here is **4 MB/s** — below the measurement, far below the criterion — so it
-/// catches a further regression while the gap itself is tracked in prose that cannot be silenced by
-/// deleting an `assert!`. Raise it toward 10 as the pipeline improves; the criterion is met when this can
-/// be `10.0` and the doc comment above says so.
+/// file with it. The floor here is **8 MB/s** — below the measurement, below the criterion — so it catches
+/// a further regression while the gap itself is tracked in prose that cannot be silenced by deleting an
+/// `assert!`. The criterion is met when this can be `10.0` and the doc comment above says so.
+///
+/// The floor was 4 while the measurement was 6.5. It is 8 against 9.6 for the same reason it was not 6:
+/// this machine shows about ±20% run to run on the untouched stages, and a shared CI runner will be worse,
+/// so a floor that tracks the measurement too closely converts a real gate into a flaky one. What 8 catches
+/// is a categorical regression — a pass reintroduced, a naive scan restored — not a slow afternoon.
 ///
 /// Release-only. In a debug build the measurement is dominated by unoptimised regex and iterator code —
 /// throughput drops below a megabyte a second — so an absolute figure means nothing and the sweep takes
@@ -237,11 +249,11 @@ fn warm_scans_are_well_inside_the_latency_and_throughput_budget() {
     let throughput = (big.len() * rounds) as f64 / elapsed.as_secs_f64() / 1_000_000.0;
     eprintln!("sustained throughput: {throughput:.1} MB/s");
 
-    // 4 MB/s, not SC-004a's 10. See the doc comment: the criterion is not currently met, and the gap is
+    // 8 MB/s, not SC-004a's 10. See the doc comment: the criterion is not currently met, and the gap is
     // tracked in docs/limits.md rather than by a test that is red on every run.
     assert!(
-        throughput >= 4.0,
-        "sustained throughput has regressed below the recorded baseline of ~6.5 MB/s; measured \
+        throughput >= 8.0,
+        "sustained throughput has regressed below the recorded baseline of ~9.6 MB/s; measured \
          {throughput:.1} MB/s over {} MB in {elapsed:?}. SC-004a asks for 10 MB/s and is already unmet \
          — see docs/limits.md — so this floor exists to stop it getting further away.",
         (big.len() * rounds) / 1_000_000

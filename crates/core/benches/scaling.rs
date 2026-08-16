@@ -2,28 +2,45 @@
 //!
 //! # What this found
 //!
-//! **SC-005 holds. SC-004a's throughput does not.** Sustained throughput is about **6.5 MB/s** against a
-//! criterion of 10 MB/s. Latency is comfortable — p95 at 4 KB is roughly 730 µs against a 10 ms budget —
-//! so the miss is entirely in the sustained figure, and it is a miss of composition rather than of any
-//! one stage being slow:
+//! **SC-005 holds. SC-004a's throughput does not, and is now close.** Sustained throughput is about
+//! **9.5 MB/s** against a criterion of 10. Latency is comfortable — p95 at 4 KB is under a millisecond
+//! against a 10 ms budget — so the miss is entirely in the sustained figure, and it is a miss of
+//! composition rather than of any one stage being slow:
 //!
 //! ```text
 //! per megabyte of benign prose
-//!   QuotingMap::build          47.4 ms       21 MB/s
-//!   decode::expand             49.8 ms       20 MB/s
-//!   detect::structural::scan   47.6 ms       21 MB/s
-//!   ─────────────────────────────────────────────────
-//!   full scan                 150.5 ms      6.6 MB/s
+//!   QuotingMap::build            ~4 ms      250 MB/s
+//!   decode::expand               ~50 ms      20 MB/s
+//!   detect::structural::scan     ~45 ms      22 MB/s
+//!   ───────────────────────────────────────────────────
+//!   full scan                   ~105 ms      9.5 MB/s
 //! ```
 //!
-//! Three independent linear passes over the input, each costing about the same, and their sum is the
-//! whole scan: rule matching does not appear because the literal prefilter finds nothing in benign prose,
-//! so no pattern is run. **Three passes at ~21 MB/s compose to ~6.6 MB/s**, and that is the entire
-//! distance to the criterion. Any one of them getting twice as fast buys about 15%; fusing them, or
-//! skipping the ones whose observations the class filter will discard, is the change that would matter.
+//! Figures are rounded on purpose. This machine shows about ±20% run to run on the two stages that no
+//! recent change touched, so a third significant figure here would be decoration. What is robust is the
+//! ordering and the ratios.
 //!
-//! Recorded in `docs/limits.md` rather than fixed here, because a fix is a design decision about the scan
-//! pipeline and this benchmark's job is to make the number visible and keep it that way.
+//! # What changed, and what it says about the remaining gap
+//!
+//! `QuotingMap::build` was **47 ms** and is now ~4. It spent 97% of that on fourteen naive
+//! `windows().position()` scans over a lowercased copy of the whole document, one per attributive marker;
+//! it now makes one `aho-corasick` pass over the input and no copy. Ablating the marker loop entirely
+//! measured 1.45 ms, so ~2.5 ms of what remains is the automaton and the rest is the line and character
+//! passes. Sustained throughput went 6.6 → 9.5 MB/s on that one change.
+//!
+//! The original reading of this table was that **three** independent linear passes at ~21 MB/s composed to
+//! ~6.6, and that fusing them was the change that mattered. That was right about the arithmetic and wrong
+//! about the target: one of the three was not a linear pass at 21 MB/s, it was fourteen of them, and using
+//! the multi-literal automaton this crate already depended on removed it without touching the pipeline's
+//! shape.
+//!
+//! What is left is genuinely two passes: `decode::expand` and `detect::structural::scan`, ~95 ms of the
+//! ~105. Rule matching still does not appear, because the literal prefilter finds nothing in benign prose
+//! and no pattern is run. Closing the last few percent now means fusing those two, or skipping the ones
+//! whose observations the class filter will discard — a design decision about the scan pipeline, which is
+//! why it is recorded in `docs/limits.md` rather than attempted here.
+//!
+//! The lesson worth keeping: before fusing passes, check that each one is a pass.
 //!
 //! # `--classes` does not reduce work, on purpose
 //!
@@ -130,7 +147,10 @@ fn throughput(c: &mut Criterion) {
 ///
 /// Each of these is a full independent pass over the input, and each runs on every scan regardless of
 /// which classes the caller selected. Benched individually because "the scan is slow" is not a finding
-/// anyone can act on, and "three passes at 21 MB/s each" is.
+/// anyone can act on, and "two passes at ~21 MB/s and one at 250" is.
+///
+/// This breakdown is what found the marker defect. The three stages read as equals in the aggregate
+/// figure; benched apart, one of them was twelve times the cost of what it now is.
 fn stages(c: &mut Criterion) {
     let input = prose(1_000_000);
 

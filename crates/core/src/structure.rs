@@ -605,9 +605,10 @@ mod tests {
         // Regression seed for this is in crates/core/proptest-regressions/structure.txt.
         let input = b"such asuch as and then a payload";
         let regions = attributive_regions_shipped(input);
+        let expected = (0, input.len(), QuotingContext::AttributiveMarker);
         assert_eq!(
             regions,
-            vec![(0, 7 + ATTRIBUTIVE_WINDOW.min(input.len() - 7), QuotingContext::AttributiveMarker)],
+            vec![expected],
             "one region, from the first match only"
         );
         oracle_agrees(input).unwrap();
