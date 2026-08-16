@@ -54,6 +54,7 @@ input, so `... | plz scan` works as a filter.
 | Option | Default | Requirement |
 |---|---|---|
 | `--format <human\|json>` | `human` when stdout is a terminal, else `json` | FR-027 |
+
 | `--threshold <none\|low\|medium\|high\|critical>` | `high` | FR-029 |
 | `--rules <PATH>` | built-in only | FR-023 |
 | `--disable-rule <ID>` | none; repeatable | FR-023 |
@@ -67,6 +68,16 @@ input, so `... | plz scan` works as a filter.
 `--format json` writes one verdict object per target to stdout and nothing else; diagnostics go to
 stderr (FR-027). This is what lets a hook do `plz scan --format json < input | jq .outcome` without
 defensive filtering.
+
+> **Implemented at 001 T070.** Two notes a caller needs and this table did not say:
+>
+> **One target is a bare object; several are an array.** `plz scan --format json note.md | jq .outcome`
+> works without `.[0]`, and a walked directory yields an array in resolution order.
+>
+> **Pin `--format` in scripts.** The TTY-dependent default is convenient interactively and means
+> `plz scan x` and `plz scan x | cat` print different things. Anything whose behaviour must not depend on
+> whether a terminal is attached should say which format it wants — this repository's own CLI tests all had
+> to be changed to do so when the flag landed.
 
 ---
 

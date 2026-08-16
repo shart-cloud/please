@@ -179,24 +179,24 @@ and explicit inconclusive outcomes.
 
 - [ ] T076 [P] [US3] Create adversarial fixtures in `tests/fixtures/adversarial/` including `decode_cycle.txt`, `nested_base64_x3.txt`, `invalid_utf8.bin`, pathological repetition, and a single very long line
 - [ ] T077 [P] [US3] Create resource-exhausting rule sets in `tests/fixtures/rules/` including `malformed.toml` and a counted-repetition expansion bomb
-- [ ] T078 [US3] Write failing property tests asserting every bound (`input_size`, `decode_depth`, `max_matches_per_rule`, `max_reasons`, `excerpt_length`) is enforced and reported as an `Incompleteness`, in `crates/core/tests/bounds.rs`
-- [ ] T079 [US3] Write failing test asserting oversized input yields `inconclusive` with cause `input_size` and never `clean`, in `crates/core/tests/bounds.rs` (SC-007)
-- [ ] T080 [US3] Write failing test asserting a rule set that fails to load never yields a clean verdict from an empty rule set, in `crates/core/tests/ruleset_load.rs`
+- [X] T078 [US3] Write failing property tests asserting every bound (`input_size`, `decode_depth`, `max_matches_per_rule`, `max_reasons`, `excerpt_length`) is enforced and reported as an `Incompleteness`, in `crates/core/tests/bounds.rs`
+- [X] T079 [US3] Write failing test asserting oversized input yields `inconclusive` with cause `input_size` and never `clean`, in `crates/core/tests/bounds.rs` (SC-007)
+- [X] T080 [US3] Write failing test asserting a rule set that fails to load never yields a clean verdict from an empty rule set, in `crates/core/tests/ruleset_load.rs`
 - [ ] T081 [P] [US3] Write failing test asserting an input containing text resembling a rule definition, a configuration directive, or an instruction addressed to the scanner produces the same verdict as the same input with that text as inert prose, in `crates/core/tests/no_self_steering.rs` (FR-020a)
 - [ ] T082 [P] [US3] Write failing test asserting per-input verdicts are identical regardless of the order inputs were scanned in, and regardless of what was scanned before them, in `crates/core/tests/no_self_steering.rs` (FR-020b)
 - [ ] T083 [P] [US3] Write failing test asserting concurrent scans of identical input through one shared engine produce identical verdicts, and that lazy pattern compilation makes no verdict depend on scan history, in `crates/core/tests/concurrency.rs`
-- [ ] T084 [P] [US3] Write failing test asserting an unreadable target during a directory walk yields `inconclusive` with cause `target_unreadable`, that the walk continues, and that the summary is inconclusive rather than clean, in `crates/cli/tests/walk.rs` (FR-032a, FR-032b)
+- [X] T084 [P] [US3] Write failing test asserting an unreadable target during a directory walk yields `inconclusive` with cause `target_unreadable`, that the walk continues, and that the summary is inconclusive rather than clean, in `crates/cli/tests/walk.rs` (FR-032a, FR-032b)
 - [ ] T085 [P] [US3] Add a fuzz target for the scan entry point in `crates/core/fuzz/fuzz_targets/scan.rs`
 - [ ] T086 [P] [US3] Add a fuzz target for the decode pipeline in `crates/core/fuzz/fuzz_targets/decode.rs`
 - [ ] T087 [P] [US3] Add a criterion benchmark sweeping input size across four orders of magnitude and asserting the fitted growth exponent stays within tolerance of 1.0, in `crates/core/benches/scaling.rs` (SC-005)
 
 ### Implementation for User Story 3
 
-- [ ] T088 [US3] Implement the input size gate short-circuiting to `inconclusive` before any analysis, in `crates/core/src/lib.rs` (makes T079 pass)
-- [ ] T089 [US3] Implement decode-depth bounding and cycle detection by hashing visited decoded buffers, recording unexamined remainders, in `crates/core/src/decode/mod.rs`
-- [ ] T090 [US3] Implement `max_reasons` truncation setting `reasons_truncated`, and reason ordering by `(span.start, rule_id)`, in `crates/core/src/verdict.rs`
-- [ ] T091 [US3] Implement lossless handling of invalid UTF-8 sequences without rejecting the input, in `crates/core/src/lib.rs`
-- [ ] T092 [US3] Implement unreadable-target handling in the directory walk, constructing an inconclusive verdict with cause `target_unreadable` and continuing, in `crates/cli/src/target.rs` (makes T084 pass)
+- [X] T088 [US3] Implement the input size gate short-circuiting to `inconclusive` before any analysis, in `crates/core/src/lib.rs` (makes T079 pass)
+- [X] T089 [US3] Implement decode-depth bounding and cycle detection by hashing visited decoded buffers, recording unexamined remainders, in `crates/core/src/decode/mod.rs`
+- [X] T090 [US3] Implement `max_reasons` truncation setting `reasons_truncated`, and reason ordering by `(span.start, rule_id)`, in `crates/core/src/verdict.rs`
+- [X] T091 [US3] Implement lossless handling of invalid UTF-8 sequences without rejecting the input, in `crates/core/src/lib.rs`
+- [X] T092 [US3] Implement unreadable-target handling in the directory walk, constructing an inconclusive verdict with cause `target_unreadable` and continuing, in `crates/cli/src/target.rs` (makes T084 pass)
 - [ ] T093 [US3] Add a throughput benchmark asserting warm p95 within 10 ms at 4 KB and at least 10 MB/s sustained, in `crates/core/benches/scaling.rs` (SC-004)
 - [ ] T094 [US3] Add a cold-start measurement of process launch to first verdict, budgeted at 25 ms, in `crates/cli/tests/coldstart.rs` (D4)
 - [ ] T095 [P] [US3] Add per-change fuzz smoke and benchmark gate jobs to `.github/workflows/ci.yml`
@@ -237,11 +237,11 @@ verdicts differ accordingly; assert the rule-set identity recorded in each verdi
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T108 Amend FR-024 in `specs/001-structural-detection-cli/spec.md` to require rule-set resource limits — a resource-exhausting rule is well-formed, so T023 currently implements a constraint the spec does not ask for
+- [X] T108 Amend FR-024 in `specs/001-structural-detection-cli/spec.md` to require rule-set resource limits — a resource-exhausting rule is well-formed, so T023 currently implements a constraint the spec does not ask for
 - [ ] T109 [P] Pin the minimum supported Rust version in `Cargo.toml` from the actual floor of the resolved dependency set, and assert it in `.github/workflows/ci.yml`
 - [ ] T110 [P] Write `README.md` covering purpose, install, and the scan contract, stating explicitly that accuracy is fixture-verified and **not** yet corpus-measured
-- [ ] T111 [P] Complete `docs/limits.md` with every declared gap and the reason each exists
-- [ ] T112 [P] Complete `docs/attribution.md` with the final agent- versus human-authored component breakdown
+- [X] T111 [P] Complete `docs/limits.md` with every declared gap and the reason each exists
+- [X] T112 [P] Complete `docs/attribution.md` with the final agent- versus human-authored component breakdown
 - [ ] T113 Add rustdoc to every public item in `crates/core/src/`, including the invariant that `Clean` requires both accumulators empty
 - [ ] T114 Define the per-release comprehension walkthrough procedure and record its first result, with reader name and date, in `docs/walkthrough-log.md` (SC-001a)
 - [ ] T115 Run the full `specs/001-structural-detection-cli/quickstart.md` validation, all eight scenarios, and record results

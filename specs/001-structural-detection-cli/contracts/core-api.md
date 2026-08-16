@@ -163,6 +163,15 @@ Invalid sequences are handled internally and recorded, not rejected.
 
 `serde` is off by default so the wasm and embedded builds do not pay for it. `please-cli` enables it.
 
+> **Implemented at 001 T069**, several features later than this table implied. Until then the feature was
+> declared, enabled by the CLI, and derived by nothing — so it bought precisely nothing, and
+> `contracts/verdict.schema.json` had never been validated against real output. It is `Serialize` only;
+> `Deserialize` is not implemented and is not wanted, because a `Verdict` that can be parsed back in is a
+> `Verdict` a caller can fabricate, and FR-120 spent a feature making that impossible.
+>
+> Every enum serialises through its own `as_str()` rather than through `rename_all`, so the wire name and
+> the name this crate reports are the same string by construction.
+
 > **Note (004).** `please-core` gains **no feature** for the judgement tier, and that is the point. The
 > tier is a separate crate, `please-judge`, which depends on core; core never depends on it. Core learns
 > the judgement *vocabulary* — `Features`, `SpanRole`, `SpanRelation`, `SpanJudgement`, `JudgeReport` —
