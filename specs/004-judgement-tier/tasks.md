@@ -102,19 +102,19 @@ co-author trailer; confirm a test fails before implementing it; never let a cred
 **⚠️ Nothing in Phase 3+ may start until this is complete** — every later story depends on a verdict that can
 be judged without being reconstructable by the judge.
 
-- [ ] T008 Define `SpanJudgement` with **exactly two variants**, `Confirmed` and `Demoted`, in
+- [X] T008 Define `SpanJudgement` with **exactly two variants**, `Confirmed` and `Demoted`, in
       `crates/core/src/finalize/types.rs` (**amended from `crates/judge` by plan D10** — it is reachable from
       `JudgeReport`, which hangs off `Verdict`). There is no `Cleared`, `Escalated`, or `Added`, and their
       absence is what makes SC-406 a test of a type rather than of validation code (FR-403)
-- [ ] T009 Widen `Reason::suppressed_by` to a `SuppressedBy { Quoting(QuotingContext), Judge }` in
+- [X] T009 Widen `Reason::suppressed_by` to a `SuppressedBy { Quoting(QuotingContext), Judge }` in
       `crates/core/src/finalize/types.rs`, keeping the accessor public and the constructor `pub(super)`. A
       judge-demoted observation is **not quoted**, and reusing `QuotingContext` would be the `Encoding`
       mistake again — a name that stops describing its members (data-model)
-- [ ] T009a Define the feature vocabulary in `crates/core/src/finalize/types.rs` per **plan D10**:
+- [X] T009a Define the feature vocabulary in `crates/core/src/finalize/types.rs` per **plan D10**:
       `AddressedTo`, `ImperativeSource`, `Framing`, `StatedPurposeExplainsContent`, `SpanRole`. Plain data
       enums, `#[non_exhaustive]`, an `as_str` beside the variants like `ConcealingContext` has, and **no
       constructor core can reach for**. Core describes a judgement; it cannot obtain one
-- [ ] T010 Add `finalize::rejudge(verdict, report) -> Verdict` in `crates/core/src/finalize/mod.rs`, moving
+- [X] T010 Add `finalize::rejudge(verdict, report) -> Verdict` in `crates/core/src/finalize/mod.rs`, moving
       demoted observations from `reasons` into `suppressed` and recomputing score, ordering, and outcome.
       **Two amendments from plan D9 and data-model A2, both discovered by reading `finalize`:**
       (a) if `verdict.reasons_truncated()`, judge nothing and record
@@ -122,19 +122,19 @@ be judged without being reconstructable by the judge.
       truncation (FR-001b), so recomputing from the survivors would silently under-score;
       (b) route through the private `assemble` rather than `Verdict::new`. **Finalization stays the only
       verdict producer** (002 FR-120) — see the orientation note
-- [ ] T011 Verify `tests/seams.rs::exactly_one_place_constructs_a_verdict` **still passes unmodified**. It
+- [X] T011 Verify `tests/seams.rs::exactly_one_place_constructs_a_verdict` **still passes unmodified**. It
       asserts exactly *one* `Verdict::new(` call site, so a `rejudge` that constructs its own would fail it.
       Amended from "extend the test": the guarantee should come through this feature untouched, and if the
       test needs editing, T010(b) was not done
-- [ ] T012 Define `JudgeReport` in `crates/core/src/finalize/types.rs` — model id, prompt version, document
+- [X] T012 Define `JudgeReport` in `crates/core/src/finalize/types.rs` — model id, prompt version, document
       features, per-span judgements, `model_severity` — and attach it to `Verdict` as `Option<JudgeReport>`
       with a public accessor (FR-416, plan D10). Set only by `rejudge`; **no `Reason` gains a `confirmed_by`
       field** (data-model A4 — `Confirmed` means nothing happens to the observation)
-- [ ] T013 [P] Assert `model_severity` is read by nothing **structurally rather than by grep**: give it no
+- [X] T013 [P] Assert `model_severity` is read by nothing **structurally rather than by grep**: give it no
       public accessor, so no reader outside the defining module can exist and no future one can be added
       without a visible API change (FR-410). Amended — a grep test matches the schema string and the doc
       comments, and passes for the wrong reason
-- [ ] T014 Update `specs/001-structural-detection-cli/contracts/verdict.schema.json` and `data-model.md` for
+- [X] T014 Update `specs/001-structural-detection-cli/contracts/verdict.schema.json` and `data-model.md` for
       the widened `suppressed_by`, recording the amendment beside 002's and 003's
 
 **Checkpoint**: a verdict can be re-judged, only finalization can produce one, and demotion is the strongest

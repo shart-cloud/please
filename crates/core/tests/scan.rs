@@ -7,7 +7,7 @@
 
 use please_core::policy::ScanPolicy;
 use please_core::verdict::{
-    DetectionClass, IncompleteCause, Outcome, QuotingContext, RiskLevel, TargetRef,
+    DetectionClass, IncompleteCause, Outcome, QuotingContext, RiskLevel, SuppressedBy, TargetRef,
 };
 use please_core::Engine;
 
@@ -361,7 +361,10 @@ fn suppression_is_reportable_from_a_single_scan() {
 
     let hidden = &verdict.suppressed()[0];
     assert_eq!(hidden.rule_id(), "override.ignore_previous");
-    assert_eq!(hidden.suppressed_by(), Some(QuotingContext::InlineCode));
+    assert_eq!(
+        hidden.suppressed_by(),
+        Some(SuppressedBy::Quoting(QuotingContext::InlineCode))
+    );
     assert!(
         hidden.span().start >= input.find("ignore").unwrap(),
         "and where it was, so a reader can go and look"
@@ -390,7 +393,7 @@ fn disabling_suppression_reports_the_same_observation_annotated() {
     assert_eq!(verdict.reasons().len(), 1);
     assert_eq!(
         verdict.reasons()[0].suppressed_by(),
-        Some(QuotingContext::InlineCode),
+        Some(SuppressedBy::Quoting(QuotingContext::InlineCode)),
         "reported, and annotated with what the default policy would have done"
     );
     assert!(
@@ -422,7 +425,7 @@ fn a_live_payload_is_reported_and_a_quoted_one_suppressed_in_the_same_scan() {
     assert_eq!(verdict.suppressed().len(), 1, "the quoted one is retained");
     assert_eq!(
         verdict.suppressed()[0].suppressed_by(),
-        Some(QuotingContext::InlineCode)
+        Some(SuppressedBy::Quoting(QuotingContext::InlineCode))
     );
     assert!(
         verdict.suppressed()[0].span().start < verdict.reasons()[0].span().start,

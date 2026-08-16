@@ -7,7 +7,7 @@
 //! The ordering matters and is the same discipline throughout: **sanitise the payload, then style it.**
 //! Never the reverse.
 
-use please_core::verdict::{Outcome, QuotingContext, RiskLevel, Verdict};
+use please_core::verdict::{Outcome, QuotingContext, RiskLevel, SuppressedBy, Verdict};
 
 /// Render one verdict.
 pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
@@ -146,14 +146,20 @@ fn suppressed(out: &mut String, v: &Verdict) {
 ///
 /// `Debug` on the enum would print `FencedCode`, which is a Rust identifier rather than an explanation. This
 /// is output a person reads while deciding whether the tool is wrong.
-fn context_label(context: Option<QuotingContext>) -> &'static str {
+fn context_label(context: Option<SuppressedBy>) -> &'static str {
     match context {
-        Some(QuotingContext::FencedCode) => "inside a fenced code block",
-        Some(QuotingContext::InlineCode) => "inside inline code",
-        Some(QuotingContext::BlockQuote) => "inside a block quote",
-        Some(QuotingContext::QuotedString) => "inside a quoted string",
-        Some(QuotingContext::AttributiveMarker) => "after a phrase introducing an example",
-        // `QuotingContext` is `non_exhaustive`, so a context added later lands here rather than failing to
+        Some(SuppressedBy::Quoting(QuotingContext::FencedCode)) => "inside a fenced code block",
+        Some(SuppressedBy::Quoting(QuotingContext::InlineCode)) => "inside inline code",
+        Some(SuppressedBy::Quoting(QuotingContext::BlockQuote)) => "inside a block quote",
+        Some(SuppressedBy::Quoting(QuotingContext::QuotedString)) => "inside a quoted string",
+        Some(SuppressedBy::Quoting(QuotingContext::AttributiveMarker)) => {
+            "after a phrase introducing an example"
+        }
+        // Feature 004. Deliberately says who rather than where: a judge suppression is not a property of
+        // the document, it is an external opinion about it, and a reader deciding whether to trust it needs
+        // to know which of the two they are looking at. `--explain` prints the feature answers underneath.
+        Some(SuppressedBy::Judge) => "judged to describe an instruction rather than issue one",
+        // Both enums are `non_exhaustive`, so a variant added later lands here rather than failing to
         // compile. Naming it honestly beats guessing.
         Some(_) => "inside a quoting context",
         None => "unknown context",

@@ -108,6 +108,17 @@ impl Engine {
         &self.id
     }
 
+    /// Score-to-risk boundaries from the prepared rule set.
+    ///
+    /// Exposed for feature 004: [`crate::finalize::rejudge`] recomputes the risk band after the judgement
+    /// tier demotes an observation, and a `Verdict` does not carry the bands it was banded with. They are
+    /// **calibration** — data a deployment retunes without a rebuild — so re-banding with a different table
+    /// than the scan used would silently produce a verdict that disagrees with itself. Passing them
+    /// explicitly makes that impossible to do by accident.
+    pub fn bands(&self) -> &Bands {
+        &self.bands
+    }
+
     /// Whether a rule's pattern is compiled. Test and diagnostic use.
     ///
     /// Exposed because "was this compiled twice?" is the claim SC-106 makes and there is no way to observe

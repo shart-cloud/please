@@ -173,6 +173,22 @@ pub enum QuotingContext {
     AttributiveMarker,
 }
 
+impl QuotingContext {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    ///
+    /// Added by feature 004 for [`SuppressedBy::as_str`], which has to name either a quoting context or the
+    /// judge in one string. `ConcealingContext` has carried the same method since it was introduced.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::FencedCode => "fenced_code",
+            Self::InlineCode => "inline_code",
+            Self::BlockQuote => "block_quote",
+            Self::QuotedString => "quoted_string",
+            Self::AttributiveMarker => "attributive_marker",
+        }
+    }
+}
+
 /// A region whose content is hidden from a human reader but delivered to the agent in full.
 ///
 /// **The inverse of a [`QuotingContext`], and the distinction is worth stating precisely.** A quoting context
@@ -200,6 +216,291 @@ impl ConcealingContext {
             Self::HtmlComment => "html_comment",
         }
     }
+}
+
+/// What moved an observation into the suppressed channel (feature 004, FR-403).
+///
+/// Until 004 there was one answer and [`Reason::suppressed_by`] returned an `Option<QuotingContext>`
+/// directly. The judgement tier is a second author of the same sentence — *here is what we saw, and why it
+/// might not count* — so the field needs a wider type.
+///
+/// **Not a new `QuotingContext` variant**, and the distinction is worth the breaking change. A quoting
+/// context is a claim about the *document*: this text sits inside a fence, a quote, an example. A judgement
+/// is a claim about an *external process*: a model was asked a question and its answer, run through our
+/// scoring function, came out as demote. Filing the second under the first would be the `Encoding` mistake
+/// again — a name that quietly stops describing its members — and this project has now twice concluded that
+/// an invisible consistency obligation is the worse trade.
+///
+/// The two cases also differ in what a reader should do about them. A quoting suppression is reproducible
+/// offline and deterministic. A judge suppression is neither, is attributable to a specific model and prompt
+/// version, and is reversible with one flag: `--no-judge` reproduces the structural verdict byte-identically
+/// (FR-418).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SuppressedBy {
+    /// A quoting region in the document itself (FR-014).
+    Quoting(QuotingContext),
+    /// The judgement tier, which read the span and answered that it describes an instruction rather than
+    /// issuing one (feature 004, plan D5).
+    ///
+    /// The observation is **still in the verdict**. It has moved between two lists, and this variant is the
+    /// record of what moved it.
+    Judge,
+}
+
+impl SuppressedBy {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Quoting(context) => context.as_str(),
+            Self::Judge => "judge",
+        }
+    }
+
+    /// The quoting context, when that is what suppressed this observation.
+    ///
+    /// Exists so a caller that only cares about the structural case does not have to match on a variant
+    /// that may not be compiled into its build.
+    pub fn quoting(&self) -> Option<QuotingContext> {
+        match self {
+            Self::Quoting(context) => Some(*context),
+            Self::Judge => None,
+        }
+    }
+}
+
+// ── The judgement vocabulary (feature 004, plan D10) ────────────────────────────────────────────
+//
+// These types are here for one reason: `JudgeReport` hangs off `Verdict`, `Verdict` is a core type, and
+// core cannot depend on `please-judge` without inverting the dependency direction that keeps three CI gates
+// green by construction (plan D1).
+//
+// So core learns the VOCABULARY and gains no capability. There is no client here, no credential, no
+// endpoint, no scoring function, and no way to obtain a judgement — a `JudgeReport` arrives from a caller
+// exactly as `Attribution` does. The line, stated once:
+//
+//     core may DESCRIBE a judgement; only `please-judge` may OBTAIN one.
+//
+// Every enum below is a closed answer set with no free-text member anywhere (FR-405). That is not a
+// formatting preference: the blast radius of a captured judge is bounded by these enums, which is what makes
+// SC-406 a statement about the design rather than about the quality of our validation code.
+
+/// Who a document's imperative sentences are speaking to.
+///
+/// The 003 signal, asked of a model rather than inferred from form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AddressedTo {
+    /// The person or system the document is *for*.
+    DocumentRecipient,
+    /// The agent processing the document — which is the asymmetry indirect injection is made of.
+    ProcessingAgent,
+    Unclear,
+}
+
+/// Whether the document is issuing an instruction or relaying someone else's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ImperativeSource {
+    DocumentAuthor,
+    QuotedThirdParty,
+    NonePresent,
+}
+
+/// How the document presents the material in question.
+///
+/// The field that separates `benign-tool-001` from `indirect-tool-003` — the two fixtures this tier exists
+/// for, which are near-identical in structure and oppositely labelled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Framing {
+    PresentedAsExample,
+    PresentedAsData,
+    PresentedAsReport,
+    None,
+}
+
+/// Whether the document's stated purpose accounts for what it contains.
+///
+/// A CVE advisory quoting a payload has a purpose that explains it. A meeting agenda quoting one does not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum StatedPurposeExplainsContent {
+    Yes,
+    No,
+    Unclear,
+}
+
+/// What one flagged span **is**, as opposed to what it resembles.
+///
+/// Per span rather than per document, because a document can contain both — already a passing structural
+/// test (`a_live_payload_is_reported_and_a_quoted_one_suppressed_in_the_same_scan`). A document-level answer
+/// could not express that, and the pair this tier exists to separate would be unreachable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SpanRole {
+    /// The span instructs.
+    Instruction,
+    /// The span *describes* an instruction — a transcript, an example, a quoted payload.
+    DescriptionOfAnInstruction,
+    Unrelated,
+}
+
+macro_rules! judgement_wire_names {
+    ($($ty:ident { $($variant:ident => $name:literal),+ $(,)? })+) => {
+        $(impl $ty {
+            /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+            pub fn as_str(&self) -> &'static str {
+                match self {
+                    $(Self::$variant => $name,)+
+                }
+            }
+        })+
+    };
+}
+
+judgement_wire_names! {
+    AddressedTo {
+        DocumentRecipient => "document_recipient",
+        ProcessingAgent => "processing_agent",
+        Unclear => "unclear",
+    }
+    ImperativeSource {
+        DocumentAuthor => "document_author",
+        QuotedThirdParty => "quoted_third_party",
+        NonePresent => "none_present",
+    }
+    Framing {
+        PresentedAsExample => "presented_as_example",
+        PresentedAsData => "presented_as_data",
+        PresentedAsReport => "presented_as_report",
+        None => "none",
+    }
+    StatedPurposeExplainsContent {
+        Yes => "yes",
+        No => "no",
+        Unclear => "unclear",
+    }
+    SpanRole {
+        Instruction => "instruction",
+        DescriptionOfAnInstruction => "description_of_an_instruction",
+        Unrelated => "unrelated",
+    }
+}
+
+/// The document-level answers, returned once per request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Features {
+    pub addressed_to: AddressedTo,
+    pub imperative_source: ImperativeSource,
+    pub framing: Framing,
+    pub stated_purpose_explains_content: StatedPurposeExplainsContent,
+}
+
+/// What the tier decided about one observation. **Two variants, and that is the security property.**
+///
+/// There is no `Cleared`, no `Escalated`, and no `Added`. Not "we validate against them" — they are **not
+/// representable**, so SC-406's property test is checking a type rather than a code path (FR-403).
+///
+/// The reasoning is about what an attacker wins rather than whether they succeed. The judge reads
+/// attacker-controlled text, so injection against it must be assumed to work sometimes. If it could clear a
+/// finding, capturing it would be a total bypass of the tool. Because demotion is the strongest thing it can
+/// express:
+///
+/// - the structural finding is never erased — it is in the verdict, with the judge named as what demoted it;
+/// - `--no-judge` reproduces the structural verdict exactly, so any dispute is one command to settle;
+/// - the caller's policy decides whether a judge-suppressed finding blocks (Principle I).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpanJudgement {
+    /// Nothing happens to the observation. It stays in [`Verdict::reasons`], byte-identical to the
+    /// structural one — see [`JudgeReport`] for why no annotation is written onto the [`Reason`].
+    Confirmed,
+    /// The observation moves to [`Verdict::suppressed`], annotated [`SuppressedBy::Judge`].
+    Demoted,
+}
+
+/// One span's judgement, with the answer it was derived from.
+///
+/// Carries `role` as well as `judgement` because FR-407 computes the score from the features: without them
+/// the outcome is an unexplained number, and 002 spent its effort removing exactly those.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SpanVerdict {
+    /// Index into [`Verdict::reasons`] as it stood in the **structural** verdict.
+    pub reason_index: usize,
+    pub role: SpanRole,
+    pub judgement: SpanJudgement,
+}
+
+/// What the judgement tier adds to a verdict (FR-416, R3).
+///
+/// Enough to answer *"why did it do that"* from the verdict alone, which is what US5 asks and what 002
+/// established as the standard when it removed the two-run diff from the false-positive workflow.
+///
+/// **Not recorded**: the raw response body. It is attacker-influenced text with no consumer, and storing it
+/// in a verdict would create a channel by which content reaches a reader that the sanitisation path never
+/// inspected. Nor the credential, obviously (FR-413).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JudgeReport {
+    model: String,
+    prompt_version: String,
+    features: Features,
+    judgements: Vec<SpanVerdict>,
+    model_severity: Option<u8>,
+}
+
+impl JudgeReport {
+    /// Build a report. Public because `please-judge` is a different crate and must be able to produce one —
+    /// but note what that does **not** grant: producing a report is not producing a verdict. Only
+    /// [`crate::finalize::rejudge`] can apply one, and it can only narrow (FR-403).
+    pub fn new(
+        model: impl Into<String>,
+        prompt_version: impl Into<String>,
+        features: Features,
+        judgements: Vec<SpanVerdict>,
+        model_severity: Option<u8>,
+    ) -> Self {
+        Self {
+            model: model.into(),
+            prompt_version: prompt_version.into(),
+            features,
+            judgements,
+            model_severity,
+        }
+    }
+
+    /// The resolved model id. A verdict judged by one model is not evidence about another — the same
+    /// reasoning that made the rule-set digest SHA-256 rather than `DefaultHasher` (SC-012).
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
+    /// The prompt version. Included because a prompt edit shifts feature extraction as surely as a model
+    /// change does, and it is the variable *we* control.
+    pub fn prompt_version(&self) -> &str {
+        &self.prompt_version
+    }
+
+    pub fn features(&self) -> Features {
+        self.features
+    }
+
+    pub fn judgements(&self) -> &[SpanVerdict] {
+        &self.judgements
+    }
+
+    // ── `model_severity` has no accessor, deliberately (FR-410) ─────────────────────────────────
+    //
+    // The model's own opinion is recorded and read by nothing. It is stored beside the derived score so
+    // that, over a corpus, we can ask whether the model's scoring would have agreed — and get an answer
+    // from data rather than from a prior. That is the cheapest possible experiment on "could we have just
+    // asked it?", and it costs one unused field.
+    //
+    // The guarantee that nothing reads it is STRUCTURAL rather than tested: with no accessor, no reader
+    // outside this module can exist, and a future one cannot be added without a visible API change that a
+    // reviewer will see. The task originally specified a grep-based test; a grep matches the doc comments
+    // and the wire-format string and would have passed for the wrong reason.
+    //
+    // When there is a corpus and a calibration study to run, add the accessor in the commit that reads it.
 }
 
 /// One transformation recognised while decoding (FR-011).
@@ -250,7 +551,9 @@ pub struct Reason {
     severity: u8,
     chain: Vec<Transform>,
     description: String,
-    suppressed_by: Option<QuotingContext>,
+    /// Widened from `Option<QuotingContext>` by feature 004 (T009). Quoting is no longer the only thing
+    /// that can suppress an observation — see [`SuppressedBy`].
+    suppressed_by: Option<SuppressedBy>,
 }
 
 impl Reason {
@@ -269,7 +572,7 @@ impl Reason {
         severity: u8,
         chain: Vec<Transform>,
         description: String,
-        suppressed_by: Option<QuotingContext>,
+        suppressed_by: Option<SuppressedBy>,
     ) -> Self {
         Self {
             rule_id,
@@ -319,10 +622,29 @@ impl Reason {
         &self.description
     }
 
-    /// Present only when a quoting context would normally have suppressed this reason and suppression
-    /// was disabled by policy.
-    pub fn suppressed_by(&self) -> Option<QuotingContext> {
+    /// What suppressed this reason, if anything.
+    ///
+    /// Two quite different situations produce a `Some` here, and a reader has to be able to tell them
+    /// apart:
+    ///
+    /// - on a reason in [`Verdict::suppressed`], it names what moved it there — a quoting context, or the
+    ///   judgement tier;
+    /// - on a reason in [`Verdict::reasons`], it means a quoting context *would* have suppressed it and
+    ///   policy disabled suppression. The finding is reported, annotated with what was overridden.
+    ///
+    /// Widened from `Option<QuotingContext>` in feature 004. Callers that only care about the structural
+    /// case can use [`SuppressedBy::quoting`] rather than matching a variant their build may not use.
+    pub fn suppressed_by(&self) -> Option<SuppressedBy> {
         self.suppressed_by
+    }
+
+    /// Move this reason into the suppressed channel, naming the judgement tier as the cause.
+    ///
+    /// `pub(super)` like every other mutator here: only [`crate::finalize`] may apply a judgement, which is
+    /// what keeps `rejudge` the single place a demotion can happen rather than something any holder of a
+    /// `Reason` can do (FR-120, FR-403).
+    pub(super) fn demote_by_judge(&mut self) {
+        self.suppressed_by = Some(SuppressedBy::Judge);
     }
 }
 
@@ -519,6 +841,11 @@ pub struct Verdict {
     target: TargetRef,
     ruleset: RulesetId,
     engine: EngineId,
+    /// Present only on a verdict the judgement tier acted on (feature 004, FR-416).
+    ///
+    /// `None` on every default scan, and its absence is the machine-readable form of "this verdict is
+    /// purely structural, and 001's determinism guarantee applies to it unchanged" (FR-417).
+    judge: Option<JudgeReport>,
 }
 
 impl Verdict {
@@ -566,7 +893,22 @@ impl Verdict {
             target,
             ruleset,
             engine,
+            // Never set here. A verdict is structural when it is built, and becomes judged only by passing
+            // through `rejudge` — which is what keeps the judged path strictly additive to a path that
+            // already works (FR-418).
+            judge: None,
         }
+    }
+
+    /// Attach the report that produced this verdict's demotions.
+    ///
+    /// Deliberately **not** a parameter of [`Verdict::new`]. Adding one would touch every construction path
+    /// in `finalize` — the oversized verdict, the unreadable target, the gap-only verdict — none of which
+    /// can ever be judged, and each of which would then carry a `None` that reads as a decision rather than
+    /// as an absence. A builder step on the one path that uses it says what is actually true.
+    pub(super) fn with_judge(mut self, report: JudgeReport) -> Self {
+        self.judge = Some(report);
+        self
     }
 
     pub fn outcome(&self) -> Outcome {
@@ -620,6 +962,15 @@ impl Verdict {
 
     pub fn engine(&self) -> &EngineId {
         &self.engine
+    }
+
+    /// The judgement tier's report, present only when the tier acted on this verdict (FR-416).
+    ///
+    /// `None` means no judge ran — **not** that one ran and found nothing. A judge that ran and confirmed
+    /// everything returns `Some` with every span `Confirmed`, and the difference matters: one verdict has a
+    /// second opinion behind it and the other does not.
+    pub fn judge(&self) -> Option<&JudgeReport> {
+        self.judge.as_ref()
     }
 
     /// True when this verdict's risk meets or exceeds `threshold`.

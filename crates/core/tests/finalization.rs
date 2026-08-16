@@ -32,7 +32,8 @@ use please_core::finalize::plan::Bounds;
 use please_core::finalize::{finalize, Attribution};
 use please_core::ruleset::Bands;
 use please_core::verdict::{
-    IncompleteCause, Outcome, QuotingContext, RiskLevel, RulesetId, Span, TargetRef, Verdict,
+    IncompleteCause, Outcome, QuotingContext, RiskLevel, RulesetId, Span, SuppressedBy, TargetRef,
+    Verdict,
 };
 use please_core::DetectionClass;
 
@@ -464,7 +465,7 @@ fn a_suppressed_observation_is_retained_with_the_context_that_suppressed_it() {
     assert_eq!(hidden.rule_id(), "override.disregard_prior");
     assert_eq!(
         hidden.suppressed_by(),
-        Some(QuotingContext::QuotedString),
+        Some(SuppressedBy::Quoting(QuotingContext::QuotedString)),
         "and it must say WHICH context hid it — 'something was suppressed' is not actionable"
     );
 }
@@ -575,7 +576,7 @@ fn an_observation_annotated_but_not_suppressed_is_reported_with_its_context() {
     assert_eq!(v.score(), 85, "and it scores");
     assert_eq!(
         v.reasons()[0].suppressed_by(),
-        Some(QuotingContext::FencedCode),
+        Some(SuppressedBy::Quoting(QuotingContext::FencedCode)),
         "annotated with what would have hidden it"
     );
     assert!(v.suppressed().is_empty(), "nothing was actually suppressed");

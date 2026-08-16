@@ -37,9 +37,54 @@
     },
     "target": { "$ref": "#/$defs/target_ref" },
     "ruleset": { "$ref": "#/$defs/ruleset_id" },
-    "engine": { "$ref": "#/$defs/engine_id" }
+    "engine": { "$ref": "#/$defs/engine_id" },
+    "judge": { "$ref": "#/$defs/judge_report" }
   },
   "$defs": {
+    "judge_report": {
+      "description": "Present only on a verdict the judgement tier acted on (feature 004, FR-416). Its ABSENCE is meaningful: it says the verdict is purely structural and 001's SC-011 determinism guarantee applies to it unchanged. Its presence with every span `confirmed` is a different statement from absence — one verdict has a second opinion behind it and the other does not. The raw model response is deliberately NOT recorded: it is attacker-influenced text with no consumer, and storing it would create a channel by which content reaches a reader that the sanitisation path never inspected.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "prompt_version", "features", "judgements"],
+      "properties": {
+        "model": {
+          "description": "Resolved model id. A verdict judged by one model is not evidence about another.",
+          "type": "string"
+        },
+        "prompt_version": {
+          "description": "Changes the answers as surely as the model does, and is the variable we control.",
+          "type": "string"
+        },
+        "features": {
+          "description": "The document-level answers, as returned. Recorded because the score is computed from them (FR-407) — without them it is an unexplained number.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["addressed_to", "imperative_source", "framing", "stated_purpose_explains_content"],
+          "properties": {
+            "addressed_to": { "enum": ["document_recipient", "processing_agent", "unclear"] },
+            "imperative_source": { "enum": ["document_author", "quoted_third_party", "none_present"] },
+            "framing": { "enum": ["presented_as_example", "presented_as_data", "presented_as_report", "none"] },
+            "stated_purpose_explains_content": { "enum": ["yes", "no", "unclear"] }
+          }
+        },
+        "judgements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["reason_index", "role", "judgement"],
+            "properties": {
+              "reason_index": { "type": "integer", "minimum": 0 },
+              "role": { "enum": ["instruction", "description_of_an_instruction", "unrelated"] },
+              "judgement": {
+                "description": "TWO values, and that is the security property (FR-403). There is no `cleared`, no `escalated`, and no `added` — not validated against, but not representable, which is why SC-406's property test checks a type rather than a code path.",
+                "enum": ["confirmed", "demoted"]
+              }
+            }
+          }
+        }
+      }
+    },
     "reason": {
       "type": "object",
       "additionalProperties": false,
@@ -75,8 +120,8 @@
           "type": "string"
         },
         "suppressed_by": {
-          "description": "Present only when a quoting context would normally have suppressed this reason and suppression was disabled by policy.",
-          "enum": ["fenced_code", "inline_code", "block_quote", "quoted_string", "attributive_marker"]
+          "description": "What suppressed this observation. On a reason in `suppressed`, it names what moved it there. On a reason in `reasons`, it means a quoting context WOULD have suppressed it and policy disabled suppression. Widened by feature 004 (T009): `judge` joins the quoting contexts, because the judgement tier is a second author of the same sentence and a judge-demoted observation is not *quoted* — see specs/004-judgement-tier/data-model.md.",
+          "enum": ["fenced_code", "inline_code", "block_quote", "quoted_string", "attributive_marker", "judge"]
         }
       }
     },

@@ -47,8 +47,8 @@ use evidence::{CoverageGap, Evidence, Observation, Suppression};
 use plan::Bounds;
 use score::aggregate;
 use types::{
-    DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, Reason, RiskLevel,
-    RulesetId, TargetRef, Verdict,
+    DetectionClass, EngineId, IncompleteCause, Incompleteness, JudgeReport, Outcome, Reason,
+    RiskLevel, RulesetId, SpanJudgement, SuppressedBy, TargetRef, Verdict,
 };
 
 /// Everything a verdict needs that is **not** evidence: who scanned, what with, and the band table.
@@ -184,6 +184,198 @@ pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) ->
     )
 }
 
+/// Apply a judgement to a finalized verdict (feature 004, FR-403).
+///
+/// **The judge supplies decisions; it does not assemble verdicts.** `Verdict::new` is `pub(super)` to this
+/// module, so `please-judge` — a different crate entirely — cannot construct one. That is not an obstacle
+/// worked around here, it is the guarantee 002 spent a phase establishing, preserved by giving the judgement
+/// tier a seam instead of a constructor. `tests/seams.rs` still asserts exactly one `Verdict::new(` call
+/// site, and this function routes through [`assemble`] like everything else.
+///
+/// # What it can do
+///
+/// Move an observation from `reasons` into `suppressed`, annotated [`SuppressedBy::Judge`]. That is all. It
+/// cannot erase one, cannot raise a severity, and cannot introduce one — not because those are validated
+/// against but because [`SpanJudgement`] has two variants and neither expresses them. For any report
+/// whatsoever, including a maximally hostile one:
+///
+/// ```text
+/// judged.reasons() ∪ judged.suppressed()  ==  structural.reasons() ∪ structural.suppressed()
+/// max severity in judged                  ≤   max severity in structural
+/// ```
+///
+/// # Why a truncated verdict is refused (plan D9, FR-421)
+///
+/// [`finalize`] aggregates the score **from the observations, before anything can be dropped** (FR-001b) —
+/// it is step 0 up there, deliberately. By the time a `Verdict` exists, the reasons have been ordered and
+/// truncated to `max_reasons`, and the severities of everything past the bound are gone.
+///
+/// So a `rejudge` that recomputed from the surviving reasons would silently *lower* the score on any
+/// truncated verdict — not because a judgement demoted anything, but because the truncated contributions
+/// were never there to begin with. That is a fail-open reachable by arithmetic alone, in a tier whose entire
+/// premise is that degradation goes to `Inconclusive` and never to something cheerful.
+///
+/// The alternative was to have `Verdict` retain its pre-truncation severities. It is exact, it may become
+/// necessary once there is a corpus, and it makes core carry state whose only consumer is an optional tier —
+/// which is the one thing D1 says core does not do. Refusing costs a document that produced more than
+/// `max_reasons` findings, and a document with more than sixty-four findings is not one whose *precision*
+/// problem a second opinion was going to fix.
+///
+/// # Bands are supplied, not remembered
+///
+/// A `Verdict` records its score and its risk band but not the table that mapped one to the other, because
+/// until now nothing needed to re-band. Demotion changes the score, so the table has to come back — from
+/// [`crate::Engine::bands`], the same one the scan used. Passing it explicitly is what stops a re-band
+/// against a different table than the original, which would produce a verdict quietly disagreeing with
+/// itself.
+pub fn rejudge(verdict: Verdict, report: JudgeReport, bands: &Bands) -> Verdict {
+    if verdict.reasons_truncated() {
+        return refuse_to_judge(
+            verdict,
+            "verdict truncated before judgement; the score cannot be recomputed exactly",
+        );
+    }
+
+    // Indices are into the structural `reasons()` as the judge saw them. An index past the end is a report
+    // about a different verdict, and applying part of it would demote whichever reason happened to sit at a
+    // valid index — arbitrary, and arbitrary in the attacker's favour half the time.
+    let count = verdict.reasons().len();
+    if report
+        .judgements()
+        .iter()
+        .any(|judgement| judgement.reason_index >= count)
+    {
+        return refuse_to_judge(
+            verdict,
+            "judgement names an observation this verdict does not contain",
+        );
+    }
+
+    let demoted: Vec<bool> = {
+        let mut flags = vec![false; count];
+        for judgement in report.judgements() {
+            // `|=` rather than `=`: two judgements naming the same index cannot un-demote each other.
+            // Contradiction resolves toward the structural verdict, never away from it.
+            flags[judgement.reason_index] |= judgement.judgement == SpanJudgement::Demoted;
+        }
+        flags
+    };
+
+    let (reasons, suppressed, score, risk, reasons_truncated, suppressions_truncated, attribution) =
+        disassemble(verdict, bands, &demoted);
+
+    assemble(
+        reasons,
+        reasons_truncated,
+        suppressed,
+        suppressions_truncated,
+        // Judged successfully, so no gap is added. The gaps the structural verdict already carried are
+        // preserved — a judgement resolves nothing about coverage.
+        Vec::new(),
+        score,
+        risk,
+        attribution,
+    )
+    .with_judge(report)
+}
+
+/// Rebuild a verdict with the demoted reasons moved, without ever calling `Verdict::new`.
+///
+/// Returns the pieces `assemble` wants. Separate from [`rejudge`] because the destructuring is noisy and
+/// the decision it implements — which list each reason belongs in — is one line that should be readable.
+#[allow(clippy::type_complexity)]
+fn disassemble(
+    verdict: Verdict,
+    bands: &Bands,
+    demoted: &[bool],
+) -> (
+    Vec<Reason>,
+    Vec<Reason>,
+    u8,
+    RiskLevel,
+    bool,
+    bool,
+    Attribution,
+) {
+    let attribution = Attribution {
+        target: verdict.target().clone(),
+        ruleset: verdict.ruleset().clone(),
+        bands: *bands,
+    };
+    let reasons_truncated = verdict.reasons_truncated();
+    let suppressions_truncated = verdict.suppressions_truncated();
+    let mut suppressed: Vec<Reason> = verdict.suppressed().to_vec();
+
+    let mut kept: Vec<Reason> = Vec::new();
+    for (index, reason) in verdict.reasons().iter().enumerate() {
+        let mut reason = reason.clone();
+        if demoted[index] {
+            reason.demote_by_judge();
+            suppressed.push(reason);
+        } else {
+            kept.push(reason);
+        }
+    }
+
+    // Re-aggregate over what is still reported. Exact here in a way it would not be on a truncated verdict:
+    // every reason the score was originally computed from is present, so removing the demoted ones removes
+    // exactly their contribution (plan D9).
+    let severities: Vec<(u8, DetectionClass)> = kept
+        .iter()
+        .map(|reason| (reason.severity(), reason.class()))
+        .collect();
+    let score = aggregate(&severities);
+    let risk = bands.band(score);
+
+    // Suppressed reasons arrive from two places now — quoting suppression during the scan, and demotion
+    // just above — and must still be in one order (FR-125). Note that this is the ONLY place the two lists
+    // interact, and it moves reasons between them without creating or dropping any: the union is preserved
+    // by construction rather than by check, which is what SC-406 is a test of.
+    order(&mut suppressed);
+
+    (
+        kept,
+        suppressed,
+        score,
+        risk,
+        reasons_truncated,
+        suppressions_truncated,
+        attribution,
+    )
+}
+
+/// Return the structural verdict with a `TierUnavailable` gap and **no judgement applied**.
+///
+/// Every refusal path lands here, so there is one answer to "what happens when the judge cannot be trusted
+/// with this verdict" rather than one per caller. The outcome degrades to `Inconclusive` unless the verdict
+/// already found risk — which is [`assemble`]'s ordering, unchanged: a scan that found a real payload and
+/// then lost its second opinion has still found a real payload.
+fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
+    let attribution = Attribution {
+        target: verdict.target().clone(),
+        ruleset: verdict.ruleset().clone(),
+        // Never consulted. The score and risk below are carried through unchanged, because nothing was
+        // demoted and therefore nothing needs re-banding.
+        bands: Bands::default(),
+    };
+    let mut incomplete: Vec<Incompleteness> = verdict.incomplete().to_vec();
+    incomplete.push(
+        CoverageGap::failure(IncompleteCause::TierUnavailable, detail.to_string())
+            .into_incompleteness(),
+    );
+
+    assemble(
+        verdict.reasons().to_vec(),
+        verdict.reasons_truncated(),
+        verdict.suppressed().to_vec(),
+        verdict.suppressions_truncated(),
+        incomplete,
+        verdict.score(),
+        verdict.risk(),
+        attribution,
+    )
+}
+
 /// A verdict for an input too large to analyse (FR-017).
 ///
 /// An oversized input is not analysed at all, so there is nothing to report except that fact — and
@@ -282,7 +474,11 @@ fn into_reason(observation: Observation, max_excerpt: usize) -> (Reason, bool) {
             observation.severity,
             observation.chain,
             observation.description,
-            observation.suppressed_by,
+            // An observation can only ever have been quote-suppressed: detection is the only thing that
+            // produces one, and detection has no judgement to apply. The widening in feature 004 happens
+            // here, at the one boundary observations become reasons — `SuppressedBy::Judge` is written in
+            // exactly one other place, `rejudge`, and nowhere a detector can reach.
+            observation.suppressed_by.map(SuppressedBy::Quoting),
         ),
         truncated,
     )

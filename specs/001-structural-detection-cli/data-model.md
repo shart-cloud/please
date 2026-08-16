@@ -106,6 +106,27 @@ these is an assertion, not evidence.
 | `chain` | ordered list of Transform | Empty for a direct match; populated when found via decoding |
 | `suppressed_by` | optional QuotingContext | Present only on reasons reported *because* suppression was disabled |
 
+> **Amended by feature 004 (T009).** `suppressed_by` is now an optional **`SuppressedBy`**, not an optional
+> `QuotingContext`. The new type is `Quoting(QuotingContext) | Judge`, and the extra variant records that the
+> judgement tier moved an observation into the suppressed channel.
+>
+> **Not a new `QuotingContext` variant**, deliberately. A quoting context is a claim about the *document* —
+> this text sits inside a fence, a quote, an example. A judgement is a claim about an *external process*, is
+> non-deterministic, is attributable to a model id and prompt version, and is reversible with `--no-judge`.
+> Filing the second under the first would be the `Encoding` mistake again: a name that quietly stops
+> describing its members. `SuppressedBy::quoting()` exists for callers that only care about the structural
+> case, so the widening costs a match arm only where the distinction matters.
+>
+> Also amended: `Verdict` gains an optional `judge` field carrying a `JudgeReport` (004 FR-416, plan D10).
+> Its **absence** is the machine-readable form of "this verdict is purely structural, and SC-011 applies to
+> it unchanged".
+>
+> One pre-existing gap noticed while making this edit and **not** fixed here, because it belongs to 002 and
+> silently repairing another feature's contract is how a schema stops being reviewable: the top level of
+> `contracts/verdict.schema.json` still lacks `suppressed` and `suppressions_truncated`, which 002 added to
+> the `Verdict` type. With `additionalProperties: false` that makes the schema stricter than the type it
+> describes. Worth a 002 amendment of its own.
+
 **Span in original coordinates**: when a match is found in decoded content, `span` still points into
 the original input — at the encoded region that produced it. A caller highlighting a finding must be
 able to show the user the bytes they actually have. The decoded position is carried inside `chain`.

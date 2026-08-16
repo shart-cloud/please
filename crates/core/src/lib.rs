@@ -52,9 +52,20 @@ pub use finalize::evidence::{CoverageGap, Evidence, Observation};
 pub use finalize::plan::{Bounds, ScanPlan};
 pub use policy::ScanPolicy;
 pub use ruleset::{Rule, Ruleset, RulesetError, RulesetLimits};
+/// The judgement tier's vocabulary (feature 004, plan D10).
+///
+/// Here because [`Verdict`] carries a [`JudgeReport`] and `Verdict` is a core type — core cannot depend on
+/// `please-judge` without inverting the dependency direction that keeps three CI gates green by
+/// construction. What core gains is the ability to *describe* a judgement; obtaining one still requires
+/// `please-judge`, which is where the client, the credential, and the scoring function live.
+pub use verdict::{
+    AddressedTo, Features, Framing, ImperativeSource, JudgeReport, SpanJudgement, SpanRole,
+    SpanVerdict, StatedPurposeExplainsContent,
+};
 pub use verdict::{
     DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, QuotingContext, Reason,
-    RiskLevel, RulesetId, Span, TargetKind, TargetRef, Transform, TransformKind, Verdict,
+    RiskLevel, RulesetId, Span, SuppressedBy, TargetKind, TargetRef, Transform, TransformKind,
+    Verdict,
 };
 
 /// Engine name reported in every verdict's `engine` field (FR-005).
