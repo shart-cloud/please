@@ -24,6 +24,9 @@
 //! `Inconclusive`. **Never `Clean`** (FR-402). A network dependency in a security path is a fail-open
 //! waiting to happen; that requirement is what stops it being one.
 
+pub mod credential;
+
+pub use credential::{Credential, CredentialSource, Resolution};
 pub use please_core::verdict::{
     AddressedTo, Framing, ImperativeSource, JudgeReport, SpanJudgement, SpanRole,
     StatedPurposeExplainsContent,

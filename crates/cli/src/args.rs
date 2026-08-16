@@ -34,6 +34,26 @@ pub struct Args {
 pub enum Command {
     /// Scan one or more targets.
     Scan(ScanArgs),
+
+    /// Inspect the judgement tier's configuration. **Makes no network request.**
+    ///
+    /// Absent on a default build, for the same reason `--judge` is: a security tool that accepts a
+    /// command it cannot honour is worse than one that refuses it. On a default build this is an unknown
+    /// subcommand and exits 64.
+    #[cfg(feature = "judge")]
+    Judge(JudgeArgs),
+}
+
+#[cfg(feature = "judge")]
+#[derive(Debug, Parser)]
+pub struct JudgeArgs {
+    /// Report which credential variable would be used, which are ignored, and the resolved endpoint —
+    /// without making a request (FR-414).
+    ///
+    /// Safe to run anywhere: it cannot leak a credential to an endpoint by testing it, and no line of its
+    /// output contains a credential value (FR-413, SC-404).
+    #[arg(long)]
+    pub check: bool,
 }
 
 #[derive(Debug, Parser)]

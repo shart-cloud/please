@@ -118,6 +118,20 @@ jobs:
       # what stops the whole job passing trivially the day the feature flag breaks.
       - run: ./ci/check-cli-dependencies.sh
 
+  # SC-404 / FR-413. Its own job because it runs the whole suite with canary credentials in the
+  # environment, which is not something to fold into a job people read as "lint".
+  #
+  # The natural way to write an error includes the thing that failed, and the body of a 401 can echo a
+  # token. Catching that by review works on the day someone is looking for it.
+  credential-leak:
+    name: no credential in any output (SC-404)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: ./ci/check-no-credential-leak.sh
+
 # Jobs arriving with later tasks, listed so their absence is deliberate rather than forgotten:
 #
 #   T095  per-change fuzz smoke and the benchmark growth-exponent gate (SC-005, SC-006).

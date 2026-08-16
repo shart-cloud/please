@@ -177,26 +177,26 @@ output anywhere contains a credential value.
 **Why before the P1 stories that remain**: US3 must report *which variables were consulted* when none yields
 a credential, so resolution has to exist first. No network is involved in any of it.
 
-- [ ] T019 [US4] Implement the credential newtype in `crates/judge/src/credential.rs` with a hand-written
+- [X] T019 [US4] Implement the credential newtype in `crates/judge/src/credential.rs` with a hand-written
       `Debug` printing the source and never the value, no `Display`, no serialisation (FR-413)
-- [ ] T020 [US4] Write the failing test asserting `{:?}` on a credential cannot emit its value
-- [ ] T021 [US4] Implement `Resolution::from_env` — order `ANTHROPIC_AUTH_TOKEN`,
+- [X] T020 [US4] Write the failing test asserting `{:?}` on a credential cannot emit its value
+- [X] T021 [US4] Implement `Resolution::from_env` — order `ANTHROPIC_AUTH_TOKEN`,
       `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, **unconditionally**, plus `ANTHROPIC_BASE_URL` and
       `ANTHROPIC_MODEL` (FR-411, FR-412, plan D3)
-- [ ] T022 [P] [US4] Write failing tests over every combination of the four variables, including the live
+- [X] T022 [P] [US4] Write failing tests over every combination of the four variables, including the live
       case: `ANTHROPIC_AUTH_TOKEN` **and** `ANTHROPIC_API_KEY` both set with a custom base URL, where
       choosing wrong sends an upstream account credential to a third-party host
-- [ ] T023a [US4] Make `Command` a real multi-variant subcommand in `crates/cli/src/args.rs` and replace the
+- [X] T023a [US4] Make `Command` a real multi-variant subcommand in `crates/cli/src/args.rs` and replace the
       irrefutable `let Command::Scan(scan_args) = args.command;` at `crates/cli/src/main.rs` with a `match`.
       Today the enum has one variant and destructuring it is infallible; adding `Judge` breaks that line, and
       it is better broken deliberately in its own commit than incidentally inside T023
-- [ ] T023 [US4] Implement `plz judge --check` in `crates/cli/src/main.rs`: selected variable, ignored
+- [X] T023 [US4] Implement `plz judge --check` in `crates/cli/src/main.rs`: selected variable, ignored
       variables, resolved endpoint and model, **making no request** (FR-414). Requires T023a first. The
       **whole `judge` subcommand is absent on a default build**, for the same reason `--judge` is — a
       security tool that accepts a command it cannot honour is worse than one that refuses it
-- [ ] T024 [US4] Emit the warning when the endpoint is non-default and `ANTHROPIC_API_KEY` is the only
+- [X] T024 [US4] Emit the warning when the endpoint is non-default and `ANTHROPIC_API_KEY` is the only
       credential available (FR-415)
-- [ ] T025 [US4] Add the suite-wide credential-leak assertion: run the tests with a canary token in the
+- [X] T025 [US4] Add the suite-wide credential-leak assertion: run the tests with a canary token in the
       environment and assert it appears in no output (SC-404). **Must pass `-- --nocapture`** — `cargo test`
       prints captured output only for *failing* tests, so the check as written in `quickstart.md` would grep
       a green suite that is leaking on every line

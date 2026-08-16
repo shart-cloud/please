@@ -67,7 +67,18 @@ fn run() -> i32 {
             };
         }
     };
-    let Command::Scan(scan_args) = args.command;
+    // A `match` rather than the irrefutable `let Command::Scan(..)` this was until feature 004. The enum
+    // had one variant, so destructuring it was infallible; `judge` makes it a real choice.
+    //
+    // On a DEFAULT build the `Judge` arm is compiled out and clippy is right that the match has one arm
+    // again. Writing it as a `let` under `cfg` instead would mean two spellings of the same dispatch that
+    // have to be kept in agreement, and the whole point of this line is that there is one.
+    #[cfg_attr(not(feature = "judge"), allow(clippy::infallible_destructuring_match))]
+    let scan_args = match args.command {
+        Command::Scan(scan_args) => scan_args,
+        #[cfg(feature = "judge")]
+        Command::Judge(judge_args) => return run_judge(&judge_args),
+    };
     let policy = scan_args.policy();
 
     let engine = match Engine::builtin() {
@@ -124,6 +135,27 @@ fn run() -> i32 {
     print!("{out}");
 
     exit_code(&verdicts, policy.threshold)
+}
+
+/// `plz judge --check` — answer *"what would you do"* without doing it (FR-414).
+///
+/// **Makes no network request**, which is what makes it safe to run anywhere: it cannot leak a credential
+/// to an endpoint by testing it. With several variables commonly set at once and a proxy in the path, "why
+/// is it hitting the wrong host with the wrong header" is otherwise a bad afternoon.
+///
+/// Exits `0` on a successful report even when no credential resolves. It is a diagnostic, not a health
+/// check — "you have nothing configured" is a successful answer to the question asked, and a scan that
+/// needs a credential and lacks one already exits `2` through the `TierUnavailable` path.
+#[cfg(feature = "judge")]
+fn run_judge(args: &args::JudgeArgs) -> i32 {
+    if !args.check {
+        eprintln!("plz judge: nothing to do. Pass --check to report the resolved configuration.");
+        return EXIT_USAGE;
+    }
+    // Diagnostics on stderr, the report on stdout — the same split as a scan, so `plz judge --check` can
+    // be piped somewhere without a warning corrupting the stream.
+    print!("{}", please_judge::Resolution::from_env().describe());
+    EXIT_CLEAN
 }
 
 /// Derive the process status from every verdict, by the precedence
