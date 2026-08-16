@@ -142,9 +142,9 @@ pub struct ScanArgs {
 
     /// Seconds to wait for the judge before giving up (FR-420).
     ///
-    /// **Whole seconds, not `5s`.** A duration parser would be a new crate in the *default* dependency
-    /// graph of `plz`, for a flag the default build does not have — precisely the leak
-    /// `ci/check-cli-dependencies.sh` exists to catch.
+    /// **Whole seconds, not `5s`.** A duration parser would be a new crate in the dependency graph of
+    /// `plz` for the sake of accepting `5s` instead of `5`, which is not a trade worth making in a tool
+    /// that argues about every crate it carries.
     #[cfg(feature = "judge")]
     #[arg(long, value_name = "SECONDS")]
     pub judge_timeout: Option<u64>,
@@ -212,7 +212,7 @@ impl ScanArgs {
     /// distinguishable from "the user said human".
     ///
     /// `std::io::IsTerminal` is in std, so this costs no dependency — which matters, because a crate added
-    /// for this would land in the default `plz` graph that `ci/check-cli-dependencies.sh` pins.
+    /// for this would land in the graph of every `plz` anyone installs.
     pub fn format(&self) -> Format {
         use std::io::IsTerminal;
         self.format.unwrap_or(if std::io::stdout().is_terminal() {

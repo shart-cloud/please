@@ -99,7 +99,7 @@ fn every_target_is_examined_under_a_memory_cap_smaller_than_the_corpus() {
 /// Run `plz scan <dir>` with the address space capped to `kb` kilobytes.
 ///
 /// `ulimit -v` in a shell rather than a `setrlimit` call, which keeps this free of a `libc`
-/// dev-dependency and of any `unsafe`. `ci/check-cli-dependencies.sh` exists because this project counts
+/// dev-dependency and of any `unsafe`. This project counts
 /// what it depends on, and a crate in the lock file to set one rlimit is a poor trade.
 #[cfg(unix)]
 fn under_address_space_limit(kb: usize, dir: &std::path::Path) -> std::process::Output {

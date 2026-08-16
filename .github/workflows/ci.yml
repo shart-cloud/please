@@ -117,14 +117,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: ./ci/check-dependencies.sh
       - run: ./ci/check-core-isolation.sh
-      # Feature 004, FR-419/SC-405. The two checks above have only ever covered `please-core`, which was
-      # sufficient while the CLI had no optional capability — the judgement tier gives it one, and
-      # Principle V requires the gating be enforced by a check rather than by review.
+      # `ci/check-cli-dependencies.sh` was here, asserting the default `plz` graph carried no HTTP or TLS
+      # crate. The judgement tier is now on by default, so that assertion is false by intent and the check
+      # is gone with it. The two above still cover `please-core`, which is where the no-network guarantee
+      # actually lives — and the wasm32 job proves it independently.
       #
-      # This one asserts in three directions: the default `plz` graph matches its allow-list exactly, it
-      # contains no HTTP or TLS crate by name, and `--features judge` DOES contain them. The third is
-      # what stops the whole job passing trivially the day the feature flag breaks.
-      - run: ./ci/check-cli-dependencies.sh
+      # A `--no-default-features` build of `plz` still carries no HTTP or TLS crate. Nothing checks that
+      # any more; it is now a property of the Cargo manifest rather than a gate.
+      - run: cargo build -p please-cli --no-default-features
 
   # SC-404 / FR-413. Its own job because it runs the whole suite with canary credentials in the
   # environment, which is not something to fold into a job people read as "lint".

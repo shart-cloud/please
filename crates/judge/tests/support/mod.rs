@@ -7,8 +7,8 @@
 //! error type it was handed, and the thing worth knowing is that `ureq` produces that error type from that
 //! situation. A 401 from a mock is our own enum; a 401 from a socket is a 401.
 //!
-//! Built on `std::net` so it costs no dependency — this is a dev-only module in a crate whose shipping
-//! graph is pinned by `ci/check-cli-dependencies.sh`.
+//! Built on `std::net` so it costs no dependency. A dev-only module either way, but a test server pulled
+//! from crates.io would be a dependency this project would have to justify.
 
 // Each integration test file is its own crate and gets its own copy of this module, so anything only one
 // of them uses is "dead" in the others. Blanket rather than per-item, because the alternative is an

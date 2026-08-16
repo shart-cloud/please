@@ -180,7 +180,8 @@ Invalid sequences are handled internally and recorded, not rejected.
 > **Core may describe a judgement; only `please-judge` may obtain one.** There is no client here, no
 > credential, and no endpoint. `cargo tree -p please-core` cannot see a crate that depends on core, so the
 > 27-crate pin holds whatever the judge needs, and the `wasm32` build is untouched. The CLI's edge to the
-> tier is behind its own non-default `judge` feature, guarded by `ci/check-cli-dependencies.sh`.
+> tier is behind a `judge` feature, which is enabled by default as of the judge-by-default change; a
+> `--no-default-features` build of `plz` still carries no HTTP or TLS crate.
 
 > **Correction 4 (002).** A `std` feature was listed and has never existed — `crates/core/Cargo.toml` declares
 > `default` and `serde` and nothing else. A caller writing `default-features = false, features = ["std"]` on
