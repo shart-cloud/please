@@ -145,3 +145,78 @@ pub const DISPLAY_FEATURES: &str = r#""addressed_to":"document_recipient",
     "imperative_source":"quoted_third_party",
     "framing":"presented_as_example",
     "stated_purpose_explains_content":"yes""#;
+
+// ── Fixture loading (T039a) ─────────────────────────────────────────────────────────────────────
+//
+// The corpus lives in `tests/fixtures/handcrafted-*.jsonl` at the repository root and is parsed by
+// `crates/core/tests/support.rs` — a test-only module of a DIFFERENT crate, which Rust gives no way to
+// reach from here.
+//
+// Three options were considered: make core's loader a published dev-only crate, run the discriminating
+// test from the CLI suite instead, or duplicate the small part of the loader this crate needs. Duplicating
+// won, and the reason is scope: core's loader validates every field of every case for the accuracy suite,
+// and this crate needs exactly "give me the text of one case by id". A shared crate to serve one caller
+// that wants a tenth of the interface is a dependency for its own sake.
+//
+// The duplication is bounded by that: if this ever needs a second field, the answer is the shared crate.
+
+/// The text of one fixture case, by file name and id.
+///
+/// Panics rather than returning an `Option`. A missing fixture means the corpus changed under a test that
+/// names a specific case, and continuing would silently turn SC-401 into a test of nothing.
+pub fn fixture(file: &str, id: &str) -> String {
+    let path = repository_root().join("tests/fixtures").join(file);
+    let content = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("reading {}: {e}", path.display()));
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let case: serde_json::Value = match serde_json::from_str(line) {
+            Ok(case) => case,
+            Err(_) => continue,
+        };
+        if case.get("id").and_then(|v| v.as_str()) == Some(id) {
+            return case
+                .get("text")
+                .and_then(|v| v.as_str())
+                .unwrap_or_else(|| panic!("case {id} has no `text` field"))
+                .to_string();
+        }
+    }
+    panic!("no case `{id}` in {}", path.display());
+}
+
+/// Walk up from this crate to the repository root, where `tests/fixtures` lives.
+fn repository_root() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/judge sits two levels below the repository root")
+        .to_path_buf()
+}
+
+/// A resolution pointing at a real endpoint, or `None` with a printed reason.
+///
+/// **Skips rather than fails.** `discriminates.rs` and `agreement.rs` are the only tests in this feature
+/// that cannot run offline, and a test that fails in CI, in a sandbox, or on a laptop with no credential is
+/// a test people learn to ignore — which would be the worst possible outcome for the one test that decides
+/// whether the tier works.
+///
+/// The skip is printed rather than silent, so a run that proved nothing does not look like a run that
+/// proved something. Visible under `-- --nocapture`.
+pub fn skip_without_endpoint(test: &str) -> Option<please_judge::Resolution> {
+    let resolution = please_judge::Resolution::from_env();
+    if resolution.credential().is_none() {
+        eprintln!(
+            "\nSKIPPED {test}: no credential in the environment (consulted: {}).\n\
+             This test needs a reachable Anthropic-compatible endpoint. It is SC-401, the criterion the \n\
+             judgement tier exists for, and skipping it means that criterion is UNVERIFIED in this run.\n",
+            please_judge::Resolution::consulted()
+        );
+        return None;
+    }
+    Some(resolution)
+}
