@@ -746,6 +746,13 @@ pub enum IncompleteCause {
     /// A target could not be read. During a directory walk the walk continues and this target is
     /// inconclusive — never silently skipped (FR-032a).
     TargetUnreadable,
+    /// A target was reachable but deliberately not descended into — a symbolic link to a directory,
+    /// which a walk refuses to follow because it may be a cycle.
+    ///
+    /// Separate from [`Self::TargetUnreadable`] because the difference is what the reader does about it.
+    /// The path is perfectly readable; the caller declined. Filed under the same fail-open rule either
+    /// way: unexamined content is inconclusive, never clean.
+    TargetNotTraversed,
     DecodeFailed,
     RulesetUnavailable,
     /// An optional detection tier was unavailable, which degrades to inconclusive and never to clean.
@@ -773,6 +780,7 @@ impl IncompleteCause {
             Self::MaxReasons => "max_reasons",
             Self::ExcerptLength => "excerpt_length",
             Self::TargetUnreadable => "target_unreadable",
+            Self::TargetNotTraversed => "target_not_traversed",
             Self::DecodeFailed => "decode_failed",
             Self::RulesetUnavailable => "ruleset_unavailable",
             Self::TierUnavailable => "tier_unavailable",

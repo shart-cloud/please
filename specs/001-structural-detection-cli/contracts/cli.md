@@ -108,6 +108,35 @@ one file could not be read summarises as **inconclusive**, not clean. Ranking `c
 `inconclusive` would be the FR-004 fail-open reproduced one level up — a directory reported safe on the
 strength of files nobody looked at.
 
+### Verdicts are written as they are produced
+
+Each target is read, scanned, reported, and released before the next is opened, so a reader sees results
+while the walk is still running and **peak memory tracks the largest single target rather than the size
+of the tree**. A run over a corpus larger than available memory completes.
+
+Output is unchanged by this: the array is the same bytes it was when the whole document was rendered at
+the end.
+
+If the reader closes the stream early — `plz scan ./tree | head` — the run stops and reports
+**inconclusive**, because the caller did not receive every verdict and must not treat what arrived as the
+whole answer. A risk already found still takes precedence.
+
+### Symbolic links to directories are not followed
+
+A directory link inside a walk is **reported and not descended into**: an inconclusive verdict for that
+path, carrying `target_not_traversed`. Not silently skipped, because a tree whose real content sits behind
+a link would otherwise summarise as clean on the strength of a subtree nobody examined — the same
+fail-open rule as an unreadable file, and a distinct cause because the path is perfectly readable and the
+tool declined to open it.
+
+A link to a **regular file** is followed normally; only directory links can form a cycle. A link named
+directly on the command line *is* followed, since naming it is an explicit instruction.
+
+The bound this enforces is not theoretical. Following them made the traversal combinatorial: the kernel's
+`ELOOP` limit caps a single path chain at around forty, so one link produced forty levels of duplicate
+targets, but two links in one directory produce 2⁴⁰ paths — measured at thirty seconds with no output, on
+a directory containing one file.
+
 ---
 
 ## Human output

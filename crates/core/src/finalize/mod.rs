@@ -432,6 +432,22 @@ pub fn unreadable_target(
     )
 }
 
+/// A verdict for a target a walk deliberately did not descend into.
+///
+/// A symbolic link to a directory, in practice: following one may be a cycle, and refusing is how a walk
+/// stays bounded. Beside [`unreadable_target`] and for the same reason — the caller owns the filesystem —
+/// but a *distinct* cause, because "we could not read this" and "we chose not to open this" send a reader
+/// looking in two different places.
+///
+/// Inconclusive, never clean. Content behind a link nobody followed is content nobody examined.
+pub fn not_traversed(target: TargetRef, detail: impl Into<String>, ruleset: RulesetId) -> Verdict {
+    gap_only(
+        CoverageGap::failure(IncompleteCause::TargetNotTraversed, detail),
+        target,
+        ruleset,
+    )
+}
+
 /// A verdict recording one coverage gap and no findings.
 ///
 /// Both short-circuit paths reduce to this, which is why neither of them needs to know how an outcome is

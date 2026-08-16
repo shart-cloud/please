@@ -435,3 +435,41 @@ So a failed judgement exits `1` or `3`, carrying a visible gap. The guarantee wa
 this delivers it more strongly than `2` would: `1` tells a caller there is something to look at, `2` only
 tells them the tool is unsure. `plz` still exits `2` by the ordinary routes — an unreadable file, an
 oversized input, any coverage gap on a verdict with no findings.
+
+## A directory walk holds one target at a time, and refuses symbolic links to directories
+
+**Status: fixed. Recorded because both halves were guaranteed in writing and neither was true, and the
+way each failed is worth knowing.**
+
+`contracts/cli.md` has always promised that no input causes *"a crash, a hang, or unbounded memory"*. Two
+things in the CLI's directory walk broke it. Neither had a test; both were found by pointing the tool at
+a corpus of the size it is meant for.
+
+**Memory grew with the corpus, not with the largest file.** Targets were resolved by reading every file's
+bytes into a `Vec` before scanning any of them, so peak resident was the sum of the tree. The failure this
+produced is the part worth recording: it was **not** a crash. `std::fs::read` reports allocation failure as
+an ordinary `io::Error`, which the walk mapped to "this target could not be read" — so a scan of a corpus
+larger than memory reported most of its files as unreadable, exited inconclusive, and looked like a
+filesystem permissions problem. Honest, in that nothing was called clean. Useless, in that the files were
+never examined and the stated reason was wrong.
+
+That shape is worth generalising: **a fail-open guard converts resource exhaustion into a plausible
+misdiagnosis.** Fail-safe behaviour keeps the tool from lying about safety; it does not keep the tool from
+lying about why.
+
+**A walk followed symbolic links to directories.** `Path::is_dir` resolves links, so an ancestor link was
+re-descended. The kernel's `ELOOP` limit caps a single path chain at around forty, which made the
+one-link case survivable — forty levels of duplicate targets and a wrong exit code — and therefore made
+the problem look smaller than it was. Two links in the same directory produce 2⁴⁰ paths: measured at
+thirty seconds with no output at all, against a directory containing one file. A fix validated only
+against a single link would have been validated against the case the kernel was already handling.
+
+Both are now enforced by tests in `crates/cli/tests/streaming.rs`, each checked against the code as it was
+before the fix. A directory link is reported as an inconclusive target carrying `target_not_traversed` —
+not skipped, because content behind a link nobody followed is content nobody examined, and not
+`target_unreadable`, because the path is readable and the tool declined to open it.
+
+**What is still unbounded:** the list of *paths*. The walk enumerates and sorts every path before scanning
+begins, which is what makes the order reproducible (SC-011) and what tells the JSON renderer whether it is
+writing an object or an array. At a couple of hundred bytes per path this is roughly two orders of
+magnitude below the contents it replaced, but it is linear in the number of files and it is not zero.

@@ -278,3 +278,40 @@ Unchanged in substance from sections 3 and 4 above, and now the whole list rathe
 The ordering advice from the original audit stands for what is left: **FR-020 first** — it is the only
 security property on the list — then fuzzing and benchmarks to discharge the constitution gate, then the
 README, then the corpus.
+
+---
+
+## Found outside the task list: the walk could not survive a large corpus
+
+Not one of the 21, and ahead of all of them. Found by pointing the binary at the size of input it exists
+for, which is the one thing no task covered.
+
+Both failures were of guarantees already in writing — `contracts/cli.md`: *"no input causes a crash, a
+hang, or unbounded memory"* — so neither is a missing feature. They are unenforced promises, which the
+21 open tasks are largely also about, and this is what that costs.
+
+| | Was | Now |
+|---|---|---|
+| **Memory** | every target's bytes read into a `Vec` before scanning any of them; peak resident was the whole corpus | read, scan, report, release — one target at a time |
+| **Output** | the entire report built as one `String` and printed at the end | written and flushed per verdict; same bytes |
+| **Symlinks** | `Path::is_dir` follows them, so directory links were re-descended | reported as `target_not_traversed`, never followed |
+
+Two details worth carrying forward, because both are about *how the failures presented* rather than what
+they were:
+
+- **Exhausting memory did not crash.** `fs::read` returns allocation failure as an ordinary `io::Error`,
+  which the walk mapped to `Target::Unreadable` — so a corpus larger than memory reported most of its
+  files as unreadable and exited inconclusive. Fail-open kept it from claiming safety; it did not keep it
+  from misdiagnosing. Which is why the regression test asserts *every target was examined* rather than
+  *the process survived*: survival was never in question, and that is exactly why this went unseen.
+- **`ELOOP` made the symlink bug look survivable.** One ancestor link is capped by the kernel at ~40
+  levels. Two in one directory give 2⁴⁰ paths — thirty seconds, no output, one file in the directory. A
+  fix validated against one link would have been validated against the case the kernel already handled.
+
+Two of the first drafts of these tests **passed against the unfixed code** and were replaced; both are
+described in `crates/cli/tests/streaming.rs` where they were. Every test there is now checked to fail
+before the fix, which is the only evidence that a regression test is one.
+
+`docs/limits.md` records what remains unbounded: the *path* list is still materialised for the whole
+walk, which is what keeps ordering reproducible. Two orders of magnitude smaller than the contents it
+replaced, but linear in file count.

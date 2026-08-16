@@ -9,13 +9,39 @@
 //! the walk continues (FR-032a). Not a usage error, because one locked file must not suppress findings in
 //! the hundreds beside it; and not a silent skip, because a file nobody examined must not be absorbed into
 //! a clean summary. That is the FR-004 fail-open reproduced one level up.
+//!
+//! # Deciding what to scan, and reading it, are two phases
+//!
+//! [`plan`] enumerates targets and reads **no content**; [`load`] reads exactly one target's bytes. They
+//! were one function returning `Vec<Target>`, which meant a directory walk held every file's contents in
+//! memory before the first scan ran — peak memory tracked the corpus, and `contracts/cli.md` promises
+//! *"no input causes a crash, a hang, or unbounded memory"*. Split, the caller loads, scans, renders and
+//! drops one target at a time, so what is resident is the largest single file rather than the sum.
+//!
+//! The path list is still built eagerly, and deliberately: a `PathBuf` is a couple of hundred bytes against
+//! a file's kilobytes-to-megabytes, and materialising it is what lets the walk be sorted once — which is
+//! what makes output reproducible (SC-011) and what tells the JSON renderer whether it is writing an object
+//! or an array before the first verdict exists.
 
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use please_core::verdict::TargetRef;
 
-/// Something to scan, or a reason it could not be read.
+/// One thing to scan, named but not yet read.
+///
+/// Ordered by path, and carries the spelling the caller used alongside it — output must not vary with the
+/// working directory it was produced from (SC-011), so the path is never absolutised.
+pub enum Source {
+    /// Standard input.
+    Stdin,
+    /// A file to read.
+    File { path: PathBuf, as_given: String },
+    /// A symbolic link to a directory, which the walk refuses to follow. See [`walk`].
+    NotTraversed { path: PathBuf, as_given: String },
+}
+
+/// Something to scan, or a reason it could not be examined.
 pub enum Target {
     /// Content read successfully.
     Content {
@@ -24,6 +50,15 @@ pub enum Target {
     },
     /// A path that exists in the walk but could not be read.
     Unreadable {
+        reference: TargetRef,
+        detail: String,
+    },
+    /// A path the walk deliberately did not descend into.
+    ///
+    /// Distinct from [`Target::Unreadable`] because the difference is true: a symlinked directory is
+    /// perfectly readable and we declined to follow it. Reporting that as unreadable would send whoever
+    /// reads the verdict to look for a permissions problem that does not exist.
+    NotTraversed {
         reference: TargetRef,
         detail: String,
     },
@@ -45,18 +80,22 @@ pub fn read_rules(path: &Path) -> Result<String, String> {
         .map_err(|e| format!("cannot read rule set {}: {e}", path.display()))
 }
 
-/// Resolve command-line targets into readable content, in a deterministic order.
+/// Enumerate what will be scanned, in a deterministic order, **without reading any of it**.
 ///
 /// An empty list, or `-`, means standard input, so `... | plz scan` works as a filter.
-pub fn resolve(targets: &[String]) -> Result<Vec<Target>, String> {
+///
+/// Errors here are invocation faults and abort the run (exit 64). Failures that belong to one target — a
+/// file that cannot be opened, a link that will not be followed — are not errors: they surface as verdicts
+/// from [`load`], so the walk continues and the target is still reported.
+pub fn plan(targets: &[String]) -> Result<Vec<Source>, String> {
     if targets.is_empty() {
-        return Ok(vec![read_stdin()?]);
+        return Ok(vec![Source::Stdin]);
     }
 
     let mut out = Vec::new();
     for raw in targets {
         if raw == "-" {
-            out.push(read_stdin()?);
+            out.push(Source::Stdin);
             continue;
         }
         let path = Path::new(raw);
@@ -66,14 +105,38 @@ pub fn resolve(targets: &[String]) -> Result<Vec<Target>, String> {
             return Err(format!("no such file or directory: {raw}"));
         }
         if path.is_dir() {
-            for file in walk(path)? {
-                out.push(read_file(&file, raw));
-            }
+            // `is_dir` follows links, and that is right *here*: a link named on the command line was named
+            // deliberately, and refusing to walk what the operator explicitly asked for would be obtuse.
+            // Inside the walk the judgement is the opposite one — see [`walk`].
+            out.extend(walk(path)?.into_iter().map(|found| found.into_source(raw)));
         } else {
-            out.push(read_file(path, raw));
+            out.push(Source::File {
+                path: path.to_path_buf(),
+                as_given: raw.clone(),
+            });
         }
     }
     Ok(out)
+}
+
+/// Read one target's content.
+///
+/// The counterpart to [`plan`]: called once per source, immediately before that target is scanned, so the
+/// bytes can be dropped as soon as its verdict is rendered.
+pub fn load(source: &Source) -> Result<Target, String> {
+    match source {
+        Source::Stdin => read_stdin(),
+        Source::File { path, as_given } => Ok(read_file(path, as_given)),
+        // Reported rather than skipped, for the same reason an unreadable file is (FR-032a): a directory
+        // summarised as clean on the strength of a subtree nobody looked at is the fail-open one level up.
+        Source::NotTraversed { path, as_given } => {
+            let display = display_name(path, as_given);
+            Ok(Target::NotTraversed {
+                reference: TargetRef::path(display, 0),
+                detail: "symbolic link to a directory; not followed".to_string(),
+            })
+        }
+    }
 }
 
 fn read_stdin() -> Result<Target, String> {
@@ -86,14 +149,8 @@ fn read_stdin() -> Result<Target, String> {
 }
 
 /// Read one file, preserving the path exactly as the caller wrote it.
-///
-/// Never absolutised: output must not vary with the working directory it was produced from (SC-011).
 fn read_file(path: &Path, as_given: &str) -> Target {
-    let display = if path.as_os_str() == as_given {
-        as_given.to_string()
-    } else {
-        path.to_string_lossy().into_owned()
-    };
+    let display = display_name(path, as_given);
 
     match std::fs::read(path) {
         Ok(bytes) => {
@@ -107,7 +164,45 @@ fn read_file(path: &Path, as_given: &str) -> Target {
     }
 }
 
-/// Every regular file under `root`, sorted.
+/// How a path is named in output.
+///
+/// Never absolutised: output must not vary with the working directory it was produced from (SC-011).
+fn display_name(path: &Path, as_given: &str) -> String {
+    if path.as_os_str() == as_given {
+        as_given.to_string()
+    } else {
+        path.to_string_lossy().into_owned()
+    }
+}
+
+/// One thing the walk found, and what kind of thing it was.
+enum Found {
+    File(PathBuf),
+    SymlinkedDirectory(PathBuf),
+}
+
+impl Found {
+    fn into_source(self, as_given: &str) -> Source {
+        match self {
+            Self::File(path) => Source::File {
+                path,
+                as_given: as_given.to_string(),
+            },
+            Self::SymlinkedDirectory(path) => Source::NotTraversed {
+                path,
+                as_given: as_given.to_string(),
+            },
+        }
+    }
+
+    fn path(&self) -> &Path {
+        match self {
+            Self::File(p) | Self::SymlinkedDirectory(p) => p,
+        }
+    }
+}
+
+/// Everything under `root` worth reporting, sorted.
 ///
 /// Sorted so repeated runs produce identical output (SC-011) — a directory walk's natural order is
 /// filesystem-dependent, which would make the same tree yield different reports on different machines.
@@ -115,27 +210,64 @@ fn read_file(path: &Path, as_given: &str) -> Target {
 /// A directory that cannot be listed is reported as an error rather than skipped: unlike a single
 /// unreadable file, an unlistable directory means an unknown number of unexamined targets, and there is
 /// nothing to attach an inconclusive verdict to.
-fn walk(root: &Path) -> Result<Vec<PathBuf>, String> {
+///
+/// # Symbolic links to directories are not followed
+///
+/// The type comes from [`std::fs::DirEntry::file_type`], which — unlike `Path::is_dir` — does **not**
+/// follow links. It costs no extra syscall on any platform that returns the type from `readdir`.
+///
+/// This walk used to test `path.is_dir()`, which follows them, so a link to an ancestor was re-descended.
+/// The kernel bounds any *single* path chain at `ELOOP` — about forty links — so **one** such link merely
+/// produced forty levels of duplicate targets and a wrong exit code. **Two** in the same directory
+/// produce two-to-the-fortieth paths, and the walk does not return: measured at thirty seconds with no
+/// output, against a directory holding one file and two links. That is the hang `contracts/cli.md`
+/// promises cannot happen, and it is why the ELOOP backstop is not a defence.
+///
+/// Refusing to descend removes it without canonicalising anything or carrying a visited set.
+///
+/// The refusal is **reported**, never silent — a link becomes an inconclusive verdict naming it. Skipping
+/// it would let a tree whose real content sits behind a symlink summarise as clean, which is the FR-032a
+/// fail-open one level up. A link to a *regular file* is followed normally: it cannot cycle, and reading
+/// through it is what anyone would expect.
+fn walk(root: &Path) -> Result<Vec<Found>, String> {
     let mut found = Vec::new();
     let mut stack = vec![root.to_path_buf()];
 
     while let Some(dir) = stack.pop() {
         let entries = std::fs::read_dir(&dir)
             .map_err(|e| format!("cannot read directory {}: {e}", dir.display()))?;
-        let mut level: Vec<PathBuf> = entries
+        // Sorted at each level as well as globally below. The global sort is what fixes the reported
+        // order; this one only keeps the traversal itself deterministic, which matters for the error
+        // above — which unlistable directory is hit first should not depend on the filesystem.
+        let mut level: Vec<(PathBuf, std::fs::FileType)> = entries
             .filter_map(Result::ok)
-            .map(|entry| entry.path())
+            // A `file_type` that fails is a target we cannot classify, so it is treated as a file: `load`
+            // will attempt the read and report an unreadable target if that fails too. Dropping it is the
+            // one thing that must not happen.
+            .filter_map(|entry| {
+                let kind = entry.file_type().ok()?;
+                Some((entry.path(), kind))
+            })
             .collect();
-        level.sort();
-        for path in level {
-            if path.is_dir() {
+        level.sort_by(|a, b| a.0.cmp(&b.0));
+
+        for (path, kind) in level {
+            if kind.is_symlink() {
+                // Only a link to a directory can cycle, so only that is refused. `path.is_dir()` here
+                // resolves the link on purpose — the question being asked is what it points at.
+                if path.is_dir() {
+                    found.push(Found::SymlinkedDirectory(path));
+                } else {
+                    found.push(Found::File(path));
+                }
+            } else if kind.is_dir() {
                 stack.push(path);
             } else {
-                found.push(path);
+                found.push(Found::File(path));
             }
         }
     }
 
-    found.sort();
+    found.sort_by(|a, b| a.path().cmp(b.path()));
     Ok(found)
 }

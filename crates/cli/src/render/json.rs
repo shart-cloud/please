@@ -36,33 +36,99 @@
 //! output impossible, which is what lets a caller cache a verdict and diff it in CI — and the caller
 //! already knows when they ran the scan and from where.
 
+//! # Written incrementally
+//!
+//! Each verdict reaches stdout as it is produced, rather than being collected and rendered at the end.
+//! That is what bounds `plz`'s memory to the largest single target instead of the whole corpus
+//! (`cli.md`: *"no input causes a crash, a hang, or unbounded memory"*).
+//!
+//! It costs the convenience of `to_string_pretty(&verdicts)`: the array framing is written by hand here.
+//! The output is **byte-identical** to what that call produced, which is not a coincidence to be trusted —
+//! `tests/streaming.rs::streamed_json_is_byte_identical_to_the_batched_document` compares the two.
+
+use std::io::Write;
+
 use please_core::Verdict;
 
-/// Render every verdict as one JSON document.
+/// Machine-readable output, one verdict at a time.
 ///
-/// Pretty-printed rather than compact. The reader is as often a person running `plz scan --format json | less`
-/// while debugging a hook as it is `jq`, and `jq` does not care either way. Both are deterministic;
-/// `serde_json` writes struct fields in declaration order and every collection in a verdict is a `Vec`, so
-/// there is no map iteration order to vary.
-pub fn render(out: &mut String, verdicts: &[Verdict]) {
-    let document = match verdicts {
-        [single] => serde_json::to_string_pretty(single),
-        many => serde_json::to_string_pretty(many),
-    };
+/// `many` is fixed at construction from the **target count**, before a single byte of any target has been
+/// read. That is what keeps "one target is an object, many are an array" decidable in a streaming writer:
+/// by the time the first verdict exists the document's shape is already known, so nothing has to be
+/// buffered to find out whether a second one is coming.
+pub struct Emitter {
+    many: bool,
+    /// Whether anything has been written yet — drives `[` versus `,`, and distinguishes an empty run.
+    first: bool,
+}
 
-    match document {
-        Ok(json) => {
-            out.push_str(&json);
-            out.push('\n');
-        }
-        // Serialising a `Verdict` cannot fail: every field is a plain owned value, there is no map with
-        // non-string keys, and no `Serialize` impl in this project returns an error. Writing into a
-        // `String` cannot fail either. So this arm is unreachable — but it is a `Result`, and the one
-        // thing that must never happen is a half-written document on stdout that a caller parses as
-        // truth. Emitting nothing and letting the caller's parse fail is the safe direction.
-        Err(e) => {
-            debug_assert!(false, "a verdict failed to serialise: {e}");
-            eprintln!("plz: internal: a verdict failed to serialise: {e}");
+impl Emitter {
+    pub fn new(targets: usize) -> Self {
+        Self {
+            many: targets != 1,
+            first: true,
         }
     }
+
+    /// Write one verdict into the document.
+    pub fn verdict<W: Write>(&mut self, w: &mut W, v: &Verdict) -> std::io::Result<()> {
+        // Serialising a `Verdict` cannot fail: every field is a plain owned value, there is no map with
+        // non-string keys, and no `Serialize` impl in this project returns an error. So this arm is
+        // unreachable — but it is a `Result`, and the one thing that must never happen is a half-written
+        // document on stdout that a caller parses as truth. Skipping the element and letting the caller's
+        // parse fail is the safe direction.
+        let body = match serde_json::to_string_pretty(v) {
+            Ok(body) => body,
+            Err(e) => {
+                debug_assert!(false, "a verdict failed to serialise: {e}");
+                eprintln!("plz: internal: a verdict failed to serialise: {e}");
+                return Ok(());
+            }
+        };
+
+        if !self.many {
+            self.first = false;
+            return w.write_all(body.as_bytes());
+        }
+
+        if self.first {
+            w.write_all(b"[\n")?;
+            self.first = false;
+        } else {
+            w.write_all(b",\n")?;
+        }
+        indented(w, &body)
+    }
+
+    /// Close the document.
+    pub fn finish<W: Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        match (self.many, self.first) {
+            // A single target whose verdict was written: it is a bare object and needs only the newline.
+            (false, false) => w.write_all(b"\n"),
+            // A single target that produced nothing — only reachable through the unreachable arm above.
+            // Emitting nothing beats emitting a lone newline a caller would try to parse.
+            (false, true) => Ok(()),
+            // No targets at all: a walked directory containing no files. `[]`, as before.
+            (true, true) => w.write_all(b"[]\n"),
+            (true, false) => w.write_all(b"\n]\n"),
+        }
+    }
+}
+
+/// Write `body` with every line indented two spaces, and no trailing newline.
+///
+/// Two spaces because that is `serde_json`'s pretty indent, so an element written here sits at exactly the
+/// depth `to_string_pretty` on the enclosing `Vec` would have put it. The trailing newline is the caller's,
+/// since what follows is either `,` or the closing bracket.
+fn indented<W: Write>(w: &mut W, body: &str) -> std::io::Result<()> {
+    let mut lines = body.lines();
+    if let Some(line) = lines.next() {
+        w.write_all(b"  ")?;
+        w.write_all(line.as_bytes())?;
+    }
+    for line in lines {
+        w.write_all(b"\n  ")?;
+        w.write_all(line.as_bytes())?;
+    }
+    Ok(())
 }

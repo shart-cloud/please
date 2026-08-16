@@ -15,7 +15,7 @@
 use please_core::verdict::{Outcome, QuotingContext, SuppressedBy, Verdict};
 
 /// Render one verdict.
-pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
+fn verdict(out: &mut String, v: &Verdict, explain: bool) {
     let name = v
         .target()
         .name
@@ -256,23 +256,60 @@ fn context_label(context: Option<SuppressedBy>) -> &'static str {
 }
 
 /// Summary line for a multi-target run.
-pub fn summary(out: &mut String, verdicts: &[Verdict]) {
-    if verdicts.len() < 2 {
+///
+/// Takes counts rather than the verdicts, because nothing keeps the verdicts any more: they are rendered
+/// and dropped one at a time so peak memory tracks the largest single target rather than the corpus. Three
+/// running integers are the whole of what this line ever needed from them.
+fn summary(out: &mut String, clean: usize, risk: usize, inconclusive: usize) {
+    let total = clean + risk + inconclusive;
+    if total < 2 {
         return;
     }
-    let risk = verdicts
-        .iter()
-        .filter(|v| v.outcome() == Outcome::RiskFound)
-        .count();
-    let inconclusive = verdicts
-        .iter()
-        .filter(|v| v.outcome() == Outcome::Inconclusive)
-        .count();
-    let clean = verdicts.len() - risk - inconclusive;
     out.push_str(&format!(
-        "\n{} target(s): {clean} clean, {risk} with findings, {inconclusive} inconclusive\n",
-        verdicts.len()
+        "\n{total} target(s): {clean} clean, {risk} with findings, {inconclusive} inconclusive\n",
     ));
+}
+
+/// Human output, one verdict at a time.
+///
+/// The counts are the only state carried across targets, and `scratch` is one reused allocation rather
+/// than one per verdict — [`verdict`] still writes into a `String`, so this is where that string lives
+/// now instead of growing without bound in `main`.
+pub struct Emitter {
+    explain: bool,
+    scratch: String,
+    clean: usize,
+    risk: usize,
+    inconclusive: usize,
+}
+
+impl Emitter {
+    pub fn new(explain: bool) -> Self {
+        Self {
+            explain,
+            scratch: String::new(),
+            clean: 0,
+            risk: 0,
+            inconclusive: 0,
+        }
+    }
+
+    pub fn verdict<W: std::io::Write>(&mut self, w: &mut W, v: &Verdict) -> std::io::Result<()> {
+        match v.outcome() {
+            Outcome::Clean => self.clean += 1,
+            Outcome::RiskFound => self.risk += 1,
+            Outcome::Inconclusive => self.inconclusive += 1,
+        }
+        self.scratch.clear();
+        verdict(&mut self.scratch, v, self.explain);
+        w.write_all(self.scratch.as_bytes())
+    }
+
+    pub fn finish<W: std::io::Write>(&mut self, w: &mut W) -> std::io::Result<()> {
+        self.scratch.clear();
+        summary(&mut self.scratch, self.clean, self.risk, self.inconclusive);
+        w.write_all(self.scratch.as_bytes())
+    }
 }
 
 /// Short severity label, so a reader can scan a column rather than compare numbers.

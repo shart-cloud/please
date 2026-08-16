@@ -172,7 +172,7 @@
       "required": ["cause"],
       "properties": {
         "cause": {
-          "description": "Bounds: input_size, decode_depth, max_matches_per_rule, max_reasons, excerpt_length. Failures: target_unreadable (a file in a directory walk could not be read — the walk continues and this target is inconclusive, never silently skipped), decode_failed, ruleset_unavailable, tier_unavailable (an optional detection tier was not available, which degrades to inconclusive and never to clean).",
+          "description": "Bounds: input_size, decode_depth, max_matches_per_rule, max_reasons, excerpt_length. Failures: target_unreadable (a file in a directory walk could not be read — the walk continues and this target is inconclusive, never silently skipped), target_not_traversed (a symbolic link to a directory, which a walk refuses to follow because it may be a cycle — the path is readable and the caller declined, which is why it is not target_unreadable), decode_failed, ruleset_unavailable, tier_unavailable (an optional detection tier was not available, which degrades to inconclusive and never to clean).",
           "enum": [
             "input_size",
             "decode_depth",
@@ -180,6 +180,7 @@
             "max_reasons",
             "excerpt_length",
             "target_unreadable",
+            "target_not_traversed",
             "decode_failed",
             "ruleset_unavailable",
             "tier_unavailable"
