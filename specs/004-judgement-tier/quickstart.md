@@ -45,20 +45,32 @@ cargo tree -p please-cli --edges normal --prefix none | grep -Ec 'ureq|rustls|we
 **The fail-closed property, and the reason a network dependency in a security path is normally a mistake.**
 
 ```sh
-# Unreachable endpoint, deliberately not a mock.
+# Unreachable endpoint, deliberately not a mock. Content WITH findings — see the note below.
 ANTHROPIC_BASE_URL=http://127.0.0.1:1 ANTHROPIC_AUTH_TOKEN=x \
-  plz scan --judge --judge-timeout 2 tests/fixtures/files/clean.md; echo "exit=$?"
+  plz scan --judge --judge-timeout 2 <a file with findings>; echo "exit=$?"
 ```
 
-**Expected**: exit `2`. Not `0`. Content that scans clean must not *become* clean-and-blessed because the
-second opinion never arrived.
+**Expected**: **not** exit `0`. The findings are still reported and the verdict carries
+`unexamined: tier_unavailable (...)` naming the cause. A verdict a working judge might have demoted to
+nothing must not come back clean because the second opinion never arrived — that is the bypass.
 
 ```sh
 env -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
-  plz scan --judge tests/fixtures/files/clean.md; echo "exit=$?"
+  plz scan --judge <a file with findings>; echo "exit=$?"
 ```
 
-**Expected**: exit `2`, and stderr names the variables consulted — **never a value**.
+**Expected**: the same, and the gap names the variables consulted — **never a value**.
+
+> **Amended at T030, twice.** This scenario originally used `clean.md` and expected exit `2`. Both were
+> wrong, and each for its own reason.
+>
+> **Clean content never reaches the judge.** FR-404 makes no request when a verdict has no observations, so
+> an unreachable endpoint costs nothing and the verdict stays `Clean` at exit `0`. The spec's US3 Scenario 1
+> contradicted its own US1 Scenario 3 on this point; `spec.md` records the resolution.
+>
+> **Exit `2` is unreachable through this tier.** Every verdict the judge can fail on has findings, and
+> `RiskFound` outranks `Inconclusive`, so a failed judgement lands on `1` or `3`. The guarantee was always
+> "never `0`", and the precedence rule delivers it more strongly than `2` would.
 
 Each remaining failure mode gets the same treatment, and each is its own test: timeout, `401`, a proxy that
 rejects tool use, well-formed JSON that fails the schema, an unrecognised `span_id`, **and a verdict whose

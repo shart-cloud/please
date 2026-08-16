@@ -91,6 +91,32 @@ pub struct ScanArgs {
     /// Maximum reasons reported per target.
     #[arg(long)]
     pub max_reasons: Option<u32>,
+
+    /// Ask the judgement tier for a second opinion on what was found.
+    ///
+    /// Makes one network request per target that produced findings. An unavailable judge is
+    /// **inconclusive, never clean** — see `docs/limits.md`.
+    #[cfg(feature = "judge")]
+    #[arg(long, overrides_with = "no_judge")]
+    pub judge: bool,
+
+    /// Do not ask the judgement tier. The default, and the way to reproduce a structural verdict exactly.
+    ///
+    /// `overrides_with` on both, so **the last flag wins**: a wrapper script appending `--no-judge` can
+    /// override a config that supplied `--judge`. Two independent booleans would make
+    /// `--judge --no-judge` mean whichever the code happened to check first.
+    #[cfg(feature = "judge")]
+    #[arg(long, overrides_with = "judge")]
+    pub no_judge: bool,
+
+    /// Seconds to wait for the judge before giving up (FR-420).
+    ///
+    /// **Whole seconds, not `5s`.** A duration parser would be a new crate in the *default* dependency
+    /// graph of `plz`, for a flag the default build does not have — precisely the leak
+    /// `ci/check-cli-dependencies.sh` exists to catch.
+    #[cfg(feature = "judge")]
+    #[arg(long, value_name = "SECONDS")]
+    pub judge_timeout: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

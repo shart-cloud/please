@@ -58,16 +58,32 @@ working.
 |---|---|---|
 | Judge demoted everything, nothing reported | `0` | Clean. The suppressed list carries the story |
 | Judge confirmed a finding at or above threshold | `1` | Risk found |
-| **Judge unavailable, for any reason** | `2` | **Inconclusive — never `0`** (FR-402) |
 | Judge confirmed a finding below the threshold | `3` | Risk found, under the caller's bar |
+| **Judge unavailable, for any reason** | `1` or `3` | **Never `0`** (FR-402). The findings stay reported and a `TierUnavailable` gap names the cause |
+| Nothing to arbitrate, judge never asked | `0` | FR-404. No observations, no request, no gap |
 | `--judge` (or `judge`) on a build without the feature | `64` | Usage |
 
-The **third** row is the whole fail-closed posture. An unreachable endpoint, a missing credential, a timeout,
-a 401, a proxy without tool-use support, a response that does not validate, **and a verdict whose reasons were
-truncated before judgement** (plan D9) — all one outcome, and it is not "fine".
+> **Amended during implementation (T030).** The unavailable row said `2`, and `2` turns out to be
+> **unreachable through this tier**. Two requirements combine to make it so:
+>
+> - FR-404 skips the request entirely when a verdict has no observations, so every verdict the judge *can*
+>   fail on has at least one reason;
+> - `RiskFound` outranks `Inconclusive` in the outcome precedence (001 FR-032b), because a scan that found a
+>   real payload and then lost its second opinion has still found a real payload.
+>
+> So a failed judgement always lands on `1` or `3`, carrying a `TierUnavailable` gap in a verdict that is
+> visibly not clean. **The guarantee was always "never `0`"** — `2` was one way of achieving it, and the
+> precedence rule achieves it more strongly, since `1` tells a caller there is something to look at and `2`
+> only tells them the tool is unsure.
+>
+> `plz scan --judge` still emits `2` by the ordinary route: an unreadable file in a directory walk, an
+> oversized input, any pre-existing gap on a verdict with no findings. Nothing about the exit-code contract
+> changed; what changed is which row the judge's own failures land in.
 
-The **fourth** row is in `contracts/cli.md` and was missing here. Demotion can move a verdict from `1` to `3`
-as well as to `0`, and a caller that allows-but-logs at `3` needs that to keep working.
+The unavailable row is the whole fail-closed posture. An unreachable endpoint, a missing credential, a
+timeout, a 401, a proxy without tool-use support, a response that does not validate, a document over the
+judgement size limit, **and a verdict whose reasons were truncated before judgement** (plan D9) — all one
+behaviour, and it is not "fine".
 
 ---
 

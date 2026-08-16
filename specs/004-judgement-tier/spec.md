@@ -87,10 +87,29 @@ fail-open waiting to happen, and this is the requirement that stops it being one
 
 **Acceptance Scenarios**:
 
-1. **Given** `--judge` and an unreachable endpoint, **When** scanning clean content, **Then** the outcome is
-   `Inconclusive`, not `Clean`, and exit code 2.
+1. **Given** `--judge` and an unreachable endpoint, **When** scanning content **that produced
+   observations**, **Then** the outcome is not `Clean`, every finding is still reported, a `TierUnavailable`
+   gap names the cause, and the exit code is not 0.
 2. **Given** `--judge` with no credential in the environment, **When** scanning, **Then** the same, and the
    gap names which variables were consulted.
+
+> **Amended during implementation (T026).** Scenario 1 originally read *"when scanning clean content, then
+> the outcome is `Inconclusive`, not `Clean`, and exit code 2"*, and **that contradicts US1 Scenario 3 and
+> FR-404**: content with no observations produces no request, no request produces no failure, and no failure
+> leaves the verdict `Clean`. The two cannot both hold.
+>
+> **FR-404 wins**, for two reasons. Marking every clean scan under `--judge` inconclusive would make the
+> flag useless — the common case is content with nothing to arbitrate, and a tool that reports "I could not
+> be sure" about a document it fully examined has stopped distinguishing anything. And the judge is *not a
+> detector*: with no observations there is nothing a second opinion could have changed, so its absence costs
+> no information. An attacker who takes the endpoint down when the structural tier found nothing gains
+> exactly what they had.
+>
+> The guarantee that actually carries the constitutional requirement is the restated one above, and it is
+> the stronger claim. `benign-tool-001` is the shape that makes it matter: observations a working judge
+> demotes to nothing, leaving `Clean`. **If an unavailable judge produced that same `Clean`, taking the
+> endpoint down would be a bypass.** It does not — the findings stay reported and a gap is recorded.
+> `crates/judge/tests/fail_closed.rs` proves it for every failure mode.
 3. **Given** a response that is well-formed JSON but not the expected schema, **When** parsed, **Then** the
    same. A judge replying in prose is a judge that has been talked to.
 

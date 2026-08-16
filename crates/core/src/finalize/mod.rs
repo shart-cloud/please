@@ -344,25 +344,34 @@ fn disassemble(
     )
 }
 
-/// Return the structural verdict with a `TierUnavailable` gap and **no judgement applied**.
+/// Record a coverage gap against an already-finalized verdict.
 ///
-/// Every refusal path lands here, so there is one answer to "what happens when the judge cannot be trusted
-/// with this verdict" rather than one per caller. The outcome degrades to `Inconclusive` unless the verdict
-/// already found risk — which is [`assemble`]'s ordering, unchanged: a scan that found a real payload and
-/// then lost its second opinion has still found a real payload.
-fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
+/// The seam an optional tier needs in order to fail closed. `please-judge` cannot build a `Verdict` and
+/// cannot turn a [`CoverageGap`] into an [`Incompleteness`], so without this there would be no way for it
+/// to say "I did not run" — and a tier that cannot say that would have to either succeed or be silent,
+/// which is the fail-open the whole outcome model exists to prevent.
+///
+/// # Why this is safe to make public when `Verdict::new` is not
+///
+/// **Adding a gap is monotone in one direction.** It can turn `Clean` into `Inconclusive` and can change
+/// nothing else: it cannot add a finding, cannot remove one, cannot alter a score, and cannot make any
+/// verdict *more* reassuring than it was. The worst a caller can do with it is report less confidence than
+/// the evidence warrants, which is the direction this project errs in anyway.
+///
+/// Contrast `Verdict::new`, which decides what a verdict *says*, and which is why it is `pub(super)`.
+///
+/// The judgement tier is the first caller, but nothing here is judge-specific — any downstream tier that
+/// can fail needs exactly this.
+pub fn add_gap(verdict: Verdict, gap: CoverageGap) -> Verdict {
     let attribution = Attribution {
         target: verdict.target().clone(),
         ruleset: verdict.ruleset().clone(),
-        // Never consulted. The score and risk below are carried through unchanged, because nothing was
-        // demoted and therefore nothing needs re-banding.
+        // Never consulted. Score and risk are carried through unchanged: nothing was demoted, so there is
+        // nothing to re-band, and `assemble` zeroes both for a non-`RiskFound` outcome anyway.
         bands: Bands::default(),
     };
     let mut incomplete: Vec<Incompleteness> = verdict.incomplete().to_vec();
-    incomplete.push(
-        CoverageGap::failure(IncompleteCause::TierUnavailable, detail.to_string())
-            .into_incompleteness(),
-    );
+    incomplete.push(gap.into_incompleteness());
 
     assemble(
         verdict.reasons().to_vec(),
@@ -373,6 +382,19 @@ fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
         verdict.score(),
         verdict.risk(),
         attribution,
+    )
+}
+
+/// Return the structural verdict with a `TierUnavailable` gap and **no judgement applied**.
+///
+/// Every refusal path inside `rejudge` lands here, so there is one answer to "what happens when the judge
+/// cannot be trusted with this verdict" rather than one per caller. The outcome degrades to `Inconclusive`
+/// unless the verdict already found risk — which is [`assemble`]'s ordering, unchanged: a scan that found a
+/// real payload and then lost its second opinion has still found a real payload.
+fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
+    add_gap(
+        verdict,
+        CoverageGap::failure(IncompleteCause::TierUnavailable, detail.to_string()),
     )
 }
 

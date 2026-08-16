@@ -214,18 +214,18 @@ a credential, so resolution has to exist first. No network is involved in any of
 **Why before US1**: the failure path is the safety net, it needs no endpoint, and building it first means the
 happy path is added to something already fail-closed rather than the reverse.
 
-- [ ] T026 [US3] Write failing tests in `crates/judge/tests/fail_closed.rs` for each mode: unreachable
+- [X] T026 [US3] Write failing tests in `crates/judge/tests/fail_closed.rs` for each mode: unreachable
       endpoint, no credential, timeout, HTTP 401, tool-use unsupported, malformed JSON, schema violation,
       unknown `span_id`, missing span (SC-403)
-- [ ] T027 [US3] Implement the `TierUnavailable` path — every failure records
+- [X] T027 [US3] Implement the `TierUnavailable` path — every failure records
       `CoverageGap::failure(TierUnavailable, …)` naming the cause, and nothing else (FR-402). This is the
       variant's **first production call site**; it has existed unused since 001
-- [ ] T028 [US3] Implement `Judge::review` as infallible: `Verdict → Verdict`, every failure a coverage gap,
+- [X] T028 [US3] Implement `Judge::review` as infallible: `Verdict → Verdict`, every failure a coverage gap,
       no `Err` for a caller to `unwrap_or_default()` into something cheerful
-- [ ] T029 [US3] Return early without a request when the verdict has no observations (FR-404)
-- [ ] T030 [P] [US3] Write the failing CLI test asserting exit code `2` for an unreachable endpoint against
+- [X] T029 [US3] Return early without a request when the verdict has no observations (FR-404)
+- [X] T030 [P] [US3] Write the failing CLI test asserting exit code `2` for an unreachable endpoint against
       clean content, using a genuinely unreachable port rather than a mock
-- [ ] T031 [P] [US3] Write the failing CLI test asserting `--judge` on a build **without** the feature is
+- [X] T031 [P] [US3] Write the failing CLI test asserting `--judge` on a build **without** the feature is
       exit `64`, not a silently ignored flag
 
 **Checkpoint**: the tier fails closed before it can succeed at anything.
@@ -238,27 +238,27 @@ happy path is added to something already fail-closed rather than the reverse.
 
 **Independent Test**: `benign-tool-001` demoted, `indirect-tool-003` reported.
 
-- [ ] T032 [US1] Implement `JudgeRequest` assembly in `crates/judge/src/request.rs`: neutralised document and
+- [X] T032 [US1] Implement `JudgeRequest` assembly in `crates/judge/src/request.rs`: neutralised document and
       spans via the existing sanitisation path, opaque span ids, and **no rule id, class, or severity**
       (FR-406, FR-408)
 - [ ] T033 [P] [US1] Write the failing test asserting the request contains none of *injection*, *attack*,
       *malicious*, *suspicious*, *risk*, and no rule identity — naming the interesting answer produces it
-- [ ] T034 [US1] Implement the tool-use request per [contracts/judge-tier.md](./contracts/judge-tier.md),
+- [X] T034 [US1] Implement the tool-use request per [contracts/judge-tier.md](./contracts/judge-tier.md),
       with the tool's input schema being
       [contracts/judge-response.schema.json](./contracts/judge-response.schema.json) (research R2)
-- [ ] T035 [US1] Implement schema validation in `crates/judge/src/response.rs`: reject entire on unknown
+- [X] T035 [US1] Implement schema validation in `crates/judge/src/response.rs`: reject entire on unknown
       field, unknown enum value, unrecognised or missing `span_id` — no partial acceptance (FR-409)
-- [ ] T036 [US1] Implement the scoring function in `crates/judge/src/score.rs` mapping `Features` →
+- [X] T036 [US1] Implement the scoring function in `crates/judge/src/score.rs` mapping `Features` →
       `SpanJudgement` (FR-407). **Keep it trivial and obvious**: `description_of_an_instruction` plus a
       corroborating document field demotes, anything else confirms. Tuning waits for the corpus
-- [ ] T037 [US1] Assert `unclear` everywhere demotes nothing — abstention must never be cheaper for an
+- [X] T037 [US1] Assert `unclear` everywhere demotes nothing — abstention must never be cheaper for an
       attacker than honesty
-- [ ] T038 [US1] Wire `--judge` and `--judge-timeout` into `crates/cli/src/args.rs` and `main.rs`, behind the
+- [X] T038 [US1] Wire `--judge` and `--judge-timeout` into `crates/cli/src/args.rs` and `main.rs`, behind the
       feature. Two mechanics the contract implies and does not state: `--judge` and `--no-judge` need clap's
       `overrides_with` for "last flag wins" (`quickstart.md` Scenario 6) — two bare bools do not give that;
       and `--judge-timeout` takes **whole seconds as an integer**, not `5s`, because a duration parser is a
       new crate in the CLI's *default* graph for a flag the default build does not have (FR-420)
-- [ ] T038a [US1] Warn once on stderr when `--judge` is combined with a multi-target walk, naming the target
+- [X] T038a [US1] Warn once on stderr when `--judge` is combined with a multi-target walk, naming the target
       count before the first request. Cost is per target and multiplies; the spec's edge case puts optimising
       it out of scope and **not surprising anyone with it** in scope
 - [ ] T039a [US1] Give `crates/judge/tests` a fixture loader. The cases live in

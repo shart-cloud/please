@@ -102,11 +102,46 @@ fn run() -> i32 {
         }
     };
 
+    // The judgement tier, if this build has it and this invocation asked for it (FR-401). Built once
+    // rather than per target: credential resolution reads the environment, and doing that in a loop would
+    // make a directory walk's behaviour depend on when each target happened to be reached.
+    #[cfg(feature = "judge")]
+    let judge = if scan_args.judge {
+        let resolution = please_judge::Resolution::from_env();
+        // FR-415, before any request. A warning after the fact is a warning about something already sent.
+        for warning in resolution.warnings() {
+            eprintln!("plz: warning: {warning}");
+        }
+        // T038a. Cost is per target and multiplies. The spec puts optimising that out of scope and NOT
+        // surprising anyone with it in scope, so say the number before spending it.
+        if targets.len() > 1 {
+            eprintln!(
+                "plz: --judge makes one request per target with findings; {} targets queued",
+                targets.len()
+            );
+        }
+        let mut judge = please_judge::Judge::new(resolution);
+        if let Some(seconds) = scan_args.judge_timeout {
+            judge = judge.with_timeout(std::time::Duration::from_secs(seconds));
+        }
+        Some(judge)
+    } else {
+        None
+    };
+
     let mut verdicts: Vec<Verdict> = Vec::new();
     for item in targets {
         match item {
             Target::Content { bytes, reference } => {
-                verdicts.push(engine.scan(&bytes, &policy, reference));
+                let verdict = engine.scan(&bytes, &policy, reference);
+                // `Verdict → Verdict`, infallible. Every failure mode is a coverage gap inside the returned
+                // verdict rather than an `Err` this loop could quietly skip (R4, FR-402).
+                #[cfg(feature = "judge")]
+                let verdict = match &judge {
+                    Some(judge) => judge.review(verdict, &bytes, engine.bands()),
+                    None => verdict,
+                };
+                verdicts.push(verdict);
             }
             // An unreadable file is inconclusive for that target and the walk continues (FR-032a). It is
             // constructed here because the core never opens a file, so the caller doing the I/O owns this
