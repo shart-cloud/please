@@ -42,11 +42,19 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
+      # `--no-fail-fast`, and it is not a style preference. Cargo stops after the first test *target*
+      # that fails, so while `please-core --test fixtures` is red — the false-positive rate is under
+      # SC-003's threshold with 17 of the required 200 benign cases — every target sorting after it is
+      # never executed: preparation, ruleset_load, sanitize, scaling, scan, score, seams,
+      # no_self_steering. Eight binaries, silently, including the FR-020 security properties.
+      #
+      # The failing suite still fails the job. The difference is that the run now says what else is
+      # broken instead of stopping at the first thing.
+      - run: cargo test --workspace --no-fail-fast
       # Same reasoning as clippy above: the tier's own tests — the adversarial property test, the
       # fail-closed suite, credential resolution — are only compiled when the feature is on. The
       # offline ones are the majority and they are where the security properties live.
-      - run: cargo test --workspace --features please-cli/judge
+      - run: cargo test --workspace --features please-cli/judge --no-fail-fast
 
   # Principle V's embeddability claim is only worth what proves it. This job IS that proof: the core
   # must build for a target with no filesystem, no network, no threads, and no monotonic clock. It is

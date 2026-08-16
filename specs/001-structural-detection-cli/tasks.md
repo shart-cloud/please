@@ -182,9 +182,14 @@ and explicit inconclusive outcomes.
 - [X] T078 [US3] Write failing property tests asserting every bound (`input_size`, `decode_depth`, `max_matches_per_rule`, `max_reasons`, `excerpt_length`) is enforced and reported as an `Incompleteness`, in `crates/core/tests/bounds.rs`
 - [X] T079 [US3] Write failing test asserting oversized input yields `inconclusive` with cause `input_size` and never `clean`, in `crates/core/tests/bounds.rs` (SC-007)
 - [X] T080 [US3] Write failing test asserting a rule set that fails to load never yields a clean verdict from an empty rule set, in `crates/core/tests/ruleset_load.rs`
-- [ ] T081 [P] [US3] Write failing test asserting an input containing text resembling a rule definition, a configuration directive, or an instruction addressed to the scanner produces the same verdict as the same input with that text as inert prose, in `crates/core/tests/no_self_steering.rs` (FR-020a)
-- [ ] T082 [P] [US3] Write failing test asserting per-input verdicts are identical regardless of the order inputs were scanned in, and regardless of what was scanned before them, in `crates/core/tests/no_self_steering.rs` (FR-020b)
-- [ ] T083 [P] [US3] Write failing test asserting concurrent scans of identical input through one shared engine produce identical verdicts, and that lazy pattern compilation makes no verdict depend on scan history, in `crates/core/tests/concurrency.rs`
+- [X] T081 [P] [US3] Write failing test asserting an input containing text resembling a rule definition, a configuration directive, or an instruction addressed to the scanner produces the same verdict as the same input with that text as inert prose, in `crates/core/tests/no_self_steering.rs` (FR-020a)
+- [X] T082 [P] [US3] Write failing test asserting per-input verdicts are identical regardless of the order inputs were scanned in, and regardless of what was scanned before them, in `crates/core/tests/no_self_steering.rs` (FR-020b)
+- [X] T083 [P] [US3] Write failing test asserting concurrent scans of identical input through one shared engine produce identical verdicts, and that lazy pattern compilation makes no verdict depend on scan history, in `crates/core/tests/concurrency.rs`
+  - Landed in `no_self_steering.rs` rather than its own file: it is the concurrent case of FR-020b, and
+    separating them would have put the same corpus and the same equality argument in two places. Adds a
+    compile-time `Send + Sync` assertion for the `core-api.md` claim, and a test that engine state
+    **does** change between scans — without which the order tests could be passing because there is no
+    history to depend on.
 - [X] T084 [P] [US3] Write failing test asserting an unreadable target during a directory walk yields `inconclusive` with cause `target_unreadable`, that the walk continues, and that the summary is inconclusive rather than clean, in `crates/cli/tests/walk.rs` (FR-032a, FR-032b)
 - [ ] T085 [P] [US3] Add a fuzz target for the scan entry point in `crates/core/fuzz/fuzz_targets/scan.rs`
 - [ ] T086 [P] [US3] Add a fuzz target for the decode pipeline in `crates/core/fuzz/fuzz_targets/decode.rs`
