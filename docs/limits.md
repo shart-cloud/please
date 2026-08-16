@@ -79,7 +79,8 @@ harness. Stating it as "accepted" is honest only as far as that; do not read it 
 
 ## Displayed payloads in tool output cannot be told from live ones
 
-**Status: known false positive, structurally unfixable in this tier. Evaluated and left open.**
+**Status: still structurally unfixable in the surface tier. RESOLVED by the optional judgement tier
+(feature 004) — see the update at the end of this section.**
 
 A shell transcript that displays injection strings and one that carries an injection are the same
 document to a structural pass:
@@ -140,6 +141,37 @@ The right home is the retained-suppression work (FR-128): keep the observation, 
 would have suppressed it, and let a later judgement tier weigh it against everything else it knows. That
 turns "we guessed, and we were right half the time" into "here is what we saw and why it might not
 count".
+
+### Update — feature 004 separates the pair, with `--judge`
+
+The judgement tier does what this section predicted, and the question it turned out to need was not the
+one anyone would have guessed.
+
+Under `plz scan --judge`, `benign-tool-001` demotes to clean and `indirect-tool-003` stays reported —
+measured 5/5 in both directions. The structural verdict is unchanged and reachable with `--no-judge`.
+
+**The obvious question does not work.** Asked *"is this excerpt an instruction or a description of one?"*
+the model answers `description_of_an_instruction` for **both** documents, and it is right both times. Asked
+*"who does this excerpt address?"* it answers `no_one_in_particular` for both, and is right again. Every
+document-level question behaves the same way, because at document scale the two transcripts genuinely are
+the same document: both present data.
+
+The question that separates them is one level down — **is this excerpt what the document set out to show,
+or a passenger inside it?** `cat injection_samples.txt` exists to show its payloads; `grep -r TODO` exists
+to find TODOs and carried one payload along. See `specs/004-judgement-tier/plan.md` D4a for the measurements
+and `crates/judge/tests/axis_probe.rs` for the harness.
+
+**Three limits on that result, none of which the number above conveys:**
+
+- **Two fixtures are not evidence about accuracy.** It shows the axis is real, not that the tier is good.
+  That needs the corpus this document keeps deferring to.
+- **The default build is unchanged.** No network, no dependency, same false positive. This is an opt-in
+  capability, and `benign-tool-001` remains a false positive for everyone who does not enable it.
+- **The tier rests more heavily on one field than intended.** `span_relation_to_document` agreed with
+  hand labels 12/12; `span_role` agreed 14/20, and every disagreement ran the same way. The corroboration
+  argument — a captured judge needs two consistent lies — is weaker than it looks when one answer nearly
+  determines the other. Recorded in the SC-407 agreement output rather than fixed, because the fix is more
+  labelled data.
 
 ## A whole-input transform is a copy of the document that suppression does not cover
 
@@ -331,3 +363,75 @@ harmful, offensive, or unsafe.
 Those are different problems with different corpora and different consumers, and conflating them makes
 both sets of metrics meaningless. Harmful-content detection may ship as an opt-in tier that **reports
 and never blocks** by default. If you need moderation, use a moderation tool.
+
+## The judgement tier is outside the determinism guarantee, and says so
+
+**Status: accepted for one tier and nowhere else. Recorded rather than mitigated (004 FR-417).**
+
+001's SC-011 requires byte-identical output for the same input, and it is what lets a caller cache a verdict
+and diff it in CI. **A model breaks that.** `temperature: 0` narrows it and does not close it, and pretending
+otherwise would be the kind of claim this document exists to avoid.
+
+The carve-out is precise:
+
+| | |
+|---|---|
+| The default path (`plz scan`) | **Deterministic, unchanged.** No network, no model, SC-011 holds |
+| `--no-judge` | Reproduces the structural verdict **byte-identically** (FR-418) |
+| `--judge` | **Not deterministic.** Two runs may disagree |
+
+Plan D4 recovers half of it and the half it recovers is the useful one. The *score* is a deterministic
+function of the model's answers, so the non-determinism is confined to feature extraction and is **visible**:
+two runs that disagree show which named field flipped, rather than producing two unexplained numbers. Under
+`--explain` that field is printed.
+
+Every judged verdict records the model id and the prompt version, so an old verdict stays attributable —
+the same reasoning that made the rule-set digest SHA-256 rather than `DefaultHasher` (SC-012). **A verdict
+judged by one model is not evidence about another**, and a prompt edit changes the answers as surely as a
+model change does.
+
+## A captured judge and a correct judgement produce the same verdict
+
+**Status: inherent to the design. Bounded, not prevented.**
+
+The judge reads attacker-controlled text, so prompt injection against the judge must be assumed to succeed
+sometimes. The design does not try to prevent that; it bounds what an attacker gains, and the honest
+statement of the bound is uncomfortable enough to belong here rather than in a footnote.
+
+**A fully captured judge that demotes every finding, and a correct judgement of a genuinely benign document,
+produce byte-identical verdicts.** Both report clean with every observation in the suppressed channel. There
+is nothing in a judged verdict that distinguishes them.
+
+What the design guarantees instead:
+
+- **No finding is ever erased.** Demotion moves an observation from `reasons()` to `suppressed()`, annotated
+  with the judge as what moved it. It is still in the verdict, still readable, still carrying its excerpt.
+- **Nothing is escalated or invented.** `SpanJudgement` has two variants and neither is `Cleared`,
+  `Escalated`, or `Added` — they are not representable, so this is a property of a type rather than of
+  validation code.
+- **`--no-judge` reproduces the structural verdict exactly.** One command settles any dispute.
+
+So the answer to *"was that clean verdict real?"* is a second run, and the tool cannot answer it for you.
+**A judge-suppressed finding is reported as suppressed, and whether that blocks is the caller's policy**
+(Principle I) — a deployment that does not want a model's opinion in its decisions should not enable the
+tier, or should treat a non-empty suppressed list as something to look at.
+
+## An unavailable judge is never clean, but it is not exit 2 either
+
+**Status: a correction to the feature 004 contract, recorded because a hook may branch on it.**
+
+Every judge failure — unreachable endpoint, missing credential, timeout, 401, a proxy without tool-use
+support, a response that does not validate, a document over the size limit, a verdict whose reasons were
+truncated — records a `tier_unavailable` coverage gap and **never produces a clean verdict**.
+
+It also never produces exit code `2`. Two rules combine:
+
+- a verdict with no observations is not sent to the judge at all (FR-404), so every verdict the judge can
+  fail on already has findings;
+- `risk_found` outranks `inconclusive` in the outcome precedence (001 FR-032b), because a scan that found a
+  real payload and then lost its second opinion has still found a real payload.
+
+So a failed judgement exits `1` or `3`, carrying a visible gap. The guarantee was always **never `0`**, and
+this delivers it more strongly than `2` would: `1` tells a caller there is something to look at, `2` only
+tells them the tool is unsure. `plz` still exits `2` by the ordinary routes — an unreadable file, an
+oversized input, any coverage gap on a verdict with no findings.

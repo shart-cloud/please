@@ -56,6 +56,47 @@ Two entries above are worth reading together, because they are the same lesson f
 proposal that measurement rejected, and a human inspection that found a defect the agent's own tests had
 missed. Neither would have been caught by the other party working alone.
 
+## Feature 004 — The Judgement Tier
+
+| Component | Authorship | Notes |
+|---|---|---|
+| Feature 004 specification, plan, research, tasks | Agent, human-directed | Human set the scope: a second opinion that arbitrates rather than detects |
+| **D2 — `ureq` over `reqwest`** | **Human** | Human rejected adding a tokio runtime for a single POST. The agent measured the trees afterwards and the numbers agreed; the decision preceded the measurement |
+| **D3 — credential precedence** | **Human** | Human supplied the live environment where `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_API_KEY` are both set with a proxy base URL. That configuration is what turns the ordering from a preference into a disclosure question, and the agent would not have found it |
+| D4 — the model reports, we compute the score | Agent, human-directed | The anti-inflation argument is the agent's; the constraint that the tier must not be able to raise a severity is the human's |
+| D9 — refusing to judge a truncated verdict | Agent | Found by reading `finalize`, not by reading the spec: the score is aggregated before truncation, so recomputing after it silently understates. A fail-open reachable by arithmetic |
+| D10 — the vocabulary moves into `please-core` | Agent, human-directed | Human chose between three options after the agent laid out what each cost |
+| **D4a — the axis, by measurement** | **Agent, and it refuted the agent's own hypothesis** | See below |
+| Fail-closed paths and the adversarial property test | Agent | |
+| Two spec contradictions found during implementation | Agent | US3 Scenario 1 against FR-404, and the claim that an unavailable judge exits 2 |
+| Human decision to investigate the axis empirically rather than patch | Human | When T039 failed, the human chose "probe first, then decide" over "add a field and see". That choice is why the wrong hypothesis cost one experiment instead of a design |
+
+### D4a is the entry worth reading
+
+T039 — the criterion the whole tier exists for — failed on first contact, and the failure was not the
+scoring function. Every answer the model gave was **correct**, and correct answers demoted a live payload,
+because D4's questions were all at document scale and at document scale the two discriminating fixtures
+genuinely are the same document.
+
+The agent's hypothesis was that `addressed_to` belonged at span scale. **It was wrong**, and a probe said so
+in one run: both fixtures answer `no_one_in_particular`. The question that works —
+*is this excerpt what the document set out to show, or a passenger inside it?* — was the third candidate,
+and it separated the pair 3/3 where the other two separated nothing.
+
+Adding the field was still not enough. The fix, found by ablating the real schema one change at a time,
+turned out to be **one line of the tool description**: naming the document before the excerpts frames every
+excerpt as part of what the document shows. Reordered, the tier works 5/5.
+
+The agent also wrote a comment claiming the `required` array order was load-bearing, having reordered it on
+suspicion and not yet measured it. It is not (4/4 either way). That claim was corrected in the same commit
+that made it, and is recorded here because writing an unverified claim into the spec is precisely the
+failure mode this feature spent its time finding in the spec.
+
+**None of this was reachable by argument.** Three hypotheses, two of them wrong, and the correct one is a
+sentence most readers would skim. The human instruction that made it findable was *"investigate the axis
+empirically first"* rather than *"add a per-span field and re-test"* — which was on the table and would have
+produced a tier that failed for a reason nobody had characterised.
+
 *Sections below are filled in as the work lands (T112).*
 
 ## Detection rules

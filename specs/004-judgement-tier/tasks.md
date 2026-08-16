@@ -290,18 +290,18 @@ put one back.
 
 ## Phase 8: Polish & verification
 
-- [ ] T043 [P] Write the agreement measurement in `crates/judge/tests/agreement.rs` over at least twenty
+- [X] T043 [P] Write the agreement measurement in `crates/judge/tests/agreement.rs` over at least twenty
       hand-labelled spans, **reported not gated** (SC-407). The number is the deliverable; it is expected to
       be imperfect, and turning it into a threshold now would be 001's provisional band boundaries again
-- [ ] T044 [P] Record in `docs/limits.md`: the determinism carve-out (FR-417), that a captured judge and a
+- [X] T044 [P] Record in `docs/limits.md`: the determinism carve-out (FR-417), that a captured judge and a
       correct judgement produce the same verdict, and that `--no-judge` is what distinguishes them
-- [ ] T045 [P] Update `specs/001-structural-detection-cli/contracts/core-api.md` for `finalize::rejudge` and
+- [X] T045 [P] Update `specs/001-structural-detection-cli/contracts/core-api.md` for `finalize::rejudge` and
       the widened `suppressed_by`
-- [ ] T046 [P] Update `docs/attribution.md` with this feature's authorship split
-- [ ] T047 Verify `--no-judge` reproduces the structural verdict byte-identically (FR-418, SC-402)
-- [ ] T048 Verify accuracy against `docs/004-accuracy-baseline.txt` — unjudged must be unchanged: 31/41, 1
+- [X] T046 [P] Update `docs/attribution.md` with this feature's authorship split
+- [X] T047 Verify `--no-judge` reproduces the structural verdict byte-identically (FR-418, SC-402)
+- [X] T048 Verify accuracy against `docs/004-accuracy-baseline.txt` — unjudged must be unchanged: 31/41, 1
       false positive, same case ids
-- [ ] T049 Verify cold start for the default path against `SC-004b`'s 25 ms. **Building with
+- [X] T049 Verify cold start for the default path against `SC-004b`'s 25 ms. **Building with
       `--features judge` must not slow an unjudged scan** — if it does, the gating is not working (SC-408)
 - [ ] T050 Run all eight scenarios in [quickstart.md](./quickstart.md), recording the result of each in
       `docs/004-validation.md` including any that cannot be run and why

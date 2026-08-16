@@ -47,12 +47,39 @@ Verdict::suppressions_truncated(&self) -> bool
 Verdict::incomplete(&self) -> &[Incompleteness]
 Verdict::is_at_or_above(&self, RiskLevel) -> bool
 Verdict::summary(&self) -> String
+Verdict::judge(&self) -> Option<&JudgeReport>       // 004 FR-416: present only if a judge ran
 
 // Verdicts for targets the core cannot examine itself. The caller does the I/O, so the caller
 // records the outcome — see the note on `target_unreadable` below.
 finalize::unreadable_target(TargetRef, impl Into<String>, RulesetId) -> Verdict
 finalize::oversized(u64, usize, TargetRef, RulesetId) -> Verdict
+
+// The seams an optional downstream tier needs (004). Neither can make a verdict say more than it
+// already does — see Correction 6.
+finalize::rejudge(Verdict, JudgeReport, &Bands) -> Verdict
+finalize::add_gap(Verdict, CoverageGap) -> Verdict
+Engine::bands(&self) -> &Bands
 ```
+
+> **Correction 6 (004).** Two functions were added to a module whose whole point is that it has one
+> producer, so the reason each is safe is worth stating rather than inferring.
+>
+> **`add_gap` is monotone in one direction.** It can turn `Clean` into `Inconclusive` and can do nothing
+> else — it cannot add a finding, remove one, change a score, or make any verdict *more* reassuring than it
+> was. The worst a caller can do with it is report less confidence than the evidence warrants, which is the
+> direction this project errs in anyway. Without it an optional tier has no way to say *"I did not run"*,
+> and a tier that cannot say that must either succeed or be silent.
+>
+> **`rejudge` can only narrow.** It moves observations from `reasons()` into `suppressed()` and does
+> nothing else; `SpanJudgement` has two variants and neither is `Cleared`, `Escalated`, or `Added`. It
+> refuses a verdict whose reasons were truncated, because the score was aggregated before truncation
+> (FR-001b) and recomputing from the survivors would understate it. It routes through the same private
+> `assemble` as `finalize`, so `Verdict::new` still has exactly one call site and `tests/seams.rs` is
+> unmodified.
+>
+> **`Engine::bands` exists because a `Verdict` does not carry the table it was banded with.** Demotion
+> changes the score, so the table has to come back, and passing it explicitly prevents a re-band against a
+> different table than the scan used.
 
 > **Correction 1 (002).** `Engine::builtin` and `Engine::from_toml` were the whole construction surface here.
 > They remain, but as conveniences: the thing they wrap is `prepare`, and stating only the conveniences hid
@@ -135,6 +162,16 @@ Invalid sequences are handled internally and recorded, not rejected.
 | `serde` | off | `Serialize`/`Deserialize` on the verdict types |
 
 `serde` is off by default so the wasm and embedded builds do not pay for it. `please-cli` enables it.
+
+> **Note (004).** `please-core` gains **no feature** for the judgement tier, and that is the point. The
+> tier is a separate crate, `please-judge`, which depends on core; core never depends on it. Core learns
+> the judgement *vocabulary* — `Features`, `SpanRole`, `SpanRelation`, `SpanJudgement`, `JudgeReport` —
+> as plain data enums with no logic and no dependencies, in the same category as `QuotingContext`.
+>
+> **Core may describe a judgement; only `please-judge` may obtain one.** There is no client here, no
+> credential, and no endpoint. `cargo tree -p please-core` cannot see a crate that depends on core, so the
+> 27-crate pin holds whatever the judge needs, and the `wasm32` build is untouched. The CLI's edge to the
+> tier is behind its own non-default `judge` feature, guarded by `ci/check-cli-dependencies.sh`.
 
 > **Correction 4 (002).** A `std` feature was listed and has never existed — `crates/core/Cargo.toml` declares
 > `default` and `serde` and nothing else. A caller writing `default-features = false, features = ["std"]` on
