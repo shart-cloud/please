@@ -17,6 +17,36 @@ Both residues are the same shape: **the structural tier can see form and cannot 
 
 ---
 
+## Summary
+
+A second opinion on findings the structural tier cannot resolve, in a separate crate reached over one
+synchronous HTTP request. The model is asked **factual questions with closed answers** and never for a
+judgement; this project computes the score. The tier may confirm a finding or demote it into the suppression
+channel, and may not erase, escalate, or invent one. Unavailable for any reason means `Inconclusive`.
+
+## Technical Context
+
+| | |
+|---|---|
+| **Language** | Rust 2021, MSRV as workspace |
+| **New crate** | `crates/judge` → `please-judge`, workspace member, depends on `please-core` |
+| **HTTP** | `ureq 3`, `default-features = false`, features `rustls` + `json` — 22 crates, no executor (research R1) |
+| **Serialisation** | `serde` + `serde_json`, already in the workspace |
+| **Async** | **None.** One blocking `POST`. Adding an executor for one request is the objection that ruled out `rig.rs` |
+| **Endpoint** | Any Anthropic-compatible `/v1/messages`, via `ANTHROPIC_BASE_URL` |
+| **Structured output** | Tool-use schema, required — not prompted JSON (research R2) |
+| **Placement** | After finalization, in the CLI, as `Verdict → Verdict` (research R4) |
+| **Dependency delta** | 28 crates new to the repository; `please-core`'s 27 unchanged |
+| **Performance** | Default path unchanged (`SC-004b`, 25 ms). Judged path: no budget, a timeout |
+| **Testing** | Unit + adversarial property tests offline; the discriminating pair and agreement measurement need an endpoint |
+
+**No `NEEDS CLARIFICATION` remains.** Four unknowns were open at Phase 0 and all four are resolved in
+[research.md](./research.md). One question is deliberately **left open rather than unresolved**: how features
+combine into a score. That is calibration, calibration needs the corpus, and inventing weights now would
+repeat 001's provisional band boundaries with less excuse the second time.
+
+---
+
 ## The constraint this is built inside
 
 The constitution anticipated this tier and fenced it (Principle V, Scope & Analysis Constraints):
@@ -39,6 +69,71 @@ Three existing CI gates constrain the design and none may be weakened:
 | `wasm32-unknown-unknown` build | core must keep compiling for a target with no sockets |
 
 ---
+
+## Constitution Check
+
+*GATE: evaluated before Phase 0 and re-evaluated after Phase 1.*
+
+This is the first feature to add a network dependency, so Principle V's gates carry the weight.
+
+| Gate | Principle | Pre-Phase 0 | Post-Phase 1 | How it is discharged |
+|---|---|---|---|---|
+| Verdict reports; caller enforces | I | PASS | PASS | `review` returns a verdict; a judge-suppressed finding is reported as suppressed and the deployment's policy disposes |
+| Incomplete analysis is never clean | I | **AT RISK** | PASS | The risk is the point: a network dependency is a fail-open waiting to happen. FR-402 sends every failure mode to `TierUnavailable` → `Inconclusive`, and Scenario 2 tests each against a real unreachable endpoint |
+| Optional tier degrades to inconclusive, never clean | I | **AT RISK** | PASS | Same mechanism. `IncompleteCause::TierUnavailable` has existed since 001 with no call site, reserved for this |
+| Linear-time analysis | II | PASS | PASS | Untouched — the judge arbitrates findings the matcher already made |
+| Bounded input and recursion | II | PASS | PASS | Plus a per-invocation timeout (FR-420) |
+| Rule sets validated against resource limits | II | PASS | PASS | Untouched |
+| No backtracking patterns | II | PASS | PASS | Untouched |
+| Fuzzed analysis path | II | **CARRIED** | **CARRIED** | Still 001's T095/T096, still unbuilt. Carried, not passed — the honest colour for a gate with no evidence |
+| Rules are reviewable data | III | PASS | PASS | Untouched. The judge declares no rules |
+| Rule set identified in every verdict | III | PASS | PASS | Extended: a judged verdict also records model id and prompt version (FR-416) |
+| Detection classes independently addressable | III, V | PASS | PASS | Untouched; the judge is a tier, not a class, and adds none |
+| Per-source stratified metrics | IV | **DEFERRED** | **DEFERRED** | `please-eval`'s job, still unbuilt |
+| False-positive gate in CI | IV | **FAILING** | **FAILING** | Failing at 1 while the corpus is under 200. This tier aims at it and must not be credited before SC-401 and the corpus say so |
+| Gaps stated explicitly | IV | PASS | PASS | `docs/limits.md` gains the determinism carve-out (FR-417) and the bounded-not-immune property |
+| No corpus text vendored | IV | PASS | PASS | Untouched |
+| **Runtime-free, offline, no model** | V | **VIOLATED?** | **PASS** | **The gate this feature exists to test.** The constitution permits it explicitly — *model-backed and judgement tiers MUST sit behind explicit opt-in* — and D1's dependency direction is what keeps the *default* build runtime-free and offline. Discharged by `ci/check-core-isolation.sh` plus the new CLI check |
+| `wasm32` build proven in CI | V | PASS | PASS | Core unchanged; nothing downstream of core is in the wasm build |
+| **Optional deps gated by test** | V | **GAP** | PASS | The allow-list covers `please-core` only. `ci/check-cli-dependencies.sh` is new and required: the default CLI build must carry none of R1's 28 crates (FR-419, SC-405) |
+| CLI holds no logic the library lacks | V | PASS | PASS | The tier is a library (`please-judge`); the CLI wires flags to it |
+| Built-in rule set's validity established | II | PASS | PASS | Untouched (added by 002 T086) |
+
+**Pre-Phase 0 verdict**: three gates at risk and one outright gap. All four are the same fact seen from
+different angles — this feature introduces network I/O to a project whose central promise is that it needs
+none.
+
+**Post-Phase 1 verdict**: all four discharged by mechanism rather than by intent. The dependency direction
+(D1) keeps the default build offline by construction; `TierUnavailable` keeps the failure mode fail-closed;
+the new CLI check keeps the gating honest as the tier grows. Three gates remain non-passing and all three are
+inherited and already recorded: fuzzing, per-source metrics, and the false-positive gate.
+
+**The gap is worth naming separately.** `ci/check-dependencies.sh` has only ever covered `please-core`, which
+was sufficient while the CLI had no optional capability. It no longer is, and Principle V requires the gating
+be enforced by a check rather than by review. That check does not exist yet and this feature must not ship
+without it.
+
+## Project Structure
+
+```text
+crates/
+├── core/          please-core    unchanged. 27-crate graph, wasm32, no network
+├── cli/           please-cli     gains `--judge`, `judge --check`; judge edge behind `--features judge`
+├── judge/         please-judge   NEW. ureq client, credential resolution, schema, scoring
+│   ├── src/
+│   │   ├── lib.rs         Judge::review — the Verdict → Verdict transformation
+│   │   ├── credential.rs  Resolution::from_env; the non-Debug newtype (FR-413)
+│   │   ├── request.rs     JudgeRequest assembly; neutralisation; no rule ids (FR-406, FR-408)
+│   │   ├── response.rs    schema validation; reject-entire (FR-409)
+│   │   └── score.rs       Features → SpanJudgement (FR-407)
+│   └── tests/
+│       ├── adversarial_responses.rs   SC-406 property test
+│       ├── discriminates.rs           SC-401, needs an endpoint
+│       └── agreement.rs               SC-407, needs an endpoint
+└── eval/          please-eval    unchanged, still excluded from the workspace
+
+ci/check-cli-dependencies.sh   NEW. FR-419 / SC-405
+```
 
 ## D1 — A separate crate, and the dependency direction is the whole safety argument
 

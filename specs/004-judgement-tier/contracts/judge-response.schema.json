@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jlgore/please/schemas/judge-response.json",
+  "title": "Judge response",
+  "description": "The input schema of the single tool the judge is required to call. It is the whole answer space: a model that has been talked into ignoring its instructions can still only emit a value this schema permits, so the blast radius of a captured judge is bounded here rather than by the strictness of our parser. Every field is a closed enum and there is no free-text field anywhere (004 FR-405). Note what the schema also makes impossible to ASK: there is no field for a severity, a recommendation, or a confidence, so the request cannot contain a leading question either (FR-406).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["addressed_to", "imperative_source", "framing", "stated_purpose_explains_content", "spans"],
+
+  "properties": {
+    "addressed_to": {
+      "description": "Who the document speaks to. Neutral by construction: there is no severe end of this scale to drift toward, which is the point of asking it rather than asking whether the document is an attack.",
+      "enum": ["document_recipient", "processing_agent", "unclear"]
+    },
+
+    "imperative_source": {
+      "description": "Where any instruction in the document originates. Separates issuing an instruction from relaying or reporting one.",
+      "enum": ["document_author", "quoted_third_party", "none_present"]
+    },
+
+    "framing": {
+      "description": "How the document presents its own content. This is the field that separates a shell transcript displaying payloads from one carrying a payload, and a scanner's report of an injection from an injection.",
+      "enum": ["presented_as_example", "presented_as_data", "presented_as_report", "none"]
+    },
+
+    "stated_purpose_explains_content": {
+      "description": "Whether the document states a purpose that accounts for instruction-shaped text being present — a CVE advisory quoting a payload, a test fixture listing them.",
+      "enum": ["yes", "no", "unclear"]
+    },
+
+    "spans": {
+      "description": "One entry per span in the request, no more and no fewer. A response with an unrecognised span id, or missing one that was asked about, is rejected entire rather than partially accepted (FR-409).",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["span_id", "span_role"],
+        "properties": {
+          "span_id": {
+            "description": "Echoes an id from the request. Opaque, and deliberately carries no rule identity or class — the request does not tell the model why a span is present.",
+            "type": "string",
+            "maxLength": 64
+          },
+          "span_role": {
+            "description": "The core question, per span. `description_of_an_instruction` is what demotes a finding into the suppressed channel; nothing here can clear it.",
+            "enum": ["instruction", "description_of_an_instruction", "unrelated"]
+          }
+        }
+      }
+    },
+
+    "model_severity": {
+      "description": "RECORDED AND NEVER READ (FR-410). Stored beside the score this project derives, so that over a corpus the question 'could we have just asked it?' can be answered from data rather than from a prior. No decision branches on it, and a test asserts that none does. Optional: a response omitting it is valid.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+
+  "$comment": "Absent by design, and each absence is a requirement rather than an oversight. There is no `reasoning`, `explanation`, or `notes` field: free text is the channel through which a captured judge would say something interesting, and a judge replying in prose is a judge that has been talked to. There is no `is_injection`, `verdict`, or `risk` field: the model is not asked to decide, and naming the interesting answer produces it. There is no `confidence`: `unclear` is the abstention, available on every field where it makes sense and costing nothing to choose, because models over-commit when abstention is not offered."
+}
