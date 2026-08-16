@@ -246,3 +246,183 @@ fn an_api_key_bound_for_a_non_default_host_warns_on_stderr() {
     );
     assert!(!run.stderr.contains("canary"), "leaked: {}", run.stderr);
 }
+
+// ── US5: a judged verdict explains itself ───────────────────────────────────────────────────────
+
+/// T042. **002 removed a two-run diff from the false-positive workflow; this must not put one back.**
+///
+/// An engineer disagreeing with a judged outcome should see which observation the judge acted on and what
+/// it answered, from ONE verdict. `--no-judge` exists to settle whether the judge is *right*, not to
+/// discover what it *did*.
+///
+/// Runs against a canned local endpoint rather than a real one, because what is asserted is the rendering
+/// and not the model.
+#[test]
+#[cfg(feature = "judge")]
+fn a_judged_verdict_shows_which_answer_drove_each_judgement() {
+    let endpoint = judged_endpoint(
+        "description_of_an_instruction",
+        "is_what_the_document_shows",
+    );
+    let run = run(
+        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+            ("ANTHROPIC_MODEL", "test-model-1"),
+        ],
+    );
+
+    let out = &run.stdout;
+    assert!(out.contains("judged:"), "no judgement block:\n{out}");
+    assert!(
+        out.contains("framing presented_as_example"),
+        "the document answers must be shown, not just the outcome:\n{out}"
+    );
+    assert!(
+        out.contains("relation is_what_the_document_shows"),
+        "the field the decision turns on must be visible (plan D4a):\n{out}"
+    );
+    assert!(
+        out.contains("role description_of_an_instruction"),
+        "the per-span role must be visible:\n{out}"
+    );
+    assert!(
+        out.contains("demoted"),
+        "the derived judgement must be shown beside the answers it came from:\n{out}"
+    );
+    // FR-416.
+    assert!(
+        out.contains("judge: test-model-1") && out.contains("prompt "),
+        "the model id and prompt version must be recorded:\n{out}"
+    );
+}
+
+/// The suppression block must name **what actually suppressed** and **the flag that reverses it**.
+///
+/// Before feature 004 both were unconditionally "quoting" and `--no-suppress-in-quotes`, which reads wrong
+/// on precisely the case this tier exists for: four judge demotions under a heading claiming they were
+/// quoted, offering a flag that would change nothing. The second run someone does after that is the
+/// two-run diff 002 removed.
+#[test]
+#[cfg(feature = "judge")]
+fn judge_demotions_name_the_judge_and_the_flag_that_reverses_them() {
+    let endpoint = judged_endpoint(
+        "description_of_an_instruction",
+        "is_what_the_document_shows",
+    );
+    let run = run(
+        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+        ],
+    );
+
+    let out = &run.stdout;
+    assert!(
+        out.contains("suppressed by the judge"),
+        "the heading must not claim these were quoted:\n{out}"
+    );
+    assert!(
+        out.contains("Re-run with --no-judge"),
+        "the remedy must be the flag that actually reverses a judge demotion:\n{out}"
+    );
+    assert!(
+        !out.contains("--no-suppress-in-quotes"),
+        "offering a flag that changes nothing here sends the reader on a second run for no reason:\n{out}"
+    );
+}
+
+/// A confirmed observation stays reported and is still explained.
+#[test]
+#[cfg(feature = "judge")]
+fn a_confirmed_observation_stays_reported_and_says_so() {
+    let endpoint = judged_endpoint(
+        "description_of_an_instruction",
+        "incidental_to_what_the_document_shows",
+    );
+    let run = run(
+        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+        ],
+    );
+
+    let out = &run.stdout;
+    assert!(out.contains("RISK FOUND"), "{out}");
+    assert!(
+        out.contains("confirmed"),
+        "a confirmed span must be shown as confirmed, not merely absent from the demoted list:\n{out}"
+    );
+    assert!(
+        out.contains("relation incidental_to_what_the_document_shows"),
+        "the answer that kept it reported must be visible:\n{out}"
+    );
+}
+
+/// A tiny endpoint answering every span with the given role and relation.
+///
+/// Local and canned: these tests assert what `plz` RENDERS, and pinning that to a live model would make
+/// them fail for reasons that have nothing to do with rendering.
+#[cfg(feature = "judge")]
+fn judged_endpoint(role: &str, relation: &str) -> String {
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let port = listener.local_addr().unwrap().port();
+    let role = role.to_string();
+    let relation = relation.to_string();
+
+    std::thread::spawn(move || {
+        for stream in listener.incoming().take(1) {
+            let Ok(mut stream) = stream else { continue };
+            // Read the request so the client's write completes before it waits for a reply.
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 {
+                    break;
+                }
+                if let Some(v) = line.to_ascii_lowercase().strip_prefix("content-length:") {
+                    length = v.trim().parse().unwrap_or(0);
+                }
+                if line == "\r\n" || line == "\n" {
+                    break;
+                }
+            }
+            let mut body = vec![0u8; length];
+            let _ = reader.read_exact(&mut body);
+
+            // One answer per span the request asked about; the count is however many span ids it carried.
+            let asked = String::from_utf8_lossy(&body)
+                .matches("span_id=\\\"s")
+                .count();
+            let spans: Vec<String> = (0..asked.max(1))
+                .map(|i| {
+                    format!(
+                        r#"{{"span_id":"s{i}","span_role":"{role}","span_relation_to_document":"{relation}"}}"#
+                    )
+                })
+                .collect();
+            let payload = format!(
+                r#"{{"id":"m","type":"message","role":"assistant","content":[{{"type":"tool_use","id":"t","name":"classify_document","input":{{"addressed_to":"document_recipient","imperative_source":"quoted_third_party","framing":"presented_as_example","stated_purpose_explains_content":"yes","spans":[{}]}}}}]}}"#,
+                spans.join(",")
+            );
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
+                payload.len()
+            );
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        }
+    });
+
+    format!("http://127.0.0.1:{port}")
+}

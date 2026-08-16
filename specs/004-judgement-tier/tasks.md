@@ -278,10 +278,10 @@ happy path is added to something already fail-closed rather than the reverse.
 **Goal**: no unexplained numbers. 002 removed a two-run diff from the false-positive workflow; this must not
 put one back.
 
-- [ ] T040 [US5] Render judged observations under `--explain` in `crates/cli/src/render.rs`: the feature
+- [X] T040 [US5] Render judged observations under `--explain` in `crates/cli/src/render.rs`: the feature
       answers, the derived judgement, and the judge named as what suppressed a demoted finding
-- [ ] T041 [US5] Render the model id and prompt version in the verdict footer beside the rule-set identity
-- [ ] T042 [P] [US5] Write the failing CLI test asserting a judged verdict under `--explain` shows which
+- [X] T041 [US5] Render the model id and prompt version in the verdict footer beside the rule-set identity
+- [X] T042 [P] [US5] Write the failing CLI test asserting a judged verdict under `--explain` shows which
       feature drove each judgement
 
 **Checkpoint**: "why did it do that" is answerable from one verdict.

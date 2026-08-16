@@ -7,7 +7,9 @@
 //! The ordering matters and is the same discipline throughout: **sanitise the payload, then style it.**
 //! Never the reverse.
 
-use please_core::verdict::{Outcome, QuotingContext, RiskLevel, SuppressedBy, Verdict};
+use please_core::verdict::{
+    Outcome, QuotingContext, RiskLevel, SpanJudgement, SuppressedBy, Verdict,
+};
 
 /// Render one verdict.
 pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
@@ -26,7 +28,12 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
             // would make the answer unavailable in the one case it is wanted.
             if explain {
                 suppressed(out, v);
+                judgement(out, v);
             }
+            // A clean verdict still has attribution to report when a judge produced it — this is the
+            // benign-tool-001 case, and "clean because a model said so" is exactly the claim a reader
+            // needs to be able to attribute.
+            judge_attribution(out, v);
             return;
         }
         Outcome::Inconclusive => {
@@ -78,6 +85,7 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
 
     if explain {
         suppressed(out, v);
+        judgement(out, v);
     }
 
     // Coverage gaps are printed for every non-clean verdict, not only inconclusive ones. A risk-found
@@ -104,6 +112,64 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         v.ruleset().version,
         v.ruleset().digest
     ));
+    judge_attribution(out, v);
+}
+
+/// The judgement tier's identity, beside the rule set's (FR-416, T041).
+///
+/// Always shown when a judge ran, not only under `--explain`. The rule-set digest is on every verdict for
+/// the same reason: a verdict is evidence, and evidence that cannot say what produced it is worth less
+/// later than it seems now (001 SC-012). A model id and a prompt version are the same claim one level up —
+/// **a verdict judged by one model is not evidence about another.**
+fn judge_attribution(out: &mut String, v: &Verdict) {
+    let Some(report) = v.judge() else {
+        return;
+    };
+    out.push_str(&format!(
+        "  judge: {} (prompt {})\n",
+        report.model(),
+        report.prompt_version()
+    ));
+}
+
+/// What the judge answered, and which answer drove each judgement (US5, T040).
+///
+/// Under `--explain` only, and the reason is the same one that puts the suppressed list there: default
+/// output is what a hook prints on a denial, and a table of feature answers would bury the finding.
+///
+/// **002 removed a two-run diff from the false-positive workflow. This must not put one back.** An engineer
+/// disagreeing with a judged outcome should be able to see which observation the judge acted on and what it
+/// said, from one verdict — not by rerunning with `--no-judge` and diffing. That command exists to settle
+/// disputes about whether the judge is *right*, not to discover what it *did*.
+fn judgement(out: &mut String, v: &Verdict) {
+    let Some(report) = v.judge() else {
+        return;
+    };
+
+    let features = report.features();
+    out.push_str("\n  judged:\n");
+    out.push_str(&format!(
+        "    document   addressed to {}, imperatives {}, framing {}, purpose explains content {}\n",
+        features.addressed_to.as_str(),
+        features.imperative_source.as_str(),
+        features.framing.as_str(),
+        features.stated_purpose_explains_content.as_str(),
+    ));
+
+    for span in report.judgements() {
+        // `relation` first, because it is the field the decision usually turns on (plan D4a) and a reader
+        // scanning this column wants the deciding answer where their eye lands.
+        out.push_str(&format!(
+            "    span {:<3}   {:<10}  relation {:<38} role {}\n",
+            span.reason_index,
+            match span.judgement {
+                SpanJudgement::Confirmed => "confirmed",
+                SpanJudgement::Demoted => "demoted",
+            },
+            span.relation.as_str(),
+            span.role.as_str(),
+        ));
+    }
 }
 
 /// What quoting suppression hid, under `--explain` (T069, SC-110).
@@ -119,8 +185,23 @@ fn suppressed(out: &mut String, v: &Verdict) {
         return;
     }
 
+    // Feature 004: the heading and the advice below both used to say "quoting" unconditionally, which was
+    // true while quoting was the only thing that could suppress. It now reads wrong on exactly the case the
+    // judgement tier exists for — benign-tool-001 renders four judge demotions under a heading claiming
+    // they were quoted, and the remedy it offers does not work on them.
+    let by_judge = v
+        .suppressed()
+        .iter()
+        .filter(|r| r.suppressed_by() == Some(SuppressedBy::Judge))
+        .count();
+    let by_quoting = v.suppressed().len() - by_judge;
+    let cause = match (by_quoting, by_judge) {
+        (0, _) => "suppressed by the judge",
+        (_, 0) => "suppressed by quoting",
+        _ => "suppressed",
+    };
     out.push_str(&format!(
-        "\n  suppressed by quoting ({} not reported):\n",
+        "\n  {cause} ({} not reported):\n",
         v.suppressed().len()
     ));
     for reason in v.suppressed() {
@@ -136,10 +217,18 @@ fn suppressed(out: &mut String, v: &Verdict) {
     if v.suppressions_truncated() {
         out.push_str("    (more were suppressed than the limit reports)\n");
     }
-    out.push_str(
-        "    Re-run with --no-suppress-in-quotes to report these. Suppressed content WAS examined; \
-         this is a reporting choice, not a gap in coverage.\n",
-    );
+    // Name the flag that actually reverses what happened here. Offering `--no-suppress-in-quotes` for a
+    // judge demotion sends the reader to a flag that will change nothing, and the second run they do after
+    // that is the two-run diff 002 spent a phase removing.
+    let remedy = match (by_quoting, by_judge) {
+        (0, _) => "--no-judge",
+        (_, 0) => "--no-suppress-in-quotes",
+        _ => "--no-suppress-in-quotes and/or --no-judge",
+    };
+    out.push_str(&format!(
+        "    Re-run with {remedy} to report these. Suppressed content WAS examined; this is a \
+         reporting choice, not a gap in coverage.\n",
+    ));
 }
 
 /// Why an observation was suppressed, in the words a reader would use.
