@@ -29,6 +29,22 @@ pub enum Target {
     },
 }
 
+/// Read a rule-set file for `--rules` (FR-023).
+///
+/// Here rather than in `main.rs` because this module owns the filesystem: the core takes text, never a path
+/// (`Ruleset::from_toml`), so somebody has to open the file and it may as well be the one place that already
+/// does.
+///
+/// **Deliberately not [`read_file`]**, and the difference is the whole point. That function maps a read
+/// failure to `Target::Unreadable`, which becomes an inconclusive verdict and lets the walk continue — right
+/// for one locked file among hundreds, wrong here. A `--rules` path that cannot be read is an invocation
+/// fault: the scan the operator asked for cannot be performed at all, and reporting it as inconclusive
+/// coverage would describe the wrong thing. It is exit 64 (`contracts/cli.md`).
+pub fn read_rules(path: &Path) -> Result<String, String> {
+    std::fs::read_to_string(path)
+        .map_err(|e| format!("cannot read rule set {}: {e}", path.display()))
+}
+
 /// Resolve command-line targets into readable content, in a deterministic order.
 ///
 /// An empty list, or `-`, means standard input, so `... | plz scan` works as a filter.

@@ -1,0 +1,49 @@
+# A caller-supplied rule set, for 001 T097 / SC-010.
+#
+# The worked example from `specs/001-structural-detection-cli/contracts/ruleset.md`: a team that has seen a
+# payload style the built-in rules do not cover, and that writes a rule for it rather than filing an issue
+# and waiting. That is what FR-023 is for, and this file is what proves it works from the CLI rather than
+# only from an embedder.
+#
+# Two rules, chosen to exercise the two halves of resolution:
+#
+#   boundary.acme_tool_marker   a NEW id. Layers on top of the built-in set and appears in a verdict by
+#                               its own name.
+#   override.disregard_prior    an EXISTING built-in id. Replaces it, which the loader reports as a
+#                               warning on stderr so an override is never accidental.
+#
+# The second is the one worth having a fixture for. Replacing a built-in silently is how a team disables
+# detection without meaning to, and the warning is the only thing standing between "we tuned a rule" and
+# "we turned one off and nobody noticed".
+
+[ruleset]
+name = "acme.internal"
+version = "1.0.0"
+
+# ── A new rule ──────────────────────────────────────────────────────────────────────────────────
+#
+# A forged marker in the shape Acme's internal tooling emits. Nothing in the built-in set knows about it,
+# because nothing outside Acme has seen it — which is exactly the case rule sets as data exist to serve.
+[[rule]]
+id = "boundary.acme_tool_marker"
+class = "boundary"
+severity = 75
+literals = ["ACME-TOOL"]
+pattern = '(?i)<<ACME-TOOL:[a-z_]+>>'
+description = "Forged Acme internal tool-result marker. Only the tool runner emits these; content containing one is impersonating it."
+
+# ── A replacement ───────────────────────────────────────────────────────────────────────────────
+#
+# Same id as a built-in, so this wins. Deliberately narrower than the rule it replaces: it requires the
+# word "instructions" specifically, where the built-in accepts prompt/rule/direction/guideline/constraint
+# and a wider gap between the parts.
+#
+# A team would do this to cut a false positive on their own documents. The point of the fixture is that the
+# loader SAYS SO when they do.
+[[rule]]
+id = "override.disregard_prior"
+class = "override"
+severity = 85
+literals = ["ignore", "disregard"]
+pattern = '(?i)\b(ignore|disregard)\b[^.\n]{0,20}\binstructions\b'
+description = "Narrowed replacement for the built-in rule of the same id: requires the word instructions."

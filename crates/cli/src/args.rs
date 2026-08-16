@@ -5,9 +5,12 @@
 //! it holds no detection logic, so anything `plz` can decide, an embedder calling the library can decide
 //! identically (Principle V).
 //!
-//! `--format json` and the rule-set flags arrive with User Story 2 and 4. They are absent rather than
-//! stubbed: a flag that parses and then fails is worse than one that does not exist, because a script
-//! written against it looks correct.
+//! Every flag `contracts/cli.md` documents now exists. The rule-set flags arrived at 001 T102/T103 and
+//! `--format` at T070, several features later than planned — they were absent rather than stubbed in the
+//! meantime, on the principle that a flag which parses and then fails is worse than one that does not
+//! exist, because a script written against it looks correct.
+
+use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use please_core::verdict::{DetectionClass, RiskLevel};
@@ -91,6 +94,23 @@ pub struct ScanArgs {
     /// Maximum reasons reported per target.
     #[arg(long)]
     pub max_reasons: Option<u32>,
+
+    /// A TOML rule set to layer on top of the built-in rules. Repeatable.
+    ///
+    /// Additions are applied in argument order and a rule whose id matches an existing one **replaces**
+    /// it, reported as a warning on stderr so overriding is never accidental. A malformed rule set is a
+    /// usage error naming the offending rule; the scan does not proceed on a partially loaded set
+    /// (FR-023, FR-024).
+    #[arg(long, value_name = "PATH")]
+    pub rules: Vec<PathBuf>,
+
+    /// Disable a rule by id. Repeatable.
+    ///
+    /// Applied **after** additions, so a rule can be added by one layer and disabled by another.
+    /// Disabling an id that does not exist is a usage error rather than a silent no-op: the usual cause
+    /// is a typo, and a typo that quietly leaves a rule enabled defeats the point of disabling it.
+    #[arg(long, value_name = "ID")]
+    pub disable_rule: Vec<String>,
 
     /// Ask the judgement tier for a second opinion on what was found.
     ///

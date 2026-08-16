@@ -216,20 +216,20 @@ verdicts differ accordingly; assert the rule-set identity recorded in each verdi
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T097 [P] [US4] Create `tests/fixtures/rules/acme.toml` with a caller-defined boundary rule, and `tests/fixtures/override/acme_marker.txt` matching it
-- [ ] T098 [US4] Write failing test asserting a caller-supplied rule fires and appears in the verdict by its own id, in `crates/core/tests/ruleset_load.rs` (SC-010)
-- [ ] T099 [US4] Write failing test asserting a suppressed built-in rule stops matching and the input reports clean, in `crates/core/tests/ruleset_load.rs`
-- [ ] T100 [US4] Write failing test asserting the resolved rule-set digest changes when rules are added or suppressed, in `crates/core/tests/ruleset_load.rs` (SC-012)
-- [ ] T101 [P] [US4] Write failing test asserting an addition replacing a built-in id is reported at load, and that suppressing an unknown id is a usage error rather than a no-op, in `crates/core/tests/ruleset_load.rs`
+- [X] T097 [P] [US4] Create `tests/fixtures/rules/acme.toml` with a caller-defined boundary rule, and `tests/fixtures/override/acme_marker.txt` matching it
+- [X] T098 [US4] Write failing test asserting a caller-supplied rule fires and appears in the verdict by its own id, in `crates/core/tests/ruleset_load.rs` (SC-010)
+- [X] T099 [US4] Write failing test asserting a suppressed built-in rule stops matching and the input reports clean, in `crates/core/tests/ruleset_load.rs`
+- [X] T100 [US4] Write failing test asserting the resolved rule-set digest changes when rules are added or suppressed, in `crates/core/tests/ruleset_load.rs` (SC-012)
+- [X] T101 [P] [US4] Write failing test asserting an addition replacing a built-in id is reported at load, and that suppressing an unknown id is a usage error rather than a no-op, in `crates/core/tests/ruleset_load.rs`
 
 ### Implementation for User Story 4
 
-- [ ] T102 [US4] Implement `--rules` and repeatable `--disable-rule` argument handling in `crates/cli/src/args.rs`
-- [ ] T103 [US4] Implement rule-set file loading in the CLI, keeping filesystem access out of the core, in `crates/cli/src/main.rs`
-- [ ] T104 [US4] Implement replacement reporting and unknown-suppression rejection in `crates/core/src/ruleset/mod.rs` (makes T101 pass)
-- [ ] T105 [US4] Implement `--classes` selection disabling detection classes independently, in `crates/cli/src/args.rs` and `crates/core/src/detect/mod.rs`
-- [ ] T106 [US4] Implement `--no-suppress-in-quotes` surfacing `suppressed_by` on affected reasons, in `crates/cli/src/args.rs` and `crates/core/src/detect/mod.rs`
-- [ ] T107 [P] [US4] Document the rule format, resolution order, and the worked override example in `docs/rules.md`
+- [X] T102 [US4] Implement `--rules` and repeatable `--disable-rule` argument handling in `crates/cli/src/args.rs`
+- [X] T103 [US4] Implement rule-set file loading in the CLI, keeping filesystem access out of the core, in `crates/cli/src/main.rs`
+- [X] T104 [US4] Implement replacement reporting and unknown-suppression rejection in `crates/core/src/ruleset/mod.rs` (makes T101 pass)
+- [X] T105 [US4] Implement `--classes` selection disabling detection classes independently, in `crates/cli/src/args.rs` and `crates/core/src/detect/mod.rs`
+- [X] T106 [US4] Implement `--no-suppress-in-quotes` surfacing `suppressed_by` on affected reasons, in `crates/cli/src/args.rs` and `crates/core/src/detect/mod.rs`
+- [X] T107 [P] [US4] Document the rule format, resolution order, and the worked override example in `docs/rules.md`
 
 **Checkpoint**: All four user stories independently functional.
 

@@ -81,13 +81,9 @@ fn run() -> i32 {
     };
     let policy = scan_args.policy();
 
-    let engine = match Engine::builtin() {
+    let engine = match build_engine(&scan_args) {
         Ok(engine) => engine,
-        // The embedded rule set failing to load is a build defect, not a user error — hence 70.
-        Err(e) => {
-            eprintln!("plz: the built-in rule set failed to load: {e}");
-            return EXIT_INTERNAL;
-        }
+        Err(code) => return code,
     };
 
     for warning in engine.warnings() {
@@ -191,6 +187,57 @@ fn run_judge(args: &args::JudgeArgs) -> i32 {
     // be piped somewhere without a warning corrupting the stream.
     print!("{}", please_judge::Resolution::from_env().describe());
     EXIT_CLEAN
+}
+
+/// Build the engine this invocation asks for (FR-023, T102/T103).
+///
+/// Returns the exit code to use on failure, because **whose fault it is decides which code**, and that
+/// distinction is the substance of this function:
+///
+/// | Failure | Code | Why |
+/// |---|---|---|
+/// | the **built-in** rule set will not load | `70` | a build defect. The rules are embedded; a user cannot cause this and cannot fix it |
+/// | a **caller's** rule set will not load, or names an unknown id to disable | `64` | an invocation fault (`contracts/cli.md`, `contracts/ruleset.md`) |
+///
+/// Before this existed there was one arm and it returned 70 for both, so a typo in someone's TOML reported
+/// itself as an internal error worth filing a bug about.
+///
+/// Filesystem access stays here rather than in the core: `Ruleset::from_toml` takes text, deliberately, so
+/// that the same engine runs in a browser. [`target::read_rules`] does the opening.
+fn build_engine(scan_args: &args::ScanArgs) -> Result<Engine, i32> {
+    // No rule flags: the built-in set, and a failure is ours.
+    if scan_args.rules.is_empty() && scan_args.disable_rule.is_empty() {
+        return Engine::builtin().map_err(|e| {
+            eprintln!("plz: the built-in rule set failed to load: {e}");
+            EXIT_INTERNAL
+        });
+    }
+
+    let mut builder = Engine::builder();
+    for path in &scan_args.rules {
+        let source = target::read_rules(path).map_err(|e| {
+            eprintln!("plz: {e}");
+            EXIT_USAGE
+        })?;
+        // Parsed here rather than handed to the builder as text, so the diagnostic can name the file. A
+        // `RulesetError` already names the offending *rule*; with several `--rules` it does not know which
+        // file that rule came from, and the operator has to.
+        let ruleset = please_core::Ruleset::from_toml(&source).map_err(|e| {
+            eprintln!("plz: {}: {e}", path.display());
+            EXIT_USAGE
+        })?;
+        builder = builder.add_ruleset(ruleset);
+    }
+    for id in &scan_args.disable_rule {
+        builder = builder.disable(id.clone());
+    }
+
+    // Resolution errors — an unknown suppression, too many rules after layering — are the caller's, so 64.
+    // Replacement warnings are NOT errors and reach stderr through `engine.warnings()` below, unchanged.
+    builder.build().map_err(|e| {
+        eprintln!("plz: {e}");
+        EXIT_USAGE
+    })
 }
 
 /// Derive the process status from every verdict, by the precedence
