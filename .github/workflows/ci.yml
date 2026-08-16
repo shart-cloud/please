@@ -132,8 +132,31 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: ./ci/check-no-credential-leak.sh
 
+  # SC-005 and SC-004a (001 T087/T093, the growth-exponent half of T095).
+  #
+  # Its own job, and `--release`, for one reason: `cargo test --workspace` runs a debug build, where an
+  # unoptimised regex engine puts throughput below a megabyte a second. An absolute figure measured there
+  # is not a weaker signal, it is a meaningless one — so the tests are `#[cfg_attr(debug_assertions,
+  # ignore)]` and appear in the main suite as ignored, which is visible, rather than absent.
+  #
+  # What each assertion is worth is argued in `crates/core/tests/scaling.rs`. Briefly: the growth exponent
+  # is scale-free and holds on any machine; the 4 KB latency bound has a fourteen-fold margin; and the
+  # throughput assertion is a regression floor rather than the criterion, because **SC-004a's 10 MB/s is
+  # not currently met** — measured ~6.5 MB/s, recorded in `docs/limits.md`. If that is ever fixed, the
+  # floor in that file becomes 10.0 and this comment goes away.
+  performance:
+    name: scaling and throughput (SC-004a, SC-005)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # `--nocapture` so the measurements land in the run log. A regression that trips the floor is worth
+      # a number in the job output, not just an assertion message.
+      - run: cargo test --release -p please-core --test scaling -- --nocapture --test-threads=1
+
 # Jobs arriving with later tasks, listed so their absence is deliberate rather than forgotten:
 #
-#   T095  per-change fuzz smoke and the benchmark growth-exponent gate (SC-005, SC-006).
+#   T095  per-change fuzz smoke (SC-006). The benchmark half of this task landed as `performance` above.
 #   T096  scheduled fuzz campaign accumulating past 1M inputs (separate workflow, self-hosted).
 #   T109  MSRV verification against the pinned floor.

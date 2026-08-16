@@ -484,3 +484,58 @@ not skipped, because content behind a link nobody followed is content nobody exa
 begins, which is what makes the order reproducible (SC-011) and what tells the JSON renderer whether it is
 writing an object or an array. At a couple of hundred bytes per path this is roughly two orders of
 magnitude below the contents it replaced, but it is linear in the number of files and it is not zero.
+
+## Sustained throughput is ~6.5 MB/s against a criterion of 10 MB/s
+
+**Status: SC-004a is unmet, measured and tracked. Latency is met; only the sustained figure misses.**
+
+```text
+p95 at 4 KB      ~730 µs      budget 10 ms       met, ~14x margin
+sustained        ~6.5 MB/s    budget 10 MB/s     missed by ~1.5x
+```
+
+Measured by `crates/core/tests/scaling.rs` and reported in full by `cargo bench -p please-core --bench
+scaling`, both added at 001 T087/T093. Before them, SC-004a had never been measured at all — it was one
+of three success criteria whose evidence was a number nobody had produced.
+
+**No stage is slow; the pipeline is.** A scan makes three independent linear passes over the input, and
+on benign prose they account for essentially the whole cost:
+
+```text
+per megabyte
+  QuotingMap::build          47.4 ms       21 MB/s
+  decode::expand             49.8 ms       20 MB/s
+  detect::structural::scan   47.6 ms       21 MB/s
+  ─────────────────────────────────────────────────
+  full scan                 150.5 ms      6.6 MB/s
+```
+
+Rule matching does not appear, because the literal prefilter finds nothing in benign prose and no pattern
+is run. Three passes at ~21 MB/s compose to ~6.6, which is the measured figure almost exactly.
+
+The consequence for anyone choosing a remedy: **making any single pass twice as fast buys about 15%.**
+Reaching 10 MB/s means one fewer pass, or passes that share one traversal — a change to the shape of the
+pipeline, not an optimisation inside a stage.
+
+Two things constrain that change, and both are load-bearing rather than incidental:
+
+* **The quoting map is built even under `--no-suppress-in-quotes`.** Deliberate: the context is recorded
+  either way and only the *action* depends on policy, which is what lets a single run report both what
+  was found and what would have been suppressed. Removing that would put back the two-run diff 002 spent
+  a phase removing (FR-128, SC-110).
+* **`--classes` does not reduce work.** The class filter is applied once, at the end, over the assembled
+  observations. 001 applied it in four places and a decoded observation passed through two of them with
+  its class changed in between, so `--classes override` and `--classes encoding` each dropped findings
+  the other kept. One site cannot disagree with itself (T051, FR-133). The cost is that a deselected
+  class still pays for every stage above. `engine.rs` names the intended remedy — a matcher owning the
+  rule slice, so one gate both filters and gates — which would recover the work for rule-driven classes
+  but not for the three passes here, none of which is rule-driven.
+
+**What the test asserts is a floor of 4 MB/s, not the criterion.** A permanently red assertion is one
+people learn to ignore, and it would take the linearity assertion in the same file with it. The floor
+catches a further regression; this section is what keeps the gap from disappearing. When the pipeline
+reaches 10 MB/s the floor becomes `10.0` and this section becomes a note about what it used to be.
+
+**Linearity, by contrast, is met** — SC-005's fitted growth exponent is 0.95 across four orders of
+magnitude, comfortably inside the criterion. The two were carried together as unverified for four
+features; only one of them turned out to be a problem.

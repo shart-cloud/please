@@ -49,12 +49,16 @@ serde_json = { workspace = true }
 # exists at all; briefly, SC-108 and FR-104 are claims about code that must NOT compile.
 trybuild = { workspace = true }
 
-# The `scaling` benchmark target is declared at 001's T087, when benches/scaling.rs exists. Declaring a
-# bench target whose file is absent is a hard build error, not a warning.
-
 # `harness = false` because criterion supplies its own. Without it, libtest also parses the arguments and
 # criterion's flags become "unrecognised option".
 [[bench]]
 name = "preparation"
 path = "benches/preparation.rs"
+harness = false
+
+# 001 T087/T093. Input-length scaling (SC-005), the two SC-004a figures, and a per-stage breakdown of
+# where a scan's time actually goes. The assertions live in `tests/scaling.rs`; this reports.
+[[bench]]
+name = "scaling"
+path = "benches/scaling.rs"
 harness = false
