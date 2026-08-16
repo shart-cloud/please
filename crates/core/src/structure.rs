@@ -24,6 +24,10 @@
 //! adoption, while this false negative costs one evasion route among several that the structural tier
 //! already cannot see.
 
+use std::sync::OnceLock;
+
+use aho_corasick::{AhoCorasick, AhoCorasickBuilder, MatchKind};
+
 use crate::finalize::types::{ConcealingContext, QuotingContext};
 
 /// Byte ranges in which matches are suppressed by default.
@@ -78,6 +82,61 @@ const ATTRIBUTIVE_MARKERS: &[&str] = &[
 /// Bounded rather than "to end of sentence" because sentence detection is itself a guess, and an
 /// unbounded window would let a single "for example" early in a document suppress everything after it.
 const ATTRIBUTIVE_WINDOW: usize = 200;
+
+/// The marker list as one automaton, built once for the life of the process.
+///
+/// # This was 96.9% of the pass
+///
+/// Until this existed, each of the fourteen markers was searched for with `windows().position()` over a
+/// lowercased copy of the whole document — fourteen naive passes plus a full-document allocation, per scan.
+/// Ablating it measured **47.0 ms of the 48.5 ms** `QuotingMap::build` spends per megabyte, and a third of
+/// the whole scan: sustained throughput went from 6.6 MB/s to 9.99 against SC-004a's criterion of 10.
+///
+/// The engine already had the right tool for this and was not using it here. [`crate::matcher`]'s literal
+/// gate is the same construction over the rule set's literals, for the same reason, and `aho-corasick` has
+/// been a direct dependency of this crate since the first commit.
+///
+/// # No shared module for this, on purpose
+///
+/// The obvious next step is a `literals` module both this and the prefilter go through. It would be a
+/// pass-through: the prefilter needs a literal-to-rule-owners mapping and reports which *rules* to
+/// evaluate, this needs spans and reports *regions*, and the only thing they would actually share is a
+/// constructor call. `AhoCorasick` is already the deep module here. Two automatons, two owners, no seam
+/// between them that anything varies across.
+///
+/// # `OnceLock` rather than a field
+///
+/// The list is a `const`, so the automaton is the same for every scan in the process and there is nothing
+/// for a caller to configure. Threading it in from [`crate::Engine`] would put a second parameter on
+/// [`QuotingMap::build`] to carry a value that could only ever have one value. Constructing it per call
+/// would pay automaton construction on every scan, against a 25 ms cold-start and a 10 ms latency budget.
+///
+/// No clock, no filesystem, no allocation per scan — `ci/check-core-isolation.sh` and the wasm32 build both
+/// still hold.
+fn attributive_markers() -> &'static AhoCorasick {
+    static MARKERS: OnceLock<AhoCorasick> = OnceLock::new();
+    MARKERS.get_or_init(|| {
+        // `ascii_case_insensitive` replaces the lowercased copy of the document, and matches the
+        // prefilter's configuration for the same reason: the markers are ASCII, and case-folding them at
+        // the automaton is free where copying the haystack is not.
+        //
+        // `Standard` because `find_overlapping_iter` requires it, and overlapping iteration is what keeps
+        // two different markers covering the same bytes both reported — "the phrases like" is `the phrase`
+        // and `phrases like`, and the naive loop found both.
+        //
+        // `expect` because the list is a `const`: a failure here is a build defect, not a runtime
+        // condition, and it is the same judgement `Engine::builtin` makes about the embedded rule set. The
+        // alternative — falling back to the naive loop — would keep two implementations of marker search
+        // alive forever, and a silent fallback that turned suppression off would flag exactly the security
+        // documentation this module exists to protect. `the_marker_automaton_builds` asserts it in CI so
+        // the defect cannot reach a caller.
+        AhoCorasickBuilder::new()
+            .ascii_case_insensitive(true)
+            .match_kind(MatchKind::Standard)
+            .build(ATTRIBUTIVE_MARKERS)
+            .expect("the attributive marker list is a const; a failure here is a build defect")
+    })
+}
 
 impl QuotingMap {
     /// Classify `input` in a single linear pass.
@@ -158,16 +217,38 @@ impl QuotingMap {
         }
 
         // ── Attributive markers ─────────────────────────────────────────────────────────────────
-        let lowered = input.to_ascii_lowercase();
-        for marker in ATTRIBUTIVE_MARKERS {
-            let needle = marker.as_bytes();
-            let mut from = 0usize;
-            while let Some(found) = find_subslice(&lowered[from..], needle) {
-                let at = from + found;
-                let end = (at + needle.len() + ATTRIBUTIVE_WINDOW).min(input.len());
-                regions.push((at, end, QuotingContext::AttributiveMarker));
-                from = at + needle.len();
+        //
+        // One automaton pass over the input, no lowercased copy. See `attributive_markers` for what this
+        // replaced and what it cost.
+        //
+        // Overlapping iteration across patterns, non-overlapping within one. Both halves are required and
+        // neither is available from the automaton alone:
+        //
+        //   * ACROSS patterns, two different markers may cover the same bytes and both are markers.
+        //     "the phrases like" is `the phrase` at 0 and `phrases like` at 4. Non-overlapping iteration
+        //     would report one and silently drop the other.
+        //   * WITHIN one pattern, a marker can overlap ITSELF, and the naive loop this replaced advanced
+        //     past each match rather than reporting the overlap. `such as` begins and ends with `s`, so
+        //     "such asuch as" contains it at 0 and again at 6 — the only marker in the list with this
+        //     property, found by `marker_search_agrees_with_the_oracle` and not by reading the list.
+        //
+        // Reporting that second match would extend suppression six bytes further than the shipping
+        // implementation did. Six bytes is nothing; changing which spans are suppressed without measuring
+        // it against the hard-negative corpus is not, and suppression is the principal lever on the
+        // false-positive rate. So the skip below reproduces the old loop's `from = at + needle.len()`
+        // exactly, per pattern.
+        //
+        // Matches for a single pattern all have the same length, so they arrive in increasing start order
+        // and one running bound per pattern is enough.
+        let mut resume_at = [0usize; ATTRIBUTIVE_MARKERS.len()];
+        for hit in attributive_markers().find_overlapping_iter(input) {
+            let marker = hit.pattern().as_usize();
+            if hit.start() < resume_at[marker] {
+                continue;
             }
+            resume_at[marker] = hit.end();
+            let end = (hit.end() + ATTRIBUTIVE_WINDOW).min(input.len());
+            regions.push((hit.start(), end, QuotingContext::AttributiveMarker));
         }
 
         // ── Concealing regions: hidden from the human, read by the agent ────────────────────────
@@ -384,10 +465,12 @@ mod tests {
     //   * case-insensitivity is ASCII-level, and reaches the markers only — not the rest of the document;
     //   * a region runs from the marker's start to `marker.len() + ATTRIBUTIVE_WINDOW`, clamped to input;
     //   * two DIFFERENT markers overlapping both produce regions ("the phrases like" is two markers);
-    //   * one marker cannot overlap itself, because the naive loop advances by `needle.len()`. No marker in
-    //     the list has a proper prefix that is also a suffix, so this is currently a distinction without a
-    //     difference — but it is a property of the LIST, not of the algorithm, and a future marker could
-    //     break it. Overlapping iteration is what keeps the two in agreement if one ever does.
+    //   * one marker overlapping ITSELF produces one region, because the naive loop advances by
+    //     `needle.len()`. This one is why the oracle exists rather than a careful reading: the first
+    //     automaton written against this comment claimed no marker could self-overlap, on the grounds that
+    //     none has a multi-character prefix that is also a suffix. `such as` begins and ends with `s`.
+    //     "such asuch as" contains it twice, at 0 and at 6, and the difference is six more bytes of
+    //     suppression — undetectable by review, caught on the property test's sixtieth case.
     fn attributive_regions_naive(input: &[u8]) -> Vec<(usize, usize, QuotingContext)> {
         let mut regions = Vec::new();
         let lowered = input.to_ascii_lowercase();
@@ -484,6 +567,19 @@ mod tests {
     ];
 
     #[test]
+    fn the_marker_automaton_builds() {
+        // `attributive_markers` panics on a build failure, on the grounds that a `const` list which will
+        // not compile into an automaton is a build defect. This is what makes that true — the defect is a
+        // red test rather than a panic reaching a caller. Same shape as
+        // `engine::tests::the_embedded_builtin_rule_set_loads`.
+        assert_eq!(
+            attributive_markers().patterns_len(),
+            ATTRIBUTIVE_MARKERS.len(),
+            "every marker must be in the automaton, or its spans stop being suppressed"
+        );
+    }
+
+    #[test]
     fn two_different_markers_overlapping_both_produce_a_region() {
         // Named as well as generated, because a proptest failure here would be a puzzle and this is the
         // case most likely to break: an automaton configured for non-overlapping matches finds one of these
@@ -497,6 +593,23 @@ mod tests {
         );
         assert_eq!(regions[0].0, 9, "`the phrase` starts at 9");
         assert_eq!(regions[1].0, 13, "`phrases like` starts at 13");
+        oracle_agrees(input).unwrap();
+    }
+
+    #[test]
+    fn a_marker_overlapping_itself_produces_one_region() {
+        // `such as` begins and ends with `s`, so it appears at 0 and again at 6 here. The shipping loop
+        // advanced past the first match and reported one region; reporting two would extend suppression six
+        // bytes further, which is a change to the false-positive lever made by accident.
+        //
+        // Regression seed for this is in crates/core/proptest-regressions/structure.txt.
+        let input = b"such asuch as and then a payload";
+        let regions = attributive_regions_shipped(input);
+        assert_eq!(
+            regions,
+            vec![(0, 7 + ATTRIBUTIVE_WINDOW.min(input.len() - 7), QuotingContext::AttributiveMarker)],
+            "one region, from the first match only"
+        );
         oracle_agrees(input).unwrap();
     }
 
