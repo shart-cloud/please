@@ -241,7 +241,7 @@ happy path is added to something already fail-closed rather than the reverse.
 - [X] T032 [US1] Implement `JudgeRequest` assembly in `crates/judge/src/request.rs`: neutralised document and
       spans via the existing sanitisation path, opaque span ids, and **no rule id, class, or severity**
       (FR-406, FR-408)
-- [ ] T033 [P] [US1] Write the failing test asserting the request contains none of *injection*, *attack*,
+- [X] T033 [P] [US1] Write the failing test asserting the request contains none of *injection*, *attack*,
       *malicious*, *suspicious*, *risk*, and no rule identity — naming the interesting answer produces it
 - [X] T034 [US1] Implement the tool-use request per [contracts/judge-tier.md](./contracts/judge-tier.md),
       with the tool's input schema being
@@ -303,9 +303,9 @@ put one back.
       false positive, same case ids
 - [X] T049 Verify cold start for the default path against `SC-004b`'s 25 ms. **Building with
       `--features judge` must not slow an unjudged scan** — if it does, the gating is not working (SC-408)
-- [ ] T050 Run all eight scenarios in [quickstart.md](./quickstart.md), recording the result of each in
+- [X] T050 Run all eight scenarios in [quickstart.md](./quickstart.md), recording the result of each in
       `docs/004-validation.md` including any that cannot be run and why
-- [ ] T051 Verify every Constitution Check gate in [plan.md](./plan.md) is discharged by a **passing
+- [X] T051 Verify every Constitution Check gate in [plan.md](./plan.md) is discharged by a **passing
       mechanical check**, recording the commit for each. The four that went in `AT RISK`/`GAP` are the ones
       to look hardest at
 
