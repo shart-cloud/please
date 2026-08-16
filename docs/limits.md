@@ -262,29 +262,40 @@ It can be wrong both ways: a JSON fragment not starting at byte zero reads as pr
 `{` and containing `":` reads as data. The second disables suppression, so it costs a false positive rather
 than a missed payload — the safe direction for this mistake to fall.
 
-## `plz` cannot load a caller's rule set
+## `plz` could not load a caller's rule set
 
-**Status: unbuilt. Documented as working in two places, which is worse than absent.**
+**Status: resolved in `6249999`. Kept because the way it was wrong outlived the gap itself.**
 
-`please-core` accepts caller-supplied rules by three routes, all validated (002 FR-102). The **CLI exposes
-none of them**: there is no `--rules` flag, and `plz` scans with the built-in rule set only.
+`--rules <PATH>` and `--disable-rule <ID>` now exist, both repeatable: `--rules` layers in argument order,
+`--disable-rule` applies last, and `docs/rules.md` documents the format and resolution order. A caller's
+malformed TOML is exit `64`; the **built-in** set failing to load stays `70`. That split was the only real
+substance in the change — there had been one arm returning `70` for both, so a typo in someone's rule file
+announced itself as an internal error worth filing a bug about.
 
-That would be an ordinary gap except that three artifacts describe it as working:
+Everything underneath had worked the whole time, with 38 tests in `crates/core/tests/ruleset_load.rs`.
+`main.rs` simply called `Engine::builtin()` unconditionally, so **US4's whole point — "no rebuild of the
+tool" — was unreachable from the tool**, and SC-010 was satisfied only for teams who write Rust.
 
-* 002's `quickstart.md` Scenarios 1 and 4 both invoke `plz scan --rules …`. Scenario 1 is the primary
-  acceptance check for the resource-bomb defect. Neither is runnable; both now carry a note saying so.
+### The part worth keeping
+
+For four features, three artifacts described this flag as working:
+
+* 002's `quickstart.md` Scenarios 1 and 4 both invoked `plz scan --rules …`. Scenario 1 was the primary
+  acceptance check for the resource-bomb defect, and it could not be run.
 * 001's `ruleset_load.rs` carried a comment reading "Any caller accepting a rule set it did not ship must
-  call [`validate_compiled`] — which is exactly what the CLI does for `--rules`." Two claims, both false: the
-  CLI has no such flag, and nothing in the tree called that method.
+  call [`validate_compiled`] — which is exactly what the CLI does for `--rules`." Two claims, both false at
+  the time: the CLI had no such flag, and nothing in the tree called that method.
 
-The guarantee the flag would need is in place and tested at the library level across all seven construction
-paths, which is a wider surface than one flag. What is missing is the flag, its file I/O, and its exit-code
-mapping. Feature 002 did not add it because no task covered it and it is a feature rather than part of closing
-the defect.
+**Documentation asserting that an unbuilt thing works is how a guarantee comes to rest on nothing** — the
+second instance in this codebase, after the CI check for built-in validation that 002 had to add before the
+built-in fast path could be called sound. It went unnoticed because every artifact that mentioned the flag
+was prose, and prose does not fail.
 
-The lesson is not about the flag. **Documentation asserting that an unbuilt thing works is how a guarantee
-comes to rest on nothing**, and this is the second instance in this codebase — the first being the CI check
-for built-in validation, which 002 had to add before the built-in fast path could be called sound.
+The same shape recurs throughout this file. `contracts/verdict.schema.json` was maintained across four
+features and validated against nothing, and drifted from the type in three places the moment a test looked
+(`1ec0a26`). The memory and symlink bounds below were promised in `contracts/cli.md` and had no test until a
+large corpus found them. In each case the artifact was accurate when written and quietly stopped being so,
+which is an argument about *executable* contracts rather than about anyone's diligence.
 
 ## An HTML comment must never become a quoting context
 

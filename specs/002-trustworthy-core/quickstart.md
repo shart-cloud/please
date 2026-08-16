@@ -42,19 +42,19 @@ plz scan --rules /tmp/bomb.toml /dev/null; echo "exit=$?"
 **Expected after**: exit `64`, stderr names `bomb.expansion` and the limit it exceeded, nothing on stdout. The
 rule set is rejected as a whole.
 
-> **⚠ Not runnable as written. `plz` has no `--rules` flag.**
+> **Runnable since `6249999`.** Verified against `tests/fixtures/rules/bomb.toml`: exit `64`, stderr names
+> `bomb.counted_repetition` and the program-size limit it exceeded, nothing on stdout.
 >
-> Discovered at the Phase 3 checkpoint. This scenario was written assuming a flag that 001 never built —
-> the same assumption `ruleset_load.rs` carried in a comment reading "which is exactly what the CLI does
-> for `--rules`". Both were describing an intention.
+> It was not runnable for four features. Written assuming a `--rules` flag that 001 never built — the same
+> assumption `ruleset_load.rs` carried in a comment reading "which is exactly what the CLI does for
+> `--rules`" — it was carried as an open item rather than fixed, because no task in 002's `tasks.md`
+> covered the CLI surface for rule loading. See `docs/limits.md`, which keeps the general form of the
+> mistake.
 >
-> Feature 002 does not add it: no task in `tasks.md` covers the CLI surface for rule loading, and adding a
-> flag, its file I/O, and its exit-code mapping is a feature rather than part of closing this defect.
-> Carried as an open item — see the amendments in Phase 8.
->
-> **What is established instead**, at the library level and across a wider surface than one flag: every
-> public construction path is enumerated and asserted to reject `tests/fixtures/rules/bomb.toml`. That
-> covers seven routes in, of which a `--rules` flag would be a caller of one.
+> **What was established instead in the meantime**, at the library level and across a wider surface than
+> one flag: every public construction path is enumerated and asserted to reject that fixture. Seven routes
+> in, of which `--rules` is a caller of one. That test remains the stronger evidence; this scenario is now
+> the end-to-end confirmation it could not have.
 
 **The negative control** — enumerate every public construction path and assert none accepts it. A single path
 that does is the whole feature failing, so this is an enumeration test rather than a spot check.
@@ -119,9 +119,9 @@ the benign fixture, each under 10 ms wall clock. `prepare/builtin` in the bench 
 
 ## Scenario 4 — Validation cost is proportional to caller rules (SC-105)
 
-Also not runnable through the CLI, for the `--rules` reason above. Measured directly instead, which is better
-evidence anyway: the bench separates the cost of validating the caller's rules from everything else the CLI
-does on the way to a verdict.
+Measured through the bench rather than the CLI. That was originally a workaround for the missing `--rules`
+flag (added in `6249999`), but it is better evidence regardless: the bench separates the cost of validating
+the caller's rules from everything else the CLI does on the way to a verdict.
 
 ```sh
 cargo bench -p please-core --bench preparation
