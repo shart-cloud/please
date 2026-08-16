@@ -126,6 +126,16 @@ these is an assertion, not evidence.
 > `contracts/verdict.schema.json` still lacks `suppressed` and `suppressions_truncated`, which 002 added to
 > the `Verdict` type. With `additionalProperties: false` that makes the schema stricter than the type it
 > describes. Worth a 002 amendment of its own.
+>
+> **Closed at 001 T065.** Both fields are now in the schema and in `required`, because a `Verdict` always
+> carries them. Two other gaps of the same kind were found at the same time and closed with it: `relation`
+> was missing from `judge_report.judgements` — 004's plan D4a added `SpanVerdict.relation` and amended the
+> prose contract and this document but not the schema — and `model_severity` is confirmed as deliberately
+> absent, since FR-410 gives it no accessor and the serialiser skips it.
+>
+> **All three were invisible for the same reason: nothing had ever validated output against this file.**
+> The schema was maintained across four features as a document. 001 T065 makes it a contract, and the first
+> thing a contract does is find where it drifted.
 
 **Span in original coordinates**: when a match is found in decoded content, `span` still points into
 the original input — at the encoded region that produced it. A caller highlighting a finding must be

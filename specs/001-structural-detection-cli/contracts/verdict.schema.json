@@ -5,7 +5,7 @@
   "description": "The machine-readable result of one scan. This document is the caller-facing contract: an agent harness or pre-tool hook reads this and applies its own policy. Additive fields are a minor version change; removing or retyping a field is a breaking change.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["outcome", "score", "risk", "reasons", "reasons_truncated", "incomplete", "target", "ruleset", "engine"],
+  "required": ["outcome", "score", "risk", "reasons", "reasons_truncated", "suppressed", "suppressions_truncated", "incomplete", "target", "ruleset", "engine"],
   "properties": {
     "outcome": {
       "description": "The three-way result. `clean` requires both an empty `reasons` array and an empty `incomplete` array. Analysis that did not complete is never reported as `clean`. Precedence: risk_found outranks inconclusive, which outranks clean.",
@@ -34,6 +34,15 @@
       "description": "Everything the scan did not examine, whether because a configured bound was reached or because something failed. Non-empty means coverage was incomplete. Empty (together with empty `reasons`) is the only case in which `clean` is permitted.",
       "type": "array",
       "items": { "$ref": "#/$defs/incompleteness" }
+    },
+    "suppressed": {
+      "description": "AMENDED BY 002 (FR-128), ADDED TO THIS SCHEMA AT 001 T065. Observations that suppression hid, each annotated with what hid it. These are NOT findings: they do not score, they do not affect the outcome, and a verdict whose only content is suppressions is `clean`. They are here so a reader can answer \"what did the heuristic change?\" from one scan rather than from a second run with --no-suppress-in-quotes. Deliberately a separate array from `reasons` rather than a flag on them, because one list with a boolean leaves the distinction to every reader to remember, and the reader who forgets reintroduces every security-prose false positive.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/reason" }
+    },
+    "suppressions_truncated": {
+      "description": "True when more was suppressed than the reason bound reports. Unlike `reasons_truncated` this is NOT a coverage gap: the reader is not being shown the whole of something they are not being shown at all.",
+      "type": "boolean"
     },
     "target": { "$ref": "#/$defs/target_ref" },
     "ruleset": { "$ref": "#/$defs/ruleset_id" },
@@ -72,10 +81,14 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["reason_index", "role", "judgement"],
+            "required": ["reason_index", "role", "relation", "judgement"],
             "properties": {
               "reason_index": { "type": "integer", "minimum": 0 },
               "role": { "enum": ["instruction", "description_of_an_instruction", "unrelated"] },
+              "relation": {
+                "description": "ADDED AT 001 T065; it should have arrived with 004 plan D4a and did not. Whether the excerpt is the document's SUBJECT or a PASSENGER inside it. D4a calls it \"the field that decides the case\": `span_role` and every document-level field answer IDENTICALLY for the two discriminating fixtures — correctly, and uselessly, because at document scale a transcript displaying payloads and one carrying a payload are the same document. This is the question that separates them, and it agreed with hand labels 12/12 where `span_role` managed 14/20.",
+                "enum": ["is_what_the_document_shows", "incidental_to_what_the_document_shows", "unclear"]
+              },
               "judgement": {
                 "description": "TWO values, and that is the security property (FR-403). There is no `cleared`, no `escalated`, and no `added` — not validated against, but not representable, which is why SC-406's property test checks a type rather than a code path.",
                 "enum": ["confirmed", "demoted"]
