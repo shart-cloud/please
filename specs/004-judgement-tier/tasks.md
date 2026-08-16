@@ -261,11 +261,11 @@ happy path is added to something already fail-closed rather than the reverse.
 - [X] T038a [US1] Warn once on stderr when `--judge` is combined with a multi-target walk, naming the target
       count before the first request. Cost is per target and multiplies; the spec's edge case puts optimising
       it out of scope and **not surprising anyone with it** in scope
-- [ ] T039a [US1] Give `crates/judge/tests` a fixture loader. The cases live in
+- [X] T039a [US1] Give `crates/judge/tests` a fixture loader. The cases live in
       `tests/fixtures/handcrafted-*.jsonl` and are parsed by `crates/core/tests/support.rs`, which is a
       test-only module of another crate and **not reachable from here**. Decide once and record why:
       duplicate the loader, or run T039 from the CLI suite instead. Do not discover this inside T039
-- [ ] T039 [US1] Write the discriminating test in `crates/judge/tests/discriminates.rs`: `benign-tool-001`
+- [X] T039 [US1] Write the discriminating test in `crates/judge/tests/discriminates.rs`: `benign-tool-001`
       demoted to clean, `indirect-tool-003` still reported (SC-401). **Failing this means plan D4 chose the
       wrong axis** — revisit D4 rather than tune T036
 

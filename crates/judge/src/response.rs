@@ -18,7 +18,8 @@
 //! express: that the set of span ids in the response is exactly the set in the request.
 
 use please_core::verdict::{
-    AddressedTo, Features, Framing, ImperativeSource, SpanRole, StatedPurposeExplainsContent,
+    AddressedTo, Features, Framing, ImperativeSource, SpanRelation, SpanRole,
+    StatedPurposeExplainsContent,
 };
 use serde::Deserialize;
 
@@ -78,6 +79,15 @@ struct WireResponse {
 struct WireSpan {
     span_id: String,
     span_role: WireSpanRole,
+    span_relation_to_document: WireSpanRelation,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WireSpanRelation {
+    IsWhatTheDocumentShows,
+    IncidentalToWhatTheDocumentShows,
+    Unclear,
 }
 
 #[derive(Debug, Deserialize)]
@@ -127,6 +137,8 @@ pub struct JudgeResponse {
     pub features: Features,
     /// Indexed by reason index. Complete by construction — validation rejects a response that is not.
     pub roles: Vec<SpanRole>,
+    /// Indexed by reason index, alongside `roles`. The field that decides the case (plan D4a).
+    pub relations: Vec<SpanRelation>,
     pub model_severity: Option<u8>,
 }
 
@@ -141,25 +153,43 @@ impl JudgeResponse {
 
         // Exactly the requested spans, no more and no fewer. A schema can require an array of objects; it
         // cannot know which ids were asked about, so this is the part that has to live here.
-        let mut roles: Vec<Option<SpanRole>> = vec![None; request.spans.len()];
+        #[allow(clippy::type_complexity)]
+        let mut answers: Vec<Option<(SpanRole, SpanRelation)>> = vec![None; request.spans.len()];
         for span in &wire.spans {
             let Some(index) = request.index_of(&span.span_id) else {
                 return Err(InvalidResponse::UnknownSpan(span.span_id.clone()));
             };
-            if roles[index].is_some() {
+            if answers[index].is_some() {
                 return Err(InvalidResponse::DuplicateSpan(span.span_id.clone()));
             }
-            roles[index] = Some(match span.span_role {
-                WireSpanRole::Instruction => SpanRole::Instruction,
-                WireSpanRole::DescriptionOfAnInstruction => SpanRole::DescriptionOfAnInstruction,
-                WireSpanRole::Unrelated => SpanRole::Unrelated,
-            });
+            answers[index] = Some((
+                match span.span_role {
+                    WireSpanRole::Instruction => SpanRole::Instruction,
+                    WireSpanRole::DescriptionOfAnInstruction => {
+                        SpanRole::DescriptionOfAnInstruction
+                    }
+                    WireSpanRole::Unrelated => SpanRole::Unrelated,
+                },
+                match span.span_relation_to_document {
+                    WireSpanRelation::IsWhatTheDocumentShows => {
+                        SpanRelation::IsWhatTheDocumentShows
+                    }
+                    WireSpanRelation::IncidentalToWhatTheDocumentShows => {
+                        SpanRelation::IncidentalToWhatTheDocumentShows
+                    }
+                    WireSpanRelation::Unclear => SpanRelation::Unclear,
+                },
+            ));
         }
 
-        let mut complete = Vec::with_capacity(roles.len());
-        for (index, role) in roles.into_iter().enumerate() {
-            match role {
-                Some(role) => complete.push(role),
+        let mut complete = Vec::with_capacity(answers.len());
+        let mut relations = Vec::with_capacity(answers.len());
+        for (index, answer) in answers.into_iter().enumerate() {
+            match answer {
+                Some((role, relation)) => {
+                    complete.push(role);
+                    relations.push(relation);
+                }
                 // Not "assume Instruction and carry on", even though that is the conservative direction.
                 // A response that answered half the question is evidence the judge is not doing what was
                 // asked, and inferring the rest would hide that (FR-409).
@@ -196,6 +226,7 @@ impl JudgeResponse {
                 },
             },
             roles: complete,
+            relations,
             model_severity: wire.model_severity,
         })
     }

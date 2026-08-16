@@ -59,8 +59,8 @@ pub use ruleset::{Rule, Ruleset, RulesetError, RulesetLimits};
 /// construction. What core gains is the ability to *describe* a judgement; obtaining one still requires
 /// `please-judge`, which is where the client, the credential, and the scoring function live.
 pub use verdict::{
-    AddressedTo, Features, Framing, ImperativeSource, JudgeReport, SpanJudgement, SpanRole,
-    SpanVerdict, StatedPurposeExplainsContent,
+    AddressedTo, Features, Framing, ImperativeSource, JudgeReport, SpanJudgement, SpanRelation,
+    SpanRole, SpanVerdict, StatedPurposeExplainsContent,
 };
 pub use verdict::{
     DetectionClass, EngineId, IncompleteCause, Incompleteness, Outcome, QuotingContext, Reason,

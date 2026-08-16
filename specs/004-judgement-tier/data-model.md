@@ -85,6 +85,17 @@ Schema is in [contracts/judge-response.schema.json](./contracts/judge-response.s
 |---|---|
 | `span_id` | Echoes a `JudgeRequest.spans` id |
 | `span_role` | `instruction` · `description_of_an_instruction` · `unrelated` |
+| `span_relation_to_document` | `is_what_the_document_shows` · `incidental_to_what_the_document_shows` · `unclear` |
+
+> **`span_relation_to_document` added by plan D4a, from measurement.** The document-level fields and
+> `span_role` answer **identically** for the two discriminating fixtures, and every answer is correct — grep
+> output is data, a TODO comment is a description of an instruction. At document scale the two documents
+> genuinely are the same, so no combination of correct document-level answers separates them. This field is
+> the one that does: `cat payloads.txt` shows its payloads as the subject, `grep -r TODO` carries one as a
+> passenger.
+>
+> It is also the field the tier's accuracy rests on, which makes it the one SC-407's agreement measurement
+> most needs to cover.
 
 **Recorded, never read** (FR-410): `model_severity`, an integer. Stored beside the derived score so the
 question *"could we have just asked it?"* can eventually be answered from data. Nothing branches on it, and a
@@ -119,9 +130,11 @@ The derived result for one observation. **Two possible values, and that is the s
 There is no `Cleared`, no `Escalated`, and no `Added`. Not "we validate against them" — **they are not
 representable**, so SC-406's property test is checking a type rather than a code path.
 
-Derived by our code from `Features` (FR-407). The function is deliberately trivial in the first
-implementation: `span_role: description_of_an_instruction`, corroborated by a document-level field, demotes;
-anything else confirms. Tuning waits for the corpus.
+Derived by our code from the answers (FR-407). The function is deliberately trivial and, since plan D4a,
+takes **three** conditions rather than two — all required:
+`span_role: description_of_an_instruction`, **`span_relation_to_document: is_what_the_document_shows`**, and
+one corroborating document-level field. Anything else confirms, including `unclear` on any of them. Tuning
+waits for the corpus; the middle condition is not tuning, it is the axis.
 
 ### JudgeReport
 

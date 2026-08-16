@@ -331,6 +331,33 @@ pub enum StatedPurposeExplainsContent {
     Unclear,
 }
 
+/// Whether a span is **the document's subject or a passenger inside it** (plan D4a).
+///
+/// The field that actually separates `benign-tool-001` from `indirect-tool-003`, established by
+/// measurement rather than by argument — see `crates/judge/tests/axis_probe.rs` and plan D4a.
+///
+/// The original design asked only [`SpanRole`] plus document-level [`Framing`], and both fixtures answered
+/// **identically**: `description_of_an_instruction` in a document `presented_as_data`. Those answers were
+/// correct. Grep output *is* data; a TODO comment *is* a description of an instruction. They just do not
+/// distinguish a transcript whose subject is a file of payloads from a transcript that happens to contain
+/// one.
+///
+/// This question does:
+///
+/// * `cat injection_samples.txt` — the payloads **are** what the command was run to show. Remove them and
+///   the document has no subject.
+/// * `grep -r TODO src/` — the payload is a **passenger**. Remove it and the grep output is unchanged in
+///   purpose, because its purpose was never to show that line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SpanRelation {
+    /// The span is part of what the document set out to show.
+    IsWhatTheDocumentShows,
+    /// The span rode along inside content displayed for an unrelated reason.
+    IncidentalToWhatTheDocumentShows,
+    Unclear,
+}
+
 /// What one flagged span **is**, as opposed to what it resembles.
 ///
 /// Per span rather than per document, because a document can contain both — already a passing structural
@@ -386,6 +413,11 @@ judgement_wire_names! {
         DescriptionOfAnInstruction => "description_of_an_instruction",
         Unrelated => "unrelated",
     }
+    SpanRelation {
+        IsWhatTheDocumentShows => "is_what_the_document_shows",
+        IncidentalToWhatTheDocumentShows => "incidental_to_what_the_document_shows",
+        Unclear => "unclear",
+    }
 }
 
 /// The document-level answers, returned once per request.
@@ -428,6 +460,8 @@ pub struct SpanVerdict {
     /// Index into [`Verdict::reasons`] as it stood in the **structural** verdict.
     pub reason_index: usize,
     pub role: SpanRole,
+    /// Subject or passenger — the field that decides the case (plan D4a).
+    pub relation: SpanRelation,
     pub judgement: SpanJudgement,
 }
 

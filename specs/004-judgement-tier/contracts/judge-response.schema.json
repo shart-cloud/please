@@ -5,7 +5,7 @@
   "description": "The input schema of the single tool the judge is required to call. It is the whole answer space: a model that has been talked into ignoring its instructions can still only emit a value this schema permits, so the blast radius of a captured judge is bounded here rather than by the strictness of our parser. Every field is a closed enum and there is no free-text field anywhere (004 FR-405). Note what the schema also makes impossible to ASK: there is no field for a severity, a recommendation, or a confidence, so the request cannot contain a leading question either (FR-406).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["addressed_to", "imperative_source", "framing", "stated_purpose_explains_content", "spans"],
+  "required": ["spans", "addressed_to", "imperative_source", "framing", "stated_purpose_explains_content"],
 
   "properties": {
     "addressed_to": {
@@ -35,7 +35,7 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["span_id", "span_role"],
+        "required": ["span_id", "span_role", "span_relation_to_document"],
         "properties": {
           "span_id": {
             "description": "Echoes an id from the request. Opaque, and deliberately carries no rule identity or class — the request does not tell the model why a span is present.",
@@ -43,8 +43,12 @@
             "maxLength": 64
           },
           "span_role": {
-            "description": "The core question, per span. `description_of_an_instruction` is what demotes a finding into the suppressed channel; nothing here can clear it.",
+            "description": "Per span. `description_of_an_instruction` is NECESSARY for a demotion and, as of plan D4a, no longer sufficient — see `span_relation_to_document`. Nothing here can clear a finding.",
             "enum": ["instruction", "description_of_an_instruction", "unrelated"]
+          },
+          "span_relation_to_document": {
+            "description": "ADDED BY PLAN D4a, and the field the tier's accuracy actually rests on. Whether the excerpt is the document's SUBJECT or a PASSENGER inside it. `span_role` and the document-level fields answer identically for the two discriminating fixtures — correctly, and uselessly, because at document scale a transcript displaying payloads and one carrying a payload are the same document. This is the question that separates them, measured 3/3 where the alternatives separated nothing.",
+            "enum": ["is_what_the_document_shows", "incidental_to_what_the_document_shows", "unclear"]
           }
         }
       }
@@ -57,6 +61,8 @@
       "maximum": 100
     }
   },
+
+  "$comment_on_order": "`spans` is listed first in `required` to agree with the tool description, which asks for the excerpts before the document. The description is load-bearing and measured (plan D4a); this ordering was measured NOT to matter on its own and is kept only so the two do not disagree.",
 
   "$comment": "Absent by design, and each absence is a requirement rather than an oversight. There is no `reasoning`, `explanation`, or `notes` field: free text is the channel through which a captured judge would say something interesting, and a judge replying in prose is a judge that has been talked to. There is no `is_injection`, `verdict`, or `risk` field: the model is not asked to decide, and naming the interesting answer produces it. There is no `confidence`: `unclear` is the abstention, available on every field where it makes sense and costing nothing to choose, because models over-commit when abstention is not offered."
 }

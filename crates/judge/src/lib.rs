@@ -133,13 +133,15 @@ impl Judge {
         let judgements: Vec<SpanVerdict> = parsed
             .roles
             .iter()
+            .zip(parsed.relations.iter())
             .enumerate()
-            .map(|(reason_index, role)| SpanVerdict {
+            .map(|(reason_index, (role, relation))| SpanVerdict {
                 reason_index,
                 role: *role,
+                relation: *relation,
                 // FR-407: the judgement is derived here, by this project's code, from the answers. The
-                // model supplied `role`; it did not supply this.
-                judgement: score::judge_span(*role, parsed.features),
+                // model supplied the answers; it did not supply this.
+                judgement: score::judge_span(*role, *relation, parsed.features),
             })
             .collect();
 

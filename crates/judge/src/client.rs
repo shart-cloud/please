@@ -73,22 +73,49 @@ impl std::fmt::Display for TransportError {
 
 /// The tool declaration: the whole answer space, as JSON Schema.
 ///
+/// Public so an experiment can compare a candidate schema against the shipping one.
+///
 /// This mirrors `contracts/judge-response.schema.json`. It is spelled out here rather than loaded from that
 /// file because the contract is a specification artifact and this is a wire payload — vendoring the file
 /// into the binary would make an edit to a design document a silent change to what is sent.
-fn tool_schema() -> Value {
+pub fn tool_schema() -> Value {
     json!({
         "name": TOOL_NAME,
-        "description": "Record the classification of the document and each excerpt.",
+        // ── THIS SENTENCE IS THE TIER ────────────────────────────────────────────────────────────
+        //
+        // It reads like boilerplate and it decides whether the feature works. Measured, 3/3 both ways:
+        //
+        //   "…of the document and each excerpt."   indirect-tool-003 → is_what_the_document_shows   0/3
+        //   "…of each excerpt, then of the document."                → incidental_to_…              3/3
+        //
+        // Naming the document first establishes a frame — the model characterises the whole transcript as
+        // "presenting data", and then every excerpt inside it is, correctly and uselessly, part of what it
+        // shows. Asked about the excerpts FIRST, each one is judged on its own terms and the payload riding
+        // inside grep output is recognised as a passenger.
+        //
+        // This is D4's own thesis one level down. D4 says naming the interesting answer produces it; this
+        // says naming the interesting SCALE produces it. `tests/axis_probe.rs::ablate_the_shipping_schema`
+        // is the measurement, and it is the only variant of five that fixed the tier.
+        //
+        // If T039 goes red, read this before touching score.rs.
+        "description": "Record the classification of each excerpt, then of the document.",
         "input_schema": {
             "type": "object",
             "additionalProperties": false,
+            // `spans` first, matching the description above. **Measured NOT to matter on its own**
+            // (`axis_probe.rs::is_the_required_order_load_bearing_too`: 4/4 either way once the
+            // description is corrected) — kept because agreeing with the sentence that does matter costs
+            // nothing, and disagreeing with it would be a puzzle for the next reader.
+            //
+            // An earlier version of this comment claimed the order WAS load-bearing. It was written after
+            // reordering and before measuring, and it was wrong. Recorded because the same mistake in the
+            // spec is what this feature keeps finding.
             "required": [
+                "spans",
                 "addressed_to",
                 "imperative_source",
                 "framing",
-                "stated_purpose_explains_content",
-                "spans"
+                "stated_purpose_explains_content"
             ],
             "properties": {
                 "addressed_to": {
@@ -120,7 +147,7 @@ fn tool_schema() -> Value {
                     "items": {
                         "type": "object",
                         "additionalProperties": false,
-                        "required": ["span_id", "span_role"],
+                        "required": ["span_id", "span_role", "span_relation_to_document"],
                         "properties": {
                             "span_id": { "type": "string", "maxLength": 64 },
                             "span_role": {
@@ -129,6 +156,15 @@ fn tool_schema() -> Value {
                                     "instruction",
                                     "description_of_an_instruction",
                                     "unrelated"
+                                ]
+                            },
+                            "span_relation_to_document": {
+                                "description": "Whether this excerpt is part of what the document set \
+                                                out to show, or incidental to it.",
+                                "enum": [
+                                    "is_what_the_document_shows",
+                                    "incidental_to_what_the_document_shows",
+                                    "unclear"
                                 ]
                             }
                         }
@@ -155,6 +191,24 @@ pub fn send(
     request: &JudgeRequest,
     timeout: Duration,
 ) -> Result<Value, TransportError> {
+    send_with_schema(resolution, tool_schema(), &request.user_content(), timeout)
+}
+
+/// Send an arbitrary tool schema. **For calibration experiments only.**
+///
+/// Public because `tests/axis_probe.rs` has to ask candidate questions the shipping schema does not
+/// contain, and the alternative — exposing the credential value so a test could build its own request —
+/// would put a hole in FR-413 for the sake of an experiment. The value's only exit stays
+/// `Credential::header_value`, which is still `pub(crate)`.
+///
+/// Nothing in the shipping path calls this with anything but [`tool_schema`]. A response obtained through
+/// it is **not** validated against [`crate::response::JudgeResponse`] and must never reach a verdict.
+pub fn send_with_schema(
+    resolution: &Resolution,
+    schema: Value,
+    user_content: &str,
+    timeout: Duration,
+) -> Result<Value, TransportError> {
     let Some(credential) = resolution.credential() else {
         return Err(TransportError::NoCredential {
             consulted: Resolution::consulted(),
@@ -168,13 +222,13 @@ pub fn send(
         // is outside SC-011 and says so in docs/limits.md, rather than that temperature 0 fixed it.
         "temperature": 0,
         "system": SYSTEM_PROMPT,
-        "tools": [tool_schema()],
+        "tools": [schema],
         // Required, not merely offered. A model that answers in prose has been talked to, and this is what
         // makes that a transport-level failure rather than something to parse around.
         "tool_choice": { "type": "tool", "name": TOOL_NAME },
         "messages": [{
             "role": "user",
-            "content": request.user_content(),
+            "content": user_content,
         }],
     });
 

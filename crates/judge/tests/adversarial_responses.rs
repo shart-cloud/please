@@ -23,8 +23,8 @@
 //! feature answers that have no bearing on the decision `rejudge` makes.
 
 use please_core::verdict::{
-    AddressedTo, Features, Framing, ImperativeSource, JudgeReport, Reason, SpanJudgement, SpanRole,
-    SpanVerdict, StatedPurposeExplainsContent, SuppressedBy, Verdict,
+    AddressedTo, Features, Framing, ImperativeSource, JudgeReport, Reason, SpanJudgement,
+    SpanRelation, SpanRole, SpanVerdict, StatedPurposeExplainsContent, SuppressedBy, Verdict,
 };
 use please_core::{Engine, ScanPolicy};
 use proptest::prelude::*;
@@ -86,6 +86,14 @@ fn any_judgement() -> impl Strategy<Value = SpanJudgement> {
     prop_oneof![Just(SpanJudgement::Confirmed), Just(SpanJudgement::Demoted)]
 }
 
+fn any_relation() -> impl Strategy<Value = SpanRelation> {
+    prop_oneof![
+        Just(SpanRelation::IsWhatTheDocumentShows),
+        Just(SpanRelation::IncidentalToWhatTheDocumentShows),
+        Just(SpanRelation::Unclear),
+    ]
+}
+
 fn any_role() -> impl Strategy<Value = SpanRole> {
     prop_oneof![
         Just(SpanRole::Instruction),
@@ -137,13 +145,14 @@ fn any_features() -> impl Strategy<Value = Features> {
 /// — and the test asserts the invariants hold either way rather than steering the generator away from the
 /// interesting half of the space.
 fn any_span_verdict() -> impl Strategy<Value = SpanVerdict> {
-    (0usize..16, any_role(), any_judgement()).prop_map(|(reason_index, role, judgement)| {
-        SpanVerdict {
+    (0usize..16, any_role(), any_relation(), any_judgement()).prop_map(
+        |(reason_index, role, relation, judgement)| SpanVerdict {
             reason_index,
             role,
+            relation,
             judgement,
-        }
-    })
+        },
+    )
 }
 
 proptest! {
@@ -218,6 +227,7 @@ fn demoting_everything_loses_nothing() {
             .map(|reason_index| SpanVerdict {
                 reason_index,
                 role: SpanRole::DescriptionOfAnInstruction,
+                relation: SpanRelation::IsWhatTheDocumentShows,
                 judgement: SpanJudgement::Demoted,
             })
             .collect(),
@@ -263,6 +273,7 @@ fn a_demoted_observation_is_still_present_readable_and_attributed() {
         vec![SpanVerdict {
             reason_index: 0,
             role: SpanRole::DescriptionOfAnInstruction,
+            relation: SpanRelation::IsWhatTheDocumentShows,
             judgement: SpanJudgement::Demoted,
         }],
         None,
@@ -315,11 +326,13 @@ fn a_self_contradictory_report_does_not_un_demote() {
             SpanVerdict {
                 reason_index: 0,
                 role: SpanRole::DescriptionOfAnInstruction,
+                relation: SpanRelation::IsWhatTheDocumentShows,
                 judgement: SpanJudgement::Demoted,
             },
             SpanVerdict {
                 reason_index: 0,
                 role: SpanRole::Instruction,
+                relation: SpanRelation::IsWhatTheDocumentShows,
                 judgement: SpanJudgement::Confirmed,
             },
         ],
@@ -365,11 +378,13 @@ fn a_report_naming_an_unknown_observation_is_refused_entire() {
             SpanVerdict {
                 reason_index: 0,
                 role: SpanRole::DescriptionOfAnInstruction,
+                relation: SpanRelation::IsWhatTheDocumentShows,
                 judgement: SpanJudgement::Demoted,
             },
             SpanVerdict {
                 reason_index: count + 5,
                 role: SpanRole::DescriptionOfAnInstruction,
+                relation: SpanRelation::IsWhatTheDocumentShows,
                 judgement: SpanJudgement::Demoted,
             },
         ],

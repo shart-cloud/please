@@ -18,8 +18,29 @@
 //! with less excuse the second time — so the rule below is the smallest thing that expresses the axis, and
 //! tuning waits for evidence (spec Assumptions, plan open question 4).
 //!
-//! The rule: **`description_of_an_instruction`, corroborated by a document-level field, demotes. Anything
-//! else confirms.**
+//! # The rule, amended by measurement (plan D4a)
+//!
+//! **Three conditions, all required, and the middle one is the load-bearing addition:**
+//!
+//! 1. `span_role` is `description_of_an_instruction` — the span describes rather than issues;
+//! 2. `span_relation_to_document` is `is_what_the_document_shows` — the span is the document's **subject**,
+//!    not a passenger inside it;
+//! 3. a document-level field corroborates.
+//!
+//! Condition 2 was not in the original design and the tier did not work without it. Asked only conditions 1
+//! and 3, the model answered **identically** for both discriminating fixtures — `description_of_an_instruction`
+//! inside a document `presented_as_data` — and both answers were correct. Grep output *is* data. A TODO
+//! comment *is* a description of an instruction. The questions simply did not reach the difference.
+//!
+//! `crates/judge/tests/axis_probe.rs` measured three candidate questions over three rounds each. Only this
+//! one separated the pair, and it separated it perfectly:
+//!
+//! ```text
+//!                            benign-tool-001            indirect-tool-003
+//! span_role                  description_of_an_...      description_of_an_...     identical
+//! span_addressed_to          no_one_in_particular       no_one_in_particular      identical
+//! span_relation_to_document  is_what_the_document_...   incidental_to_...         SEPARATES
+//! ```
 //!
 //! # Every ambiguity resolves toward confirming
 //!
@@ -28,15 +49,23 @@
 //! findings, the cheapest attack on this tier would be to make the document confusing, which is free.
 
 use please_core::verdict::{
-    AddressedTo, Features, Framing, ImperativeSource, SpanJudgement, SpanRole,
+    AddressedTo, Features, Framing, ImperativeSource, SpanJudgement, SpanRelation, SpanRole,
     StatedPurposeExplainsContent,
 };
 
-/// Decide one span's fate from its role and the document it sits in (FR-403, FR-407).
-pub fn judge_span(role: SpanRole, features: Features) -> SpanJudgement {
-    // The per-span answer is necessary. A span that instructs, or that has nothing to do with anything,
-    // is not something a document-level framing can talk us out of reporting.
+/// Decide one span's fate from its role, its relation to the document, and the document itself
+/// (FR-403, FR-407, plan D4a).
+pub fn judge_span(role: SpanRole, relation: SpanRelation, features: Features) -> SpanJudgement {
+    // A span that instructs, or that has nothing to do with anything, is not something a document-level
+    // framing can talk us out of reporting.
     if role != SpanRole::DescriptionOfAnInstruction {
+        return SpanJudgement::Confirmed;
+    }
+
+    // **The decisive condition** (D4a). A payload riding inside a document displayed for an unrelated
+    // reason is a live payload however faithfully the document reports it — and `Unclear` lands here too,
+    // because abstention must never be cheaper for an attacker than honesty.
+    if relation != SpanRelation::IsWhatTheDocumentShows {
         return SpanJudgement::Confirmed;
     }
 
@@ -91,6 +120,10 @@ mod tests {
         }
     }
 
+    /// The relation that permits a demotion. Every test that is not about the relation itself uses it, so
+    /// the other conditions are what the test actually exercises.
+    const SUBJECT: SpanRelation = SpanRelation::IsWhatTheDocumentShows;
+
     /// The neutral document: every field at its least informative value.
     fn unclear_everywhere() -> Features {
         features(
@@ -110,7 +143,7 @@ mod tests {
             SpanRole::Unrelated,
         ] {
             assert_eq!(
-                judge_span(role, unclear_everywhere()),
+                judge_span(role, SUBJECT, unclear_everywhere()),
                 SpanJudgement::Confirmed,
                 "a document the model could say nothing about must leave the structural verdict standing"
             );
@@ -130,6 +163,7 @@ mod tests {
             assert_eq!(
                 judge_span(
                     SpanRole::Instruction,
+                    SUBJECT,
                     features(
                         AddressedTo::DocumentRecipient,
                         ImperativeSource::QuotedThirdParty,
@@ -148,6 +182,7 @@ mod tests {
         assert_eq!(
             judge_span(
                 SpanRole::DescriptionOfAnInstruction,
+                SUBJECT,
                 features(
                     AddressedTo::DocumentRecipient,
                     ImperativeSource::QuotedThirdParty,
@@ -165,11 +200,55 @@ mod tests {
         assert_eq!(
             judge_span(
                 SpanRole::DescriptionOfAnInstruction,
+                SUBJECT,
                 features(
                     AddressedTo::Unclear,
                     ImperativeSource::NonePresent,
                     Framing::None,
                     StatedPurposeExplainsContent::No,
+                )
+            ),
+            SpanJudgement::Confirmed
+        );
+    }
+
+    /// **The regression test for plan D4a, and the reason the tier works at all.**
+    ///
+    /// This is `indirect-tool-003` in miniature: a payload riding inside grep output. Every other answer
+    /// corroborates display and every one of them is correct — the document really is data, the comment
+    /// really is quoted from a third party, and the search really does explain why the text is there.
+    /// Only the relation says otherwise, and it has to be enough on its own.
+    #[test]
+    fn a_passenger_payload_is_confirmed_however_well_the_document_corroborates() {
+        assert_eq!(
+            judge_span(
+                SpanRole::DescriptionOfAnInstruction,
+                SpanRelation::IncidentalToWhatTheDocumentShows,
+                features(
+                    AddressedTo::DocumentRecipient,
+                    ImperativeSource::QuotedThirdParty,
+                    Framing::PresentedAsData,
+                    StatedPurposeExplainsContent::Yes,
+                )
+            ),
+            SpanJudgement::Confirmed,
+            "a payload incidental to what the document shows is live, however faithfully the document \
+             reports it"
+        );
+    }
+
+    /// `unclear` on the relation confirms, like `unclear` everywhere else.
+    #[test]
+    fn an_unclear_relation_does_not_demote() {
+        assert_eq!(
+            judge_span(
+                SpanRole::DescriptionOfAnInstruction,
+                SpanRelation::Unclear,
+                features(
+                    AddressedTo::DocumentRecipient,
+                    ImperativeSource::QuotedThirdParty,
+                    Framing::PresentedAsExample,
+                    StatedPurposeExplainsContent::Yes,
                 )
             ),
             SpanJudgement::Confirmed
@@ -183,6 +262,7 @@ mod tests {
         assert_eq!(
             judge_span(
                 SpanRole::DescriptionOfAnInstruction,
+                SUBJECT,
                 features(
                     AddressedTo::ProcessingAgent,
                     ImperativeSource::QuotedThirdParty,

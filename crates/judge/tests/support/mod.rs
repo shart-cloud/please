@@ -137,7 +137,12 @@ fn consume_request(stream: &mut TcpStream) {
 pub fn tool_response(spans: &[(&str, &str)], features: &str) -> String {
     let spans: Vec<String> = spans
         .iter()
-        .map(|(id, role)| format!(r#"{{"span_id":"{id}","span_role":"{role}"}}"#))
+        .map(|(id, role)| {
+            format!(
+                r#"{{"span_id":"{id}","span_role":"{role}",
+                     "span_relation_to_document":"is_what_the_document_shows"}}"#
+            )
+        })
         .collect();
     format!(
         r#"{{"id":"msg_1","type":"message","role":"assistant","content":[
