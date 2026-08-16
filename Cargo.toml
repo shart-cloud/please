@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/core",
     "crates/cli",
+    "crates/judge",
 ]
 # crates/eval is deliberately EXCLUDED (plan.md D12).
 #
@@ -23,6 +24,12 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 please-core = { path = "crates/core", version = "0.1.0" }
+# The judgement tier (feature 004). A workspace member rather than an exclusion like crates/eval, because
+# it is a SHIPPING capability users enable — so it must be built, tested, linted and version-locked with
+# everything else. It reaches the default `plz` binary through nothing: the CLI's edge to it is behind a
+# non-default `judge` feature, and ci/check-cli-dependencies.sh asserts that gating rather than trusting
+# review to catch a regression (plan D1, FR-419).
+please-judge = { path = "crates/judge", version = "0.1.0" }
 
 # ── Matching engine ─────────────────────────────────────────────────────────────────────────────
 # `regex` is a finite-automaton engine: every search is worst-case O(m*n), and the syntax CANNOT

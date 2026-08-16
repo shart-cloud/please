@@ -117,7 +117,9 @@ without it.
 
 ```text
 crates/
-├── core/          please-core    unchanged. 27-crate graph, wasm32, no network
+├── core/          please-core    27-crate graph, wasm32, no network — all unchanged.
+│                                 Gains only vocabulary (D10): the feature enums, `SpanJudgement`,
+│                                 `JudgeReport`, the widened `SuppressedBy`, and `finalize::rejudge`
 ├── cli/           please-cli     gains `--judge`, `judge --check`; judge edge behind `--features judge`
 ├── judge/         please-judge   NEW. ureq client, credential resolution, schema, scoring
 │   ├── src/
@@ -402,6 +404,72 @@ a third figure is stated for the judged path.
 
 **A per-invocation timeout, defaulting low.** On expiry: `TierUnavailable`, which is `Inconclusive`, which is
 exit code 2 — distinguishable from both clean and risk-found, which is the point of the three-outcome model.
+
+## D9 — A truncated verdict is not judged at all
+
+**Decision**: when `Verdict::reasons_truncated()` is true, the judge makes no request and records
+`CoverageGap::failure(TierUnavailable, …)`. The verdict degrades to `Inconclusive` and no observation is
+demoted.
+
+**Rationale — this is a correctness hole found by reading the code, not a policy preference.** `finalize`
+computes the score in step 0, **from the observations, before anything can be dropped** (FR-001b, 002 FR-124,
+`crates/core/src/finalize/mod.rs`). By the time a verdict exists, the reasons have been ordered and truncated
+to `max_reasons`, and the severities that were truncated away are gone. A `rejudge` that recomputes the score
+from the surviving reasons would therefore *silently lower* it on any truncated verdict — not because the
+judge demoted anything, but because the truncated contributions vanished on the way through.
+
+Three ways out, and only one of them is free:
+
+| | For | Against |
+|---|---|---|
+| Refuse to judge a truncated verdict | no new state, fail-closed, consistent with every other failure mode in this tier | a very large document is never judged |
+| `Verdict` retains the pre-truncation severities | exact in all cases | widens the verdict's private state to serve one downstream tier |
+| Recompute from the survivors | simplest | a judged scan of a big document can under-score, which is a fail-*open* discovered by arithmetic |
+
+**Chosen the first.** The third is disqualified outright: the entire tier is built on the premise that
+degradation goes to `Inconclusive` and never to something cheerful, and an under-scored verdict is exactly the
+thing FR-001b exists to prevent. The second is defensible and may become necessary once there is a corpus, but
+it makes `please-core` carry state whose only consumer is an optional tier — and D1's whole argument is that
+core does not learn about the judge.
+
+The first costs a document that hit `max_reasons`, which is a document with more than 64 findings by default.
+That is not a document whose precision problem a second opinion was going to fix.
+
+**Consequence for `rejudge`**: it takes an already-untruncated verdict, so demotion is a move between two
+lists and the score recomputation is exact. `tests/seams.rs::exactly_one_place_constructs_a_verdict` asserts
+**exactly one** `Verdict::new(` call site, so `rejudge` reuses finalization's private `assemble` rather than
+constructing one — which keeps 002's guarantee not merely intact but literally unmodified.
+
+## D10 — The feature vocabulary moves into `please-core`; the client does not
+
+**Decision**: the closed-enum feature types (`AddressedTo`, `ImperativeSource`, `Framing`,
+`StatedPurposeExplainsContent`, `SpanRole`), `SpanJudgement`, and `JudgeReport` are defined in
+`please-core::verdict`. `Verdict` holds an `Option<JudgeReport>` with a public accessor. Everything that
+*reaches the network* — the credential, the request assembly, the HTTP client, the scoring function — stays in
+`please-judge`.
+
+**Rationale**: FR-416 requires a judged verdict to record the model id and prompt version, and D5 requires a
+demoted observation to be readable *in the verdict* with the judge named as what demoted it. Both are claims
+about the `Verdict` type, which lives in core — and core cannot depend on `please-judge` without inverting
+D1's whole safety argument.
+
+So the question is not *whether* core learns something, but *what*. Three candidates were considered:
+
+| | Against |
+|---|---|
+| Return `(Verdict, JudgeReport)` from `Judge::review` | FR-416 weakens from "the verdict records it" to "the CLI prints it", and a future `--format json` has to thread a second value through every call site. The contract says `Verdict → Verdict` for a reason |
+| An opaque `TierAttribution { tier, model, prompt_version }` in core | satisfies FR-416 and nothing else. US5 asks *which feature drove the judgement*, so the per-span answers have to be somewhere a renderer can reach |
+| **The enums in core** | core's public surface learns vocabulary for a tier it does not run |
+
+**Chosen the third, and the objection to it is smaller than it looks.** These are plain data enums with no
+logic, no dependencies, and no behaviour — the same category as `QuotingContext` and `TransformKind`, which
+core already defines for things decided elsewhere. They add no crate to the 27, nothing to
+`check-core-isolation.sh`'s grep, and nothing to the `wasm32` build. What core does **not** gain is any means
+of producing one: `JudgeReport` is supplied to `rejudge` by a caller, exactly as `Attribution` is supplied to
+`finalize`.
+
+The line this draws is worth stating plainly, because it is the line D1 actually cares about: **core may
+describe a judgement; only `please-judge` may obtain one.**
 
 ## Open questions for the examiner
 

@@ -30,11 +30,22 @@ intent rather than form, which is why this tier exists.
 | `wasm32-unknown-unknown` | core must keep building for a target with no sockets |
 | `cargo clippy --workspace --all-targets -- -D warnings` | clean, always |
 
-**One thing the task breakdown discovered that the design docs do not yet say.** Since 002, `Verdict::new` is
-`pub(super)` to `crate::finalize` — **the judge cannot construct a `Verdict`**. So `Judge::review` cannot
-rebuild one directly. The resolution is T010: core gains `finalize::rejudge(verdict, decisions) -> Verdict`,
-and finalization stays the only producer (002 FR-120). The judge supplies decisions; it does not assemble
-verdicts. This is better than the alternative and preserves a guarantee 002 spent a phase establishing.
+**Three things the breakdown and the code review discovered that the design docs did not say.** All three are
+now recorded as amendments — plan D9 and D10, data-model A1–A4 — and are repeated here because they change
+what several tasks do.
+
+1. **The judge cannot construct a `Verdict`.** Since 002, `Verdict::new` is `pub(super)` to
+   `crate::finalize`, so `Judge::review` cannot rebuild one. Core gains
+   `finalize::rejudge(verdict, report) -> Verdict` (T010); the judge supplies decisions and does not assemble
+   verdicts. `tests/seams.rs` asserts exactly *one* `Verdict::new(` call site, so `rejudge` routes through
+   the private `assemble` and that test comes through this feature **unmodified**.
+2. **A truncated verdict cannot be judged** (plan D9). `finalize` aggregates the score from observations
+   *before* truncation (FR-001b), so those severities are gone by the time a `Verdict` exists. Recomputing
+   from the survivors would under-score — a fail-open reachable by arithmetic. `rejudge` refuses, and records
+   `TierUnavailable`.
+3. **The feature vocabulary lands in `please-core`** (plan D10). `JudgeReport` hangs off `Verdict`, `Verdict`
+   is a core type, and core cannot depend on `please-judge`. So the enums move; the client, the credential,
+   and the scoring function do not. Core may **describe** a judgement; only `please-judge` may **obtain** one.
 
 **Working conventions in this repository**: commit per task or logical group; agent commits carry the
 co-author trailer; confirm a test fails before implementing it; never let a credential reach any output.
@@ -53,22 +64,31 @@ co-author trailer; confirm a test fails before implementing it; never let a cred
 
 **Purpose**: the crate, and the gate that must exist *before* the dependency does.
 
-- [ ] T001 Capture the accuracy baseline — run the fixture report and record positives, false positives, and
+- [X] T001 Capture the accuracy baseline — run the fixture report and record positives, false positives, and
       the missed-case ids verbatim in `docs/004-accuracy-baseline.txt`. **First task**: SC-402 requires the
       unjudged path to stay identical, and that is uncheckable without a before
-- [ ] T002 Create `crates/judge` (`please-judge`) with `please-core` as its only dependency, added to
+- [X] T002 Create `crates/judge` (`please-judge`) with `please-core` as its only dependency, added to
       `members` in the root `Cargo.toml`. **No HTTP dependency yet** — T003 must land first
-- [ ] T003 Write `ci/check-cli-dependencies.sh` asserting the **default** `please-cli` graph contains no HTTP
-      or TLS crate, and record the current default graph as its baseline in `ci/cli-dependency-allowlist.txt`
-      (FR-419, SC-405). **This is the gap the Constitution Check found**: `check-dependencies.sh` has only
-      ever covered core, and that stops being sufficient the moment the CLI has optional capability
-- [ ] T004 Add `ureq 3` (`default-features = false`, features `rustls` + `json`), `serde`, `serde_json` to
-      `crates/judge/Cargo.toml` per research R1
-- [ ] T005 Add the `judge` feature to `crates/cli/Cargo.toml`, gating an optional dependency on
+- [X] T003 Write `ci/check-cli-dependencies.sh` (FR-419, SC-405), recording the current default graph as its
+      baseline in `ci/cli-dependency-allowlist.txt`. **Three assertions, not one** — the exact-match
+      allow-list in the house style of `check-dependencies.sh` is the primary gate; a denylist grep for
+      `ureq|rustls|webpki|ring|aws-lc` is the cheap net that names the failure clearly; and the **inverse**
+      check, that `--features judge` *does* pull them, because a silently-broken feature flag otherwise passes
+      a gate that only ever looks for absence. **This is the gap the Constitution Check found**:
+      `check-dependencies.sh` has only ever covered core, and that stops being sufficient the moment the CLI
+      has optional capability
+- [X] T004 Add `ureq 3` (`default-features = false`, features `rustls` + `json`), `serde`, `serde_json` to
+      `crates/judge/Cargo.toml` per research R1. **Re-measure the resolved tree rather than trusting R1's 22**
+      — confirm the feature names are current, note which TLS backend `rustls` selects (`ring` and `aws-lc-rs`
+      differ, and one of them wants a C toolchain), and correct R1's number in place if it moved. The figure
+      is T003's baseline, so a stale one is a gate asserting the wrong thing
+- [X] T005 Add the `judge` feature to `crates/cli/Cargo.toml`, gating an optional dependency on
       `please-judge`. Default build unchanged
-- [ ] T006 Add `ci/check-cli-dependencies.sh` to `.github/workflows/ci.yml` as its own job, beside the
-      existing dependency and isolation gates
-- [ ] T007 [P] Verify `cargo tree -p please-core --edges normal` is still an exact 27-crate match and
+- [X] T006 Add `ci/check-cli-dependencies.sh` to `.github/workflows/ci.yml` as its own job, beside the
+      existing dependency and isolation gates. **In the same commit, make every build/test/clippy job run
+      both feature configurations** — default and `--features judge`. A gate that only ever sees one of them
+      is checking half the matrix, and `-D warnings` in particular will not see a line of the new crate
+- [X] T007 [P] Verify `cargo tree -p please-core --edges normal` is still an exact 27-crate match and
       `wasm32` still builds. The judge must be invisible to both
 
 **Checkpoint**: the guard exists and passes, the crate compiles, core is untouched.
@@ -83,21 +103,37 @@ co-author trailer; confirm a test fails before implementing it; never let a cred
 be judged without being reconstructable by the judge.
 
 - [ ] T008 Define `SpanJudgement` with **exactly two variants**, `Confirmed` and `Demoted`, in
-      `crates/judge/src/lib.rs`. There is no `Cleared`, `Escalated`, or `Added`, and their absence is what
-      makes SC-406 a test of a type rather than of validation code (FR-403)
+      `crates/core/src/finalize/types.rs` (**amended from `crates/judge` by plan D10** — it is reachable from
+      `JudgeReport`, which hangs off `Verdict`). There is no `Cleared`, `Escalated`, or `Added`, and their
+      absence is what makes SC-406 a test of a type rather than of validation code (FR-403)
 - [ ] T009 Widen `Reason::suppressed_by` to a `SuppressedBy { Quoting(QuotingContext), Judge }` in
       `crates/core/src/finalize/types.rs`, keeping the accessor public and the constructor `pub(super)`. A
       judge-demoted observation is **not quoted**, and reusing `QuotingContext` would be the `Encoding`
       mistake again — a name that stops describing its members (data-model)
-- [ ] T010 Add `finalize::rejudge(verdict, decisions) -> Verdict` in `crates/core/src/finalize/mod.rs`,
-      moving demoted observations from `reasons` into `suppressed` and recomputing score, ordering, and
-      outcome. **Finalization stays the only verdict producer** (002 FR-120) — see the orientation note
-- [ ] T011 Extend `tests/seams.rs::exactly_one_place_constructs_a_verdict` to cover the new entry point, so
-      `rejudge` cannot become a second producer
-- [ ] T012 Define `JudgeReport` — model id, prompt version, document features, per-span judgements,
-      `model_severity` — and attach it to `Verdict` with a public accessor (FR-416)
-- [ ] T013 [P] Write a test asserting `model_severity` is read by nothing: grep the crate for the field name
-      and assert exactly one write site and no read sites (FR-410)
+- [ ] T009a Define the feature vocabulary in `crates/core/src/finalize/types.rs` per **plan D10**:
+      `AddressedTo`, `ImperativeSource`, `Framing`, `StatedPurposeExplainsContent`, `SpanRole`. Plain data
+      enums, `#[non_exhaustive]`, an `as_str` beside the variants like `ConcealingContext` has, and **no
+      constructor core can reach for**. Core describes a judgement; it cannot obtain one
+- [ ] T010 Add `finalize::rejudge(verdict, report) -> Verdict` in `crates/core/src/finalize/mod.rs`, moving
+      demoted observations from `reasons` into `suppressed` and recomputing score, ordering, and outcome.
+      **Two amendments from plan D9 and data-model A2, both discovered by reading `finalize`:**
+      (a) if `verdict.reasons_truncated()`, judge nothing and record
+      `CoverageGap::failure(TierUnavailable, …)` — the score was aggregated from observations *before*
+      truncation (FR-001b), so recomputing from the survivors would silently under-score;
+      (b) route through the private `assemble` rather than `Verdict::new`. **Finalization stays the only
+      verdict producer** (002 FR-120) — see the orientation note
+- [ ] T011 Verify `tests/seams.rs::exactly_one_place_constructs_a_verdict` **still passes unmodified**. It
+      asserts exactly *one* `Verdict::new(` call site, so a `rejudge` that constructs its own would fail it.
+      Amended from "extend the test": the guarantee should come through this feature untouched, and if the
+      test needs editing, T010(b) was not done
+- [ ] T012 Define `JudgeReport` in `crates/core/src/finalize/types.rs` — model id, prompt version, document
+      features, per-span judgements, `model_severity` — and attach it to `Verdict` as `Option<JudgeReport>`
+      with a public accessor (FR-416, plan D10). Set only by `rejudge`; **no `Reason` gains a `confirmed_by`
+      field** (data-model A4 — `Confirmed` means nothing happens to the observation)
+- [ ] T013 [P] Assert `model_severity` is read by nothing **structurally rather than by grep**: give it no
+      public accessor, so no reader outside the defining module can exist and no future one can be added
+      without a visible API change (FR-410). Amended — a grep test matches the schema string and the doc
+      comments, and passes for the wrong reason
 - [ ] T014 Update `specs/001-structural-detection-cli/contracts/verdict.schema.json` and `data-model.md` for
       the widened `suppressed_by`, recording the amendment beside 002's and 003's
 
@@ -150,12 +186,20 @@ a credential, so resolution has to exist first. No network is involved in any of
 - [ ] T022 [P] [US4] Write failing tests over every combination of the four variables, including the live
       case: `ANTHROPIC_AUTH_TOKEN` **and** `ANTHROPIC_API_KEY` both set with a custom base URL, where
       choosing wrong sends an upstream account credential to a third-party host
+- [ ] T023a [US4] Make `Command` a real multi-variant subcommand in `crates/cli/src/args.rs` and replace the
+      irrefutable `let Command::Scan(scan_args) = args.command;` at `crates/cli/src/main.rs` with a `match`.
+      Today the enum has one variant and destructuring it is infallible; adding `Judge` breaks that line, and
+      it is better broken deliberately in its own commit than incidentally inside T023
 - [ ] T023 [US4] Implement `plz judge --check` in `crates/cli/src/main.rs`: selected variable, ignored
-      variables, resolved endpoint and model, **making no request** (FR-414)
+      variables, resolved endpoint and model, **making no request** (FR-414). Requires T023a first. The
+      **whole `judge` subcommand is absent on a default build**, for the same reason `--judge` is — a
+      security tool that accepts a command it cannot honour is worse than one that refuses it
 - [ ] T024 [US4] Emit the warning when the endpoint is non-default and `ANTHROPIC_API_KEY` is the only
       credential available (FR-415)
 - [ ] T025 [US4] Add the suite-wide credential-leak assertion: run the tests with a canary token in the
-      environment and assert it appears in no output (SC-404)
+      environment and assert it appears in no output (SC-404). **Must pass `-- --nocapture`** — `cargo test`
+      prints captured output only for *failing* tests, so the check as written in `quickstart.md` would grep
+      a green suite that is leaking on every line
 
 **Checkpoint**: `plz judge --check` explains itself, and nothing anywhere prints a secret.
 
@@ -210,7 +254,17 @@ happy path is added to something already fail-closed rather than the reverse.
 - [ ] T037 [US1] Assert `unclear` everywhere demotes nothing — abstention must never be cheaper for an
       attacker than honesty
 - [ ] T038 [US1] Wire `--judge` and `--judge-timeout` into `crates/cli/src/args.rs` and `main.rs`, behind the
-      feature
+      feature. Two mechanics the contract implies and does not state: `--judge` and `--no-judge` need clap's
+      `overrides_with` for "last flag wins" (`quickstart.md` Scenario 6) — two bare bools do not give that;
+      and `--judge-timeout` takes **whole seconds as an integer**, not `5s`, because a duration parser is a
+      new crate in the CLI's *default* graph for a flag the default build does not have (FR-420)
+- [ ] T038a [US1] Warn once on stderr when `--judge` is combined with a multi-target walk, naming the target
+      count before the first request. Cost is per target and multiplies; the spec's edge case puts optimising
+      it out of scope and **not surprising anyone with it** in scope
+- [ ] T039a [US1] Give `crates/judge/tests` a fixture loader. The cases live in
+      `tests/fixtures/handcrafted-*.jsonl` and are parsed by `crates/core/tests/support.rs`, which is a
+      test-only module of another crate and **not reachable from here**. Decide once and record why:
+      duplicate the loader, or run T039 from the CLI suite instead. Do not discover this inside T039
 - [ ] T039 [US1] Write the discriminating test in `crates/judge/tests/discriminates.rs`: `benign-tool-001`
       demoted to clean, `indirect-tool-003` still reported (SC-401). **Failing this means plan D4 chose the
       wrong axis** — revisit D4 rather than tune T036
@@ -275,7 +329,7 @@ put one back.
 ### Critical path
 
 ```text
-T001 → T003 → T005 → T008 → T009 → T010 → T012
+T001 → T003 → T005 → T008 → T009 → T009a → T010 → T012
                                               ↓
                      US2 (bypass) → US4 (auth) → US3 (fail-closed) → US1 (judge) → US5 → verify
 ```
@@ -337,6 +391,7 @@ function to pass two fixtures would produce a tier that passes two fixtures.
 | FR-401 separate crate, opt-in | T002, T005, T038 |
 | FR-402 unavailable → inconclusive | T026, T027 |
 | FR-403 confirm or demote only | T008, T015, T017 |
+| FR-402 truncated verdict is not judged (D9) | T010 |
 | FR-404 no observations, no request | T029 |
 | FR-405 closed enums, no free text | T034, T035 |
 | FR-406 no leading words, no rule ids | T032, T033 |
@@ -348,11 +403,12 @@ function to pass two fixtures would produce a tier that passes two fixtures.
 | FR-413 no credential in output | T019, T020, T025 |
 | FR-414 diagnostic without a request | T023 |
 | FR-415 non-default host warning | T024 |
-| FR-416 model id and prompt version | T012, T041 |
+| FR-416 model id and prompt version | T009a, T012, T041 |
 | FR-417 determinism carve-out | T044 |
 | FR-418 `--no-judge` reproduces structural | T047 |
 | FR-419 CLI dependency gate | T003, T006 |
 | FR-420 timeout | T038 |
+| FR-419 inverse gate: `--features judge` *does* pull them | T003 |
 | SC-401 discriminating pair | T039 |
 | SC-402 unjudged unchanged | T001, T047, T048 |
 | SC-403 every failure inconclusive | T026, T030 |
@@ -366,12 +422,12 @@ function to pass two fixtures would produce a tier that passes two fixtures.
 
 ## Notes
 
-- **51 tasks.** Roughly half need no network and no credential, which is where the security properties live
+- **57 tasks** (51, plus T009a, T023a, T038a, T039a from the code review, and two assertions folded into
+  T003 and T006). Roughly half need no network and no credential, which is where the security properties live
 - **T003 is the cheapest task with the most leverage.** It closes a gap that has been open since the CLI
   existed, and it must land before the dependency it guards
 - **T010 preserves 002's central guarantee.** The judge supplies decisions; finalization stays the only thing
-  that can produce a verdict. Discovered during this breakdown and not yet reflected in `data-model.md` —
-  worth an amendment when T010 lands
+  that can produce a verdict. Now recorded in `data-model.md` as A2 and in `plan.md` as D9
 - **T039 is the feature.** Everything else is scaffolding around whether that one test can pass
 - Confirm each test fails before implementing. A test that passes on first write is testing something other
   than what it claims

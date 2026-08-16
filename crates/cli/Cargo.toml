@@ -21,12 +21,28 @@ categories = ["command-line-utilities", "text-processing"]
 name = "plz"
 path = "src/main.rs"
 
+# ── Features ────────────────────────────────────────────────────────────────────────────────────
+#
+# `judge` is the ONLY optional capability and it is deliberately not in `default`. Enabling it links an
+# HTTP client and a TLS stack into a tool whose central promise is that it needs neither, so it must be a
+# decision someone makes rather than one they inherit (plan D8, FR-401).
+#
+# The gating is enforced by ci/check-cli-dependencies.sh, not by this comment: the default graph is pinned
+# by exact name, and the script also asserts the INVERSE — that `--features judge` does pull the client —
+# because a feature that silently stopped working would otherwise sail through an absence-only check.
+[features]
+default = []
+judge = ["dep:please-judge"]
+
 [dependencies]
 # `serde` is enabled here rather than in the core's defaults: machine-readable output is a CLI
 # concern, and the core stays serialisation-free for wasm and embedded callers.
 please-core = { workspace = true, features = ["serde"] }
 clap = { workspace = true }
 serde_json = { workspace = true }
+# Optional, and `dep:`-gated above so no implicit feature of the same name exists. The edge from `plz` to
+# the judgement tier is the one place the default build must not have (plan D1).
+please-judge = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Snapshot tests for human-readable output, and a scratch tree for directory-walk tests including the

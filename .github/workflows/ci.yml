@@ -30,6 +30,10 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # Feature 004 made `plz` a two-configuration build. A lint job that only ever sees the default one
+      # never reads a line of the judgement tier's CLI wiring, so `-D warnings` would be enforced on half
+      # the code that ships.
+      - run: cargo clippy --workspace --all-targets --features please-cli/judge -- -D warnings
 
   test:
     name: test
@@ -39,6 +43,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+      # Same reasoning as clippy above: the tier's own tests — the adversarial property test, the
+      # fail-closed suite, credential resolution — are only compiled when the feature is on. The
+      # offline ones are the majority and they are where the security properties live.
+      - run: cargo test --workspace --features please-cli/judge
 
   # Principle V's embeddability claim is only worth what proves it. This job IS that proof: the core
   # must build for a target with no filesystem, no network, no threads, and no monotonic clock. It is
@@ -101,6 +109,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: ./ci/check-dependencies.sh
       - run: ./ci/check-core-isolation.sh
+      # Feature 004, FR-419/SC-405. The two checks above have only ever covered `please-core`, which was
+      # sufficient while the CLI had no optional capability — the judgement tier gives it one, and
+      # Principle V requires the gating be enforced by a check rather than by review.
+      #
+      # This one asserts in three directions: the default `plz` graph matches its allow-list exactly, it
+      # contains no HTTP or TLS crate by name, and `--features judge` DOES contain them. The third is
+      # what stops the whole job passing trivially the day the feature flag breaks.
+      - run: ./ci/check-cli-dependencies.sh
 
 # Jobs arriving with later tasks, listed so their absence is deliberate rather than forgotten:
 #

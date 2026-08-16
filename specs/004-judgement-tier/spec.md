@@ -140,6 +140,9 @@ unexplained number would put it back.
 - **A judge that answers `unclear` to everything.** Treated as no information: nothing is demoted, the
   structural verdict stands. Abstention must never be cheaper for the attacker than honesty.
 - **Content larger than the model's context.** A gap, not a truncation-and-guess.
+- **A verdict with more findings than `max_reasons`.** Not judged at all (FR-421). A document with more than
+  sixty-four findings is not one whose precision problem a second opinion was going to fix, and the
+  alternative is a score that quietly drops the truncated severities.
 - **Judge enabled on a directory walk.** Cost is per target and multiplies. Out of scope to optimise; in
   scope to not surprise anyone with.
 
@@ -195,6 +198,10 @@ unexplained number would put it back.
   than by review. `please-core`'s dependency allow-list MUST be unchanged.
 - **FR-420**: The judge MUST honour a per-invocation timeout, defaulting low enough that a hung endpoint
   cannot hang a scan.
+- **FR-421**: A verdict whose reasons were truncated MUST NOT be judged. It MUST produce a `TierUnavailable`
+  gap instead (plan D9). The score is aggregated from observations *before* truncation (001 FR-001b), so the
+  severities a demotion would have to subtract no longer exist by the time a verdict does — and recomputing
+  from the survivors would understate the score without any judgement having said so.
 
 ---
 

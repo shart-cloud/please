@@ -47,7 +47,7 @@ cargo tree -p please-cli --edges normal --prefix none | grep -Ec 'ureq|rustls|we
 ```sh
 # Unreachable endpoint, deliberately not a mock.
 ANTHROPIC_BASE_URL=http://127.0.0.1:1 ANTHROPIC_AUTH_TOKEN=x \
-  plz scan --judge --judge-timeout 2s tests/fixtures/files/clean.md; echo "exit=$?"
+  plz scan --judge --judge-timeout 2 tests/fixtures/files/clean.md; echo "exit=$?"
 ```
 
 **Expected**: exit `2`. Not `0`. Content that scans clean must not *become* clean-and-blessed because the
@@ -61,7 +61,8 @@ env -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN \
 **Expected**: exit `2`, and stderr names the variables consulted — **never a value**.
 
 Each remaining failure mode gets the same treatment, and each is its own test: timeout, `401`, a proxy that
-rejects tool use, well-formed JSON that fails the schema, an unrecognised `span_id`.
+rejects tool use, well-formed JSON that fails the schema, an unrecognised `span_id`, **and a verdict whose
+reasons were truncated before judgement** (plan D9 — the score it would be recomputed from no longer exists).
 
 ## Scenario 3 — A captured judge cannot remove a finding (SC-406, FR-403)
 
@@ -94,9 +95,12 @@ environment above, `ANTHROPIC_AUTH_TOKEN` is selected and `ANTHROPIC_API_KEY` is
 where choosing wrong would send an upstream account credential to a third-party host (plan D3).
 
 ```sh
-ANTHROPIC_AUTH_TOKEN=canary-do-not-log cargo test --workspace --features judge 2>&1 \
+ANTHROPIC_AUTH_TOKEN=canary-do-not-log cargo test --workspace --features judge -- --nocapture 2>&1 \
   | grep -c canary-do-not-log
 ```
+
+**`--nocapture` is not optional here.** Without it `cargo test` prints captured output only for *failing*
+tests, so a green suite leaking the token on every line greps clean.
 
 **Expected**: `0`. Asserted mechanically over the whole suite, because the natural way to write an error
 includes the response body and the body of a `401` can echo a token.

@@ -12,13 +12,23 @@ schema is [judge-response.schema.json](./judge-response.schema.json).
 ```sh
 plz scan --judge <target>              # opt-in, per invocation
 plz scan --no-judge <target>           # explicit off; also the default
-plz scan --judge --judge-timeout 5s
+plz scan --judge --judge-timeout 5      # whole seconds
 plz judge --check                      # resolve credentials and endpoint; make NO request
 ```
 
 `--judge` is unavailable unless the binary was built with `--features judge`. On a default build it is an
 **unknown flag**, exit `64` — not a silently ignored one. A security tool that accepts a flag it cannot honour
-is worse than one that refuses it.
+is worse than one that refuses it. **The whole `judge` subcommand is absent on a default build too**, by the
+same argument.
+
+Two mechanics worth pinning here rather than leaving to the implementation:
+
+- `--judge` and `--no-judge` are **last-flag-wins**, which needs `overrides_with` rather than two independent
+  booleans. `plz scan --judge --no-judge` is a structural scan, and the ordering is the point: a wrapper
+  script appending `--no-judge` must be able to override a config that supplied `--judge`.
+- `--judge-timeout` takes **whole seconds as an integer**, not `5s`. A duration parser would be a new crate
+  in the CLI's *default* dependency graph, for a flag the default build does not have — which is precisely
+  the leak FR-419's gate exists to catch.
 
 ### `plz judge --check`
 
@@ -49,11 +59,15 @@ working.
 | Judge demoted everything, nothing reported | `0` | Clean. The suppressed list carries the story |
 | Judge confirmed a finding at or above threshold | `1` | Risk found |
 | **Judge unavailable, for any reason** | `2` | **Inconclusive — never `0`** (FR-402) |
-| `--judge` on a build without the feature | `64` | Usage |
+| Judge confirmed a finding below the threshold | `3` | Risk found, under the caller's bar |
+| `--judge` (or `judge`) on a build without the feature | `64` | Usage |
 
-The third row is the whole fail-closed posture. An unreachable endpoint, a missing credential, a timeout, a
-401, a proxy without tool-use support, a response that does not validate — all one outcome, and it is not
-"fine".
+The **third** row is the whole fail-closed posture. An unreachable endpoint, a missing credential, a timeout,
+a 401, a proxy without tool-use support, a response that does not validate, **and a verdict whose reasons were
+truncated before judgement** (plan D9) — all one outcome, and it is not "fine".
+
+The **fourth** row is in `contracts/cli.md` and was missing here. Demotion can move a verdict from `1` to `3`
+as well as to `0`, and a caller that allows-but-logs at `3` needs that to keep working.
 
 ---
 
@@ -108,6 +122,17 @@ Judge::new(Resolution) -> Result<Judge, JudgeError>
 // unwrap_or_default() into something cheerful.
 Judge::review(&self, verdict: Verdict, input: &[u8]) -> Verdict
 ```
+
+The seam underneath it is in core, because only finalization may produce a `Verdict` (002 FR-120):
+
+```rust
+// please-core — the judge supplies decisions; it does not assemble verdicts.
+finalize::rejudge(verdict: Verdict, report: JudgeReport) -> Verdict
+```
+
+`rejudge` refuses a verdict whose reasons were truncated, recording `TierUnavailable` instead of judging it
+(plan D9). It reuses finalization's private `assemble`, so `Verdict::new` keeps its single call site and
+`tests/seams.rs` passes unmodified.
 
 ### `review` is `Verdict → Verdict`, and can only narrow
 

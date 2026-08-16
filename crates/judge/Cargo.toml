@@ -1,0 +1,26 @@
+[package]
+name = "please-judge"
+description = "Optional second-opinion tier for `please` — arbitrates findings the structural tier cannot resolve"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# ── The dependency direction IS the safety argument (plan D1) ────────────────────────────────────
+#
+# This crate depends on please-core. Core NEVER depends on this. That single arrow is what keeps three
+# CI gates green by construction rather than by care:
+#
+#   ci/check-dependencies.sh   runs `cargo tree -p please-core`, which cannot see a crate that depends
+#                              on core — so the 27-crate pin holds whatever this crate pulls in
+#   ci/check-core-isolation.sh only reads crates/core/src
+#   wasm32-unknown-unknown     only builds core
+#
+# Reversing this arrow, or adding a dev-dependency edge from core to here, defeats all three at once.
+[dependencies]
+please-core = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }

@@ -1,0 +1,71 @@
+# Dependency allow-list for the DEFAULT build of please-cli — the `plz` binary users install.
+#
+# Feature 004's Constitution Check found a gap. `ci/check-dependencies.sh` has only ever covered
+# `please-core`, which was sufficient while the CLI had no optional capability. The judgement tier gives it
+# one, and Principle V requires the gating be enforced by a check rather than by review:
+#
+#   > Heavier capability MUST be additive and opt-in, gated so that a build selecting none of it carries
+#   > none of its dependencies. A guard test MUST enforce that gating rather than trusting review to catch
+#   > a regression.
+#
+# So this file is the CLI's equivalent pin (FR-419, SC-405). Everything below is what `plz` carried BEFORE
+# `ureq` entered the repository, captured at T003 deliberately ahead of T004 — a baseline recorded after
+# the dependency lands is a baseline that has already been contaminated by it.
+#
+# A NEW LINE HERE IS A DESIGN DECISION. If a crate belongs in the shipping binary, add it with a comment
+# saying why it is worth its weight. If it arrived because someone enabled `judge` by accident, the check
+# has done its job.
+#
+# Note what is absent and must stay absent: ureq, rustls, webpki, ring, aws-lc-sys, hyper, tokio. The judge
+# adds ~28 crates (research R1) and NONE of them may reach this list.
+
+aho-corasick
+anstream
+anstyle
+anstyle-parse
+anstyle-query
+base64
+block-buffer
+cfg-if
+clap
+clap_builder
+clap_derive
+clap_lex
+colorchoice
+cpufeatures
+crypto-common
+digest
+generic-array
+heck
+is_terminal_polyfill
+itoa
+memchr
+please-cli
+please-core
+proc-macro2
+quote
+regex
+regex-automata
+regex-syntax
+serde
+serde_core
+serde_derive
+serde_json
+serde_spanned
+sha2
+strsim
+syn
+tinyvec
+tinyvec_macros
+toml
+toml_datetime
+toml_parser
+toml_writer
+typenum
+unicode-ident
+unicode-normalization
+unicode-script
+unicode-security
+utf8parse
+winnow
+zmij

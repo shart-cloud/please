@@ -140,6 +140,60 @@ established as the standard when it removed the two-run diff.
 
 ---
 
+## Amendments (post-breakdown, from reading the code)
+
+Four things this document asserted turned out to need a decision. Recorded here the way 002 and 003 recorded
+theirs, rather than silently corrected.
+
+### A1 — `JudgeReport` lives in `please-core`, not here (plan D10)
+
+This document said "Nothing here lives in `please-core`" and that is now wrong for the **vocabulary**.
+`Verdict` is a core type, so an `Option<JudgeReport>` accessor on it must be too, and so must every enum the
+report contains. `Features`, `SpanJudgement` and `JudgeReport` are therefore defined in
+`please-core::verdict` as plain data with no logic and no dependencies — the same category as
+`QuotingContext`.
+
+`Credential`, `Resolution`, `JudgeRequest`, the client, and the scoring function are unaffected and stay in
+`please-judge`. **Core may describe a judgement; only `please-judge` may obtain one.**
+
+### A2 — A truncated verdict is not judged (plan D9)
+
+This document claimed "Demotion happens before finalization recomputes, so a demoted observation does not
+score." That is true of `finalize`, and **not** true of `rejudge`: the score is aggregated from observations
+*before* truncation (001 FR-001b), so a verdict whose reasons were truncated has already lost the severities
+it was scored from.
+
+`rejudge` therefore rejects a verdict with `reasons_truncated() == true`, recording
+`CoverageGap::failure(TierUnavailable, "verdict truncated before judgement")`. Outcome: `Inconclusive`. This
+is a fail-closed path, not a special case — under-scoring a judged verdict would be a fail-open reachable by
+arithmetic alone.
+
+`rejudge` reuses finalization's private `assemble` rather than calling `Verdict::new`, so
+`tests/seams.rs::exactly_one_place_constructs_a_verdict` continues to assert exactly one construction site,
+unmodified.
+
+### A3 — A `span_id` identifies an **observation**, not a region of text
+
+Two rules can fire on overlapping or identical spans, so "one entry per observation" and "one answer per
+span" are not the same statement. The request carries one entry per reason in the verdict's `reasons()`
+order, and `span_id` is an opaque token minted per entry — not a byte offset, not a rule id, and not stable
+across runs.
+
+Consequence worth naming: two entries with identical excerpt text may receive different `span_role` answers.
+That is the model being inconsistent, it is visible in the `JudgeReport`, and it is not something to smooth
+over in the parser.
+
+### A4 — There is no "confirmed" annotation on a `Reason`
+
+`Confirmed` means *nothing happens to the observation*. It stays in `reasons()`, unchanged, byte-identical to
+the structural one. The record that a judge looked at it and confirmed it lives in `JudgeReport.judgements`
+and nowhere else.
+
+Adding a `confirmed_by` field to `Reason` was considered and rejected: it would put judge state on the type
+whose whole guarantee is that finalization decides its contents, to record an event that changed nothing.
+
+---
+
 ## What changes in `please-core`
 
 **Almost nothing, and that is the point of R4.**
@@ -161,6 +215,9 @@ concluded that is the wrong trade.
 
 `IncompleteCause::TierUnavailable` needs **no change** — it has existed since 001 with no production call site
 and this is what it was reserved for.
+
+Beyond `suppressed_by`, core gains the vocabulary in A1 and one function, `finalize::rejudge`. It gains no
+dependency, no I/O, and no way to produce a `JudgeReport` of its own.
 
 ---
 

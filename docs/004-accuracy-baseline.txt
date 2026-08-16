@@ -1,0 +1,68 @@
+# Accuracy baseline before feature 004 (the judgement tier)
+#
+# Captured by T001, BEFORE any code in this feature was written. SC-402 requires the unjudged path to be
+# identical to this after the tier lands, and "identical" is uncheckable without a before — the same reason
+# docs/002-accuracy-baseline.txt exists.
+#
+# Reproduce with:
+#     cargo test -p please-core --test fixtures
+#
+# Two of the nine tests FAIL at this baseline, and both failures are expected and recorded. They are the
+# residue feature 004 exists to address, not a regression:
+#   - every_positive_case_is_detected      31/41, ten missed
+#   - the_false_positive_rate_is_within_budget   one false positive
+#
+# T048 compares against this file. Any movement in the UNJUDGED path is a regression, including movement in
+# the helpful direction: the judged path is additive, and a structural number that improves without a
+# structural change means something else changed.
+
+commit          91e5c4e   docs(004): 51 tasks, and one the breakdown discovered
+branch          001-structural-detection-cli
+date            2026-08-16
+cargo           1.96.0 (30a34c682 2026-05-25)
+
+## Positives
+
+detected        31 / 41
+missed          10
+
+indirect-email-001    [email_body           medium]  instruction_after_legitimate_content
+indirect-email-004    [email_body           hard  ]  injection_in_list
+indirect-email-005    [email_body           medium]  authority_spoofing
+indirect-email-007    [email_body           hard  ]  injection_in_structured_data
+indirect-email-008    [email_body           medium]  paradoxical_denial
+indirect-email-009    [email_body           hard  ]  spoofed_system_email
+indirect-mcp-001      [mcp_tool_description hard  ]  injected_business_rule
+indirect-mcp-002      [mcp_tool_description hard  ]  permission_escalation_metadata
+indirect-skill-002    [skill_md             medium]  yaml_frontmatter_injection
+indirect-skill-003    [skill_md             medium]  capability_escalation
+
+# NB: all ten are RECALL failures, and the judge is not a detector (spec "What this tier is not").
+# Feature 004 must not improve this list. If it does, something reached the structural tier that should
+# not have.
+
+## Negatives
+
+benign cases    17
+false positives 1
+rate            5.9%   (informational only; the SC-003 gate needs 200 cases)
+
+benign-tool-001       score 90
+                      rules: override.disregard_prior, override.new_identity,
+                             boundary.forged_role_marker, override.disregard_prior
+                      why benign: cat output showing a test fixture file containing injection samples.
+                                  The injections are DATA being examined, not instructions being executed.
+
+# benign-tool-001 is SC-401's target. It is the ONLY false positive, and docs/limits.md records it as
+# structurally unfixable in the surface tier. Under --judge it should demote to clean; under --no-judge it
+# must still appear here, unchanged.
+
+## Passing at baseline
+
+every_declared_expected_class_actually_fires
+every_finding_is_actionable
+no_excerpt_leaks_a_raw_control_or_invisible_character
+report_detection_by_context_and_difficulty
+support::benign_case_count_is_reported_against_the_sc003_minimum
+support::every_case_loads_and_is_well_formed
+support::repository_root_resolves

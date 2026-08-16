@@ -28,6 +28,37 @@ With `serde`, `serde_json` and `ureq`'s `json` feature — the realistic judge c
 **32 crates, of which 4 are already in `please-core`'s graph** (`base64`, `cfg-if`, `memchr`, `serde_core`).
 So the judge adds **28 crates** that are new to this repository.
 
+### Re-measured at T004, against the resolver rather than the scratch crate
+
+The estimate above was owed a check before the allow-list was built on it, because a stale baseline is a
+gate asserting the wrong thing. Measured against the real `crates/judge` after `cargo add`:
+
+| | |
+|---|---|
+| `ureq` resolved | **3.4.0** — feature names `rustls` and `json` are current; `rustls` implies `_ring` |
+| `ureq` subtree | **23 crates** including itself (estimate: 22 — version drift, not a surprise) |
+| `please-judge` total | **56 crates** |
+| **New to this repository** | **19** (estimate: 28) |
+| `tokio` | **0**, as promised |
+
+The nineteen: `bytes`, `getrandom`, `http`, `httparse`, `libc`, `log`, `once_cell`, `percent-encoding`,
+`ring`, `rustls`, `rustls-pki-types`, `rustls-webpki`, `subtle`, `untrusted`, `ureq`, `ureq-proto`,
+`utf8-zero`, `webpki-roots`, `zeroize`.
+
+Nine fewer than estimated, because the scratch crate resolved `ureq` alone while the real one shares more of
+`please-core`'s graph than the four crates the estimate credited. **The direction of the error is the
+comfortable one** and the conclusion is unchanged.
+
+**One thing the measurement surfaced that the estimate did not**: `rustls` selects `ring` as its provider,
+not `aws-lc-rs`. `ring` carries C and assembly and wants a working `cc` on any target without a prebuilt
+artifact. That is a *build* dependency of the optional tier and reaches neither `please-core` nor the
+default `plz` binary — but it is the reason `--features judge` may fail to build somewhere the default
+build succeeds, and an operator hitting that deserves to find the cause written down rather than inferred
+from a linker error.
+
+**FR-419's guard asserts against 19, not 28.** `ci/cli-dependency-allowlist.txt` pins the default CLI graph
+by exact name, so the count is documentation and the names are the contract.
+
 **Rationale**: the numbers say what the argument said. `reqwest` is ~4× the tree and brings a tokio runtime
 for a single synchronous `POST`, which is the objection that ruled out `rig.rs` one level down. Two further
 points the measurement made concrete:
@@ -45,8 +76,10 @@ rejected: TLS is not a thing to hand-roll, and `please-core`'s isolation gate wo
 this is a different crate. `rig.rs` — rejected by the examiner as too heavy for one endpoint, which the
 measurement supports.
 
-**Consequence for FR-419**: 28 new crates is the number the CLI allow-list guard asserts *against* — the
-default `please-cli` build must contain **none** of them, and the `--features judge` build exactly them.
+**Consequence for FR-419**: the CLI allow-list guard asserts *against* those crates by name — the default
+`please-cli` build must contain **none** of them, and the `--features judge` build must contain them. The
+second half matters as much as the first: a gate that only checks for absence passes trivially when the
+feature is broken.
 
 ---
 
