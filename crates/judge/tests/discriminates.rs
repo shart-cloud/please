@@ -37,7 +37,7 @@
 mod support;
 
 use please_core::verdict::{Outcome, SuppressedBy};
-use please_judge::{Judge, Resolution};
+use please_judge::Judge;
 
 use support::{engine, fixture, skip_without_endpoint};
 

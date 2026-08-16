@@ -50,7 +50,7 @@ fn only_what_we_wrote(request: &JudgeRequest) -> String {
 fn no_part_of_the_request_names_the_interesting_answer() {
     let engine = engine();
     let verdict = scan(&engine, FLAGGED);
-    let request = JudgeRequest::assemble(&verdict, FLAGGED.as_bytes()).expect("findings to judge");
+    JudgeRequest::assemble(&verdict, FLAGGED.as_bytes()).expect("findings to judge");
 
     // The excerpts are the document's own words and are excluded from the check — a payload containing the
     // word "attack" is not this project leading the witness, and neutering it would be editing evidence.
