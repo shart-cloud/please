@@ -48,4 +48,14 @@ please-judge = { workspace = true, optional = true }
 # Snapshot tests for human-readable output, and a scratch tree for directory-walk tests including the
 # unreadable-target case (FR-032a).
 insta = { workspace = true }
+# Validating `--format json` against contracts/verdict.schema.json (001 T065). The schema is a PUBLISHED
+# contract and had drifted from the type for two features before anything checked it — a second,
+# hand-rolled implementation of the same rules could drift the same way, so this validates the real file.
+#
+# A dev-dependency only, and a heavy one. `ci/check-cli-dependencies.sh` inspects `cargo tree --edges
+# normal`, which excludes dev-dependencies, so it cannot reach the default `plz` graph that Principle V
+# constrains. `default-features = false` drops the resolver's network fetching for remote `$ref`s, which
+# this schema does not use and which a security tool has no business performing.
+jsonschema = { version = "0.49", default-features = false }
+serde_json = { workspace = true }
 tempfile = { workspace = true }

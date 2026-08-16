@@ -71,6 +71,23 @@ pub enum RiskLevel {
     Critical,
 }
 
+impl RiskLevel {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    ///
+    /// Added at 001 T069, when serialisation stopped being hypothetical. `crates/cli/src/render.rs` had a
+    /// private `band()` doing the same job in different words, which is exactly the drift this method
+    /// exists to prevent.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Low => "low",
+            Self::Medium => "medium",
+            Self::High => "high",
+            Self::Critical => "critical",
+        }
+    }
+}
+
 /// A named family of related payload techniques (FR-015).
 ///
 /// **A class names a kind of finding, never a delivery mechanism** (FR-130). That distinction is not
@@ -451,6 +468,18 @@ pub enum SpanJudgement {
     Demoted,
 }
 
+impl SpanJudgement {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    ///
+    /// `crates/cli/src/render.rs` hardcoded these two strings until 001 T069.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Confirmed => "confirmed",
+            Self::Demoted => "demoted",
+        }
+    }
+}
+
 /// One span's judgement, with the answer it was derived from.
 ///
 /// Carries `role` as well as `judgement` because FR-407 computes the score from the features: without them
@@ -550,6 +579,21 @@ pub enum TransformKind {
     UnicodeTags,
     /// Variation selectors, used to smuggle arbitrary bytes.
     VariationSelectors,
+}
+
+impl TransformKind {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Base64 => "base64",
+            Self::Hex => "hex",
+            Self::Rot13 => "rot13",
+            Self::Reversed => "reversed",
+            Self::Leetspeak => "leetspeak",
+            Self::UnicodeTags => "unicode_tags",
+            Self::VariationSelectors => "variation_selectors",
+        }
+    }
 }
 
 /// One link in a decoding chain.
@@ -778,6 +822,17 @@ pub enum TargetKind {
     Path,
     Stdin,
     Buffer,
+}
+
+impl TargetKind {
+    /// Stable wire name, kept beside the variants so the serialised form cannot drift from them.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Path => "path",
+            Self::Stdin => "stdin",
+            Self::Buffer => "buffer",
+        }
+    }
 }
 
 /// What was scanned — reporting metadata only.
@@ -1047,6 +1102,220 @@ impl Verdict {
                 };
                 format!("{:?} risk, score {}: {worst}{more}", self.risk, self.score)
             }
+        }
+    }
+}
+
+// ── Serialisation (001 T069, behind the `serde` feature) ────────────────────────────────────────
+//
+// The serialised form is a **published contract**: `specs/001-structural-detection-cli/contracts/verdict.schema.json`,
+// which `crates/cli/tests/contract.rs` validates real output against. Two consequences shape everything
+// below.
+//
+// **Every enum serialises through its own `as_str()`**, not through `rename_all`. This file says four times
+// that wire names are "kept beside the variants so the serialised form cannot drift from them"; routing
+// serialisation through `as_str` makes that structurally true instead of a convention, and it means adding a
+// variant without a wire name fails to compile rather than emitting a Rust identifier.
+//
+// It is also the only thing that works for `SuppressedBy`. That enum has a newtype variant,
+// `Quoting(QuotingContext)`, which `rename_all` would render as `{"quoting": "fenced_code"}` — the schema
+// wants the flat string `"fenced_code"`, and `SuppressedBy::as_str` already flattens both arms into exactly
+// that one 6-value space.
+//
+// **Structs derive normally.** Private fields are not an obstacle: the derive is generated inside this
+// module, which is also why it has to live here rather than in the CLI.
+#[cfg(feature = "serde")]
+mod serialisation {
+    use super::*;
+    use serde::ser::{Serialize, SerializeStruct, Serializer};
+
+    /// Serialise an enum as its wire name.
+    macro_rules! as_str_serialize {
+        ($($ty:ident),+ $(,)?) => {
+            $(impl Serialize for $ty {
+                fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+                    serializer.serialize_str(self.as_str())
+                }
+            })+
+        };
+    }
+
+    as_str_serialize!(
+        Outcome,
+        RiskLevel,
+        DetectionClass,
+        QuotingContext,
+        SuppressedBy,
+        TransformKind,
+        IncompleteCause,
+        TargetKind,
+        SpanJudgement,
+        SpanRole,
+        SpanRelation,
+        AddressedTo,
+        ImperativeSource,
+        Framing,
+        StatedPurposeExplainsContent,
+    );
+
+    impl Serialize for Span {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("Span", 2)?;
+            o.serialize_field("start", &self.start)?;
+            o.serialize_field("end", &self.end)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for Transform {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("Transform", 4)?;
+            o.serialize_field("kind", &self.kind)?;
+            o.serialize_field("depth", &self.depth)?;
+            o.serialize_field("input_span", &self.input_span)?;
+            o.serialize_field("decoded_excerpt", &self.decoded_excerpt)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for Reason {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            // `suppressed_by` is skipped when absent; the schema has it optional. Every other field is
+            // always present, including `description` — the schema permits omitting it, and a finding
+            // without its explanation is one nobody can act on, so it is always written.
+            let len = 7 + usize::from(self.suppressed_by.is_some());
+            let mut o = s.serialize_struct("Reason", len)?;
+            o.serialize_field("rule_id", &self.rule_id)?;
+            o.serialize_field("class", &self.class)?;
+            o.serialize_field("span", &self.span)?;
+            o.serialize_field("matched", &self.matched)?;
+            o.serialize_field("severity", &self.severity)?;
+            o.serialize_field("chain", &self.chain)?;
+            o.serialize_field("description", &self.description)?;
+            match &self.suppressed_by {
+                Some(by) => o.serialize_field("suppressed_by", by)?,
+                None => o.skip_field("suppressed_by")?,
+            }
+            o.end()
+        }
+    }
+
+    impl Serialize for Incompleteness {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let len =
+                1 + usize::from(self.configured.is_some()) + usize::from(self.detail.is_some());
+            let mut o = s.serialize_struct("Incompleteness", len)?;
+            o.serialize_field("cause", &self.cause)?;
+            match &self.configured {
+                Some(v) => o.serialize_field("configured", v)?,
+                None => o.skip_field("configured")?,
+            }
+            match &self.detail {
+                Some(v) => o.serialize_field("detail", v)?,
+                None => o.skip_field("detail")?,
+            }
+            o.end()
+        }
+    }
+
+    impl Serialize for TargetRef {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            // `name` is the path AS GIVEN, never absolutised, which is what keeps output identical across
+            // working directories (SC-011).
+            let len = 2 + usize::from(self.name.is_some());
+            let mut o = s.serialize_struct("TargetRef", len)?;
+            o.serialize_field("kind", &self.kind)?;
+            match &self.name {
+                Some(v) => o.serialize_field("name", v)?,
+                None => o.skip_field("name")?,
+            }
+            o.serialize_field("bytes", &self.bytes)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for RulesetId {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("RulesetId", 3)?;
+            o.serialize_field("name", &self.name)?;
+            o.serialize_field("version", &self.version)?;
+            o.serialize_field("digest", &self.digest)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for EngineId {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("EngineId", 2)?;
+            o.serialize_field("name", &self.name)?;
+            o.serialize_field("version", &self.version)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for Features {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("Features", 4)?;
+            o.serialize_field("addressed_to", &self.addressed_to)?;
+            o.serialize_field("imperative_source", &self.imperative_source)?;
+            o.serialize_field("framing", &self.framing)?;
+            o.serialize_field(
+                "stated_purpose_explains_content",
+                &self.stated_purpose_explains_content,
+            )?;
+            o.end()
+        }
+    }
+
+    impl Serialize for SpanVerdict {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("SpanVerdict", 4)?;
+            o.serialize_field("reason_index", &self.reason_index)?;
+            o.serialize_field("role", &self.role)?;
+            o.serialize_field("relation", &self.relation)?;
+            o.serialize_field("judgement", &self.judgement)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for JudgeReport {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            // `model_severity` is NOT serialised, and the omission is FR-410 rather than an oversight. The
+            // model's own opinion is recorded and read by nothing; putting it on the wire would make it
+            // readable, which is the one thing the field must not be until there is a corpus to calibrate
+            // against. The schema rejects it too — `additionalProperties: false` — so this is enforced
+            // twice, by the type having no accessor and by the contract test.
+            let mut o = s.serialize_struct("JudgeReport", 4)?;
+            o.serialize_field("model", &self.model)?;
+            o.serialize_field("prompt_version", &self.prompt_version)?;
+            o.serialize_field("features", &self.features)?;
+            o.serialize_field("judgements", &self.judgements)?;
+            o.end()
+        }
+    }
+
+    impl Serialize for Verdict {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let len = 11 + usize::from(self.judge.is_some());
+            let mut o = s.serialize_struct("Verdict", len)?;
+            o.serialize_field("outcome", &self.outcome)?;
+            o.serialize_field("score", &self.score)?;
+            o.serialize_field("risk", &self.risk)?;
+            o.serialize_field("reasons", &self.reasons)?;
+            o.serialize_field("reasons_truncated", &self.reasons_truncated)?;
+            o.serialize_field("suppressed", &self.suppressed)?;
+            o.serialize_field("suppressions_truncated", &self.suppressions_truncated)?;
+            o.serialize_field("incomplete", &self.incomplete)?;
+            o.serialize_field("target", &self.target)?;
+            o.serialize_field("ruleset", &self.ruleset)?;
+            o.serialize_field("engine", &self.engine)?;
+            // Absent, not null, when no judge ran — and the ABSENCE is meaningful. `judge: null` would say
+            // "a judge ran and produced nothing", which is a different claim (004 FR-416).
+            match &self.judge {
+                Some(report) => o.serialize_field("judge", report)?,
+                None => o.skip_field("judge")?,
+            }
+            o.end()
         }
     }
 }

@@ -25,21 +25,36 @@ struct Run {
     stderr: String,
 }
 
+/// Run `plz scan` over stdin, **pinning `--format human`**.
+///
+/// Explicit since 001 T070, and not a formality. `--format` defaults to `human` on a terminal and `json`
+/// when redirected (`contracts/cli.md`), and a test harness captures stdout through a pipe — so without
+/// this, every assertion in this file about prose would be reading JSON. A test whose meaning depends on
+/// whether a terminal happens to be attached is a test that behaves differently in CI, which is the
+/// objection to the TTY-dependent default and the reason to pin it everywhere it matters.
 fn scan_stdin(input: &str, extra: &[&str]) -> Run {
     let mut child = plz()
         .arg("scan")
+        .args(["--format", "human"])
         .args(extra)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .expect("plz should launch");
-    child
+    // `let _` rather than `.expect(...)`, and this is a real failure mode rather than defensiveness.
+    // A usage error — a missing --rules file, a malformed rule set, an unknown target — makes `plz` exit
+    // BEFORE it reads stdin, so this write hits a closed pipe and returns EPIPE. Under `cargo test` for one
+    // binary the parent usually wins the race; under `cargo test --workspace` with every test binary
+    // competing for cores it does not, and the suite fails intermittently in a way that looks like a flake
+    // and is not.
+    //
+    // Whether the child consumed stdin is not something any test here asserts. What it exited with is.
+    let _ = child
         .stdin
         .as_mut()
         .expect("stdin")
-        .write_all(input.as_bytes())
-        .expect("write stdin");
+        .write_all(input.as_bytes());
     let out = child.wait_with_output().expect("plz should finish");
     Run {
         code: out.status.code().unwrap_or(-1),
@@ -365,7 +380,7 @@ fn a_directory_is_walked_and_each_target_reported() {
     .unwrap();
 
     let out = plz()
-        .arg("scan")
+        .args(["scan", "--format", "human"])
         .arg(dir.path())
         .output()
         .expect("plz should run");

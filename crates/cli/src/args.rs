@@ -68,7 +68,18 @@ pub struct ScanArgs {
     #[arg(long, value_enum, default_value_t = Band::High)]
     pub threshold: Band,
 
+    /// Output form. Defaults to `human` on a terminal and `json` when redirected.
+    ///
+    /// The default is deliberately context-sensitive (`contracts/cli.md`): a hook gets machine-readable
+    /// output with no flag, and a person gets a readable report. **Pass it explicitly in a script** —
+    /// `plz scan x` and `plz scan x | cat` print different things, and a script whose behaviour depends
+    /// on whether a terminal is attached is a script that behaves differently in CI.
+    #[arg(long, value_enum)]
+    pub format: Option<Format>,
+
     /// Show rule descriptions and decode chains.
+    ///
+    /// No effect under `--format json`, which always carries everything `--explain` adds.
     #[arg(long)]
     pub explain: bool,
 
@@ -139,6 +150,16 @@ pub struct ScanArgs {
     pub judge_timeout: Option<u64>,
 }
 
+/// The two output forms (FR-027).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Format {
+    /// A readable report. Prose, and free to be reworded — nothing parses it.
+    Human,
+    /// The published contract, `contracts/verdict.schema.json`. Breaking its shape is a major version
+    /// change.
+    Json,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Band {
     None,
@@ -184,6 +205,23 @@ impl From<Class> for DetectionClass {
 }
 
 impl ScanArgs {
+    /// The output form for this invocation, resolving the TTY-dependent default.
+    ///
+    /// Not a clap `default_value_t`, because the default is not a constant: it depends on whether stdout is
+    /// a terminal at the moment the process runs. `Option<Format>` is what lets "the user said nothing" be
+    /// distinguishable from "the user said human".
+    ///
+    /// `std::io::IsTerminal` is in std, so this costs no dependency — which matters, because a crate added
+    /// for this would land in the default `plz` graph that `ci/check-cli-dependencies.sh` pins.
+    pub fn format(&self) -> Format {
+        use std::io::IsTerminal;
+        self.format.unwrap_or(if std::io::stdout().is_terminal() {
+            Format::Human
+        } else {
+            Format::Json
+        })
+    }
+
     /// Build the scan policy this invocation asks for.
     ///
     /// Starts from the library defaults and overrides only what was given, so a default `plz scan` and a

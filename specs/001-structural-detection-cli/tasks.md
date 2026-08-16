@@ -147,18 +147,18 @@ shape, with no human reading the result.
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T065 [P] [US2] Write failing test asserting `--format json` output validates against `specs/001-structural-detection-cli/contracts/verdict.schema.json` for every fixture, in `crates/cli/tests/contract.rs`
-- [ ] T066 [P] [US2] Write failing test asserting stdout carries only the result document and all diagnostics go to stderr, in `crates/cli/tests/contract.rs`
-- [ ] T067 [P] [US2] Write failing tests asserting all six status codes (0, 1, 2, 3, 64, 70) are reachable and distinct, in `crates/cli/tests/exit_codes.rs`
-- [ ] T068 [P] [US2] Write failing determinism test asserting byte-identical `--format json` output across repeated runs and from different working directories, in `crates/cli/tests/determinism.rs` (SC-011)
+- [X] T065 [P] [US2] Write failing test asserting `--format json` output validates against `specs/001-structural-detection-cli/contracts/verdict.schema.json` for every fixture, in `crates/cli/tests/contract.rs`
+- [X] T066 [P] [US2] Write failing test asserting stdout carries only the result document and all diagnostics go to stderr, in `crates/cli/tests/contract.rs`
+- [X] T067 [P] [US2] Write failing tests asserting all six status codes (0, 1, 2, 3, 64, 70) are reachable and distinct, in `crates/cli/tests/exit_codes.rs`
+- [X] T068 [P] [US2] Write failing determinism test asserting byte-identical `--format json` output across repeated runs and from different working directories, in `crates/cli/tests/determinism.rs` (SC-011)
 
 ### Implementation for User Story 2
 
-- [ ] T069 [US2] Implement `serde` derives on the verdict types behind the `serde` feature, using ordered collections and integer scores, in `crates/core/src/verdict.rs`
-- [ ] T070 [US2] Implement JSON rendering emitting a single object per target and an array for multiple targets, with no timestamp and no absolutised paths, in `crates/cli/src/render/json.rs` (makes T065, T068 pass)
-- [ ] T071 [US2] Implement status-code mapping including the distinct below-threshold code 3 and the sysexits codes 64 and 70, in `crates/cli/src/exit.rs` (makes T067 pass)
-- [ ] T072 [US2] Implement stream discipline ensuring warnings and rule-set load errors never reach stdout, in `crates/cli/src/main.rs` (makes T066 pass)
-- [ ] T073 [US2] Implement multi-target summary status derived by the `risk_found` > `inconclusive` > `clean` precedence, in `crates/cli/src/main.rs` (FR-032b)
+- [X] T069 [US2] Implement `serde` derives on the verdict types behind the `serde` feature, using ordered collections and integer scores, in `crates/core/src/verdict.rs`
+- [X] T070 [US2] Implement JSON rendering emitting a single object per target and an array for multiple targets, with no timestamp and no absolutised paths, in `crates/cli/src/render/json.rs` (makes T065, T068 pass)
+- [X] T071 [US2] Implement status-code mapping including the distinct below-threshold code 3 and the sysexits codes 64 and 70, in `crates/cli/src/exit.rs` (makes T067 pass)
+- [X] T072 [US2] Implement stream discipline ensuring warnings and rule-set load errors never reach stdout, in `crates/cli/src/main.rs` (makes T066 pass)
+- [X] T073 [US2] Implement multi-target summary status derived by the `risk_found` > `inconclusive` > `clean` precedence, in `crates/cli/src/main.rs` (FR-032b)
 - [ ] T074 [P] [US2] Add the reference pre-tool hook script, routing inconclusive explicitly, to `examples/hooks/pre-tool.sh`
 - [ ] T075 [P] [US2] Document the integration contract and copyable hook in `README.md`
 

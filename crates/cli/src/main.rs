@@ -28,7 +28,7 @@ use clap::Parser;
 use please_core::verdict::Outcome;
 use please_core::{Engine, Verdict};
 
-use args::{Args, Command};
+use args::{Args, Command, Format};
 use target::Target;
 
 // Exit codes. Named rather than inline so the contract is legible in one place.
@@ -158,11 +158,21 @@ fn run() -> i32 {
 
     // Results to stdout, diagnostics to stderr. Nothing but results ever reaches stdout, in either format:
     // a warning interleaved into a machine-readable stream is a broken contract, not a cosmetic issue.
+    //
+    // The format switch is here and only here. Every verdict is already accumulated, so nothing threads
+    // through the scan loop and the two renderers see exactly the same values.
     let mut out = String::new();
-    for verdict in &verdicts {
-        render::verdict(&mut out, verdict, scan_args.explain);
+    match scan_args.format() {
+        Format::Human => {
+            for verdict in &verdicts {
+                render::human::verdict(&mut out, verdict, scan_args.explain);
+            }
+            render::human::summary(&mut out, &verdicts);
+        }
+        // No summary line: for JSON the answer to "how did the whole run go" is the array plus the exit
+        // code, and a summary field would be a second home for the FR-032b precedence.
+        Format::Json => render::json::render(&mut out, &verdicts),
     }
-    render::summary(&mut out, &verdicts);
     print!("{out}");
 
     exit_code(&verdicts, policy.threshold)

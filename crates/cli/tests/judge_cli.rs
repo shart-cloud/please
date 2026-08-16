@@ -41,12 +41,19 @@ fn run(args: &[&str], input: &str, env: &[(&str, &str)]) -> Run {
         .stderr(Stdio::piped())
         .spawn()
         .expect("plz should launch");
-    child
+    // `let _` rather than `.expect(...)`, and this is a real failure mode rather than defensiveness.
+    // A usage error — a missing --rules file, a malformed rule set, an unknown target — makes `plz` exit
+    // BEFORE it reads stdin, so this write hits a closed pipe and returns EPIPE. Under `cargo test` for one
+    // binary the parent usually wins the race; under `cargo test --workspace` with every test binary
+    // competing for cores it does not, and the suite fails intermittently in a way that looks like a flake
+    // and is not.
+    //
+    // Whether the child consumed stdin is not something any test here asserts. What it exited with is.
+    let _ = child
         .stdin
         .as_mut()
         .expect("stdin")
-        .write_all(input.as_bytes())
-        .expect("write stdin");
+        .write_all(input.as_bytes());
     let out = child.wait_with_output().expect("plz should finish");
     Run {
         code: out.status.code().expect("plz should exit normally"),
@@ -69,7 +76,7 @@ const CLEAN: &str = "The billing API refactor is scheduled for Q4.";
 #[test]
 #[cfg(not(feature = "judge"))]
 fn judge_on_a_build_without_the_feature_is_a_usage_error() {
-    let run = run(&["scan", "--judge"], CLEAN, &[]);
+    let run = run(&["scan", "--format", "human", "--judge"], CLEAN, &[]);
     assert_eq!(
         run.code, 64,
         "expected a usage error; stdout: {} stderr: {}",
@@ -98,7 +105,14 @@ fn the_judge_subcommand_is_absent_on_a_build_without_the_feature() {
 #[cfg(feature = "judge")]
 fn an_unreachable_endpoint_keeps_the_findings_and_records_a_gap() {
     let run = run(
-        &["scan", "--judge", "--judge-timeout", "2"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--judge-timeout",
+            "2",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", "http://127.0.0.1:1"),
@@ -126,7 +140,14 @@ fn an_unreachable_endpoint_keeps_the_findings_and_records_a_gap() {
 fn a_failed_judgement_never_prints_the_credential() {
     let canary = "canary-cli-token-4a7b19e3";
     let run = run(
-        &["scan", "--judge", "--judge-timeout", "2"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--judge-timeout",
+            "2",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", "http://127.0.0.1:1"),
@@ -154,7 +175,14 @@ fn a_failed_judgement_never_prints_the_credential() {
 #[cfg(feature = "judge")]
 fn clean_content_makes_no_request_and_stays_clean() {
     let run = run(
-        &["scan", "--judge", "--judge-timeout", "2"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--judge-timeout",
+            "2",
+        ],
         CLEAN,
         &[
             ("ANTHROPIC_BASE_URL", "http://127.0.0.1:1"),
@@ -169,18 +197,22 @@ fn clean_content_makes_no_request_and_stays_clean() {
 #[test]
 #[cfg(feature = "judge")]
 fn no_judge_reproduces_the_structural_verdict_and_the_last_flag_wins() {
-    let structural = run(&["scan"], FLAGGED, &[]);
+    let structural = run(&["scan", "--format", "human"], FLAGGED, &[]);
     let env = [
         ("ANTHROPIC_BASE_URL", "http://127.0.0.1:1"),
         ("ANTHROPIC_AUTH_TOKEN", "never-sent"),
     ];
 
-    let explicit = run(&["scan", "--no-judge"], FLAGGED, &env);
+    let explicit = run(&["scan", "--format", "human", "--no-judge"], FLAGGED, &env);
     assert_eq!(explicit.stdout, structural.stdout);
     assert_eq!(explicit.code, structural.code);
 
     // A wrapper script appending --no-judge must be able to override a config that supplied --judge.
-    let overridden = run(&["scan", "--judge", "--no-judge"], FLAGGED, &env);
+    let overridden = run(
+        &["scan", "--format", "human", "--judge", "--no-judge"],
+        FLAGGED,
+        &env,
+    );
     assert_eq!(
         overridden.stdout, structural.stdout,
         "--no-judge after --judge must win; stderr: {}",
@@ -190,7 +222,15 @@ fn no_judge_reproduces_the_structural_verdict_and_the_last_flag_wins() {
 
     // ...and the reverse ordering must genuinely turn it on, or `overrides_with` is only working one way.
     let on = run(
-        &["scan", "--no-judge", "--judge", "--judge-timeout", "2"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--no-judge",
+            "--judge",
+            "--judge-timeout",
+            "2",
+        ],
         FLAGGED,
         &env,
     );
@@ -232,7 +272,14 @@ fn judge_check_reports_the_resolution_without_a_request() {
 #[cfg(feature = "judge")]
 fn an_api_key_bound_for_a_non_default_host_warns_on_stderr() {
     let run = run(
-        &["scan", "--judge", "--judge-timeout", "2"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--judge-timeout",
+            "2",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", "http://127.0.0.1:1"),
@@ -265,7 +312,15 @@ fn a_judged_verdict_shows_which_answer_drove_each_judgement() {
         "is_what_the_document_shows",
     );
     let run = run(
-        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--explain",
+            "--judge-timeout",
+            "5",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", &endpoint),
@@ -313,7 +368,15 @@ fn judge_demotions_name_the_judge_and_the_flag_that_reverses_them() {
         "is_what_the_document_shows",
     );
     let run = run(
-        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--explain",
+            "--judge-timeout",
+            "5",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", &endpoint),
@@ -345,7 +408,15 @@ fn a_confirmed_observation_stays_reported_and_says_so() {
         "incidental_to_what_the_document_shows",
     );
     let run = run(
-        &["scan", "--judge", "--explain", "--judge-timeout", "5"],
+        &[
+            "scan",
+            "--format",
+            "human",
+            "--judge",
+            "--explain",
+            "--judge-timeout",
+            "5",
+        ],
         FLAGGED,
         &[
             ("ANTHROPIC_BASE_URL", &endpoint),
@@ -371,6 +442,11 @@ fn a_confirmed_observation_stays_reported_and_says_so() {
 /// them fail for reasons that have nothing to do with rendering.
 #[cfg(feature = "judge")]
 fn judged_endpoint(role: &str, relation: &str) -> String {
+    judged_endpoint_inner(role, relation, None)
+}
+
+#[cfg(feature = "judge")]
+fn judged_endpoint_inner(role: &str, relation: &str, severity: Option<u8>) -> String {
     use std::io::{BufRead, BufReader, Read, Write};
     use std::net::TcpListener;
 
@@ -378,6 +454,9 @@ fn judged_endpoint(role: &str, relation: &str) -> String {
     let port = listener.local_addr().unwrap().port();
     let role = role.to_string();
     let relation = relation.to_string();
+    let severity = severity
+        .map(|s| format!(r#""model_severity":{s},"#))
+        .unwrap_or_default();
 
     std::thread::spawn(move || {
         for stream in listener.incoming().take(1) {
@@ -412,7 +491,7 @@ fn judged_endpoint(role: &str, relation: &str) -> String {
                 })
                 .collect();
             let payload = format!(
-                r#"{{"id":"m","type":"message","role":"assistant","content":[{{"type":"tool_use","id":"t","name":"classify_document","input":{{"addressed_to":"document_recipient","imperative_source":"quoted_third_party","framing":"presented_as_example","stated_purpose_explains_content":"yes","spans":[{}]}}}}]}}"#,
+                r#"{{"id":"m","type":"message","role":"assistant","content":[{{"type":"tool_use","id":"t","name":"classify_document","input":{{{severity}"addressed_to":"document_recipient","imperative_source":"quoted_third_party","framing":"presented_as_example","stated_purpose_explains_content":"yes","spans":[{}]}}}}]}}"#,
                 spans.join(",")
             );
             let response = format!(
@@ -425,4 +504,130 @@ fn judged_endpoint(role: &str, relation: &str) -> String {
     });
 
     format!("http://127.0.0.1:{port}")
+}
+
+// ── The judged verdict on the wire (001 T065, 004 FR-410/FR-416) ────────────────────────────────
+
+/// A **judged** verdict conforms to the published schema.
+///
+/// `contract.rs` covers every structural shape and cannot cover this one: `judge_report` only appears when
+/// the tier ran, which needs the feature and an endpoint. It is also the newest part of the schema and the
+/// part that has already drifted once — 004's plan D4a added `SpanVerdict.relation` and did not add it
+/// here, which the first run of the contract test found.
+#[test]
+#[cfg(feature = "judge")]
+fn a_judged_verdict_conforms_to_the_schema() {
+    let endpoint = judged_endpoint(
+        "description_of_an_instruction",
+        "is_what_the_document_shows",
+    );
+    let run = run(
+        &[
+            "scan",
+            "--format",
+            "json",
+            "--judge",
+            "--judge-timeout",
+            "5",
+        ],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+        ],
+    );
+
+    let value: serde_json::Value = serde_json::from_str(&run.stdout).unwrap_or_else(|e| {
+        panic!(
+            "not JSON: {e}\nstdout: {}\nstderr: {}",
+            run.stdout, run.stderr
+        )
+    });
+
+    let schema_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|p| p.parent())
+        .expect("crates/cli sits two levels below the repository root")
+        .join("specs/001-structural-detection-cli/contracts/verdict.schema.json");
+    let schema: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&schema_path).expect("read schema"))
+            .expect("valid JSON");
+    let validator = jsonschema::validator_for(&schema).expect("valid schema");
+
+    let errors: Vec<String> = validator
+        .iter_errors(&value)
+        .map(|e| format!("  at `{}`: {e}", e.instance_path()))
+        .collect();
+    assert!(
+        errors.is_empty(),
+        "a judged verdict does not conform:\n{}\n\n{}",
+        errors.join("\n"),
+        run.stdout
+    );
+
+    // The fields that only exist here.
+    assert!(
+        value["judge"].is_object(),
+        "the report must be present:\n{}",
+        run.stdout
+    );
+    assert_eq!(
+        value["judge"]["judgements"][0]["relation"],
+        "is_what_the_document_shows"
+    );
+    assert_eq!(value["suppressed"][0]["suppressed_by"], "judge");
+}
+
+/// FR-410 — **the assertion that is vacuous anywhere else.**
+///
+/// `model_severity` is recorded and read by nothing. It is enforced three ways: the type gives it no
+/// accessor, the schema rejects it under `additionalProperties: false`, and this checks real output from a
+/// judge that actually returned one. Written here rather than in `contract.rs` because on a default build
+/// no `JudgeReport` exists, so a test there would pass however the serialiser behaved.
+#[test]
+#[cfg(feature = "judge")]
+fn model_severity_never_reaches_the_wire() {
+    let endpoint = judged_endpoint_with_severity(77);
+    let run = run(
+        &[
+            "scan",
+            "--format",
+            "json",
+            "--judge",
+            "--judge-timeout",
+            "5",
+        ],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+        ],
+    );
+
+    assert!(
+        run.stdout.contains("\"judge\""),
+        "the judge must have run, or this asserts nothing:\n{}\n{}",
+        run.stdout,
+        run.stderr
+    );
+    assert!(
+        !run.stdout.contains("model_severity"),
+        "FR-410: the model's own score must not reach the wire:\n{}",
+        run.stdout
+    );
+    assert!(
+        !run.stdout.contains("77"),
+        "the value itself must not appear either:\n{}",
+        run.stdout
+    );
+}
+
+/// A canned endpoint whose response carries a `model_severity`, so the skip has something to skip.
+#[cfg(feature = "judge")]
+fn judged_endpoint_with_severity(severity: u8) -> String {
+    judged_endpoint_inner(
+        "description_of_an_instruction",
+        "is_what_the_document_shows",
+        Some(severity),
+    )
 }

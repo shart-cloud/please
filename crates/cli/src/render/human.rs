@@ -1,5 +1,10 @@
 //! Human-readable output (FR-027).
 //!
+//! Moved from `render.rs` to `render/human.rs` at 001 T070, when `--format json` gave it a sibling. The
+//! contents are unchanged apart from two duplications this move let go of: a private `band()` that
+//! respelled `RiskLevel`, and hardcoded `"confirmed"`/`"demoted"` strings. Both now call the `as_str()`
+//! the core type carries, so the two renderers cannot disagree about what a value is called.
+//!
 //! Written to answer SC-001: a reader states what was found and where, from this output alone. Every field
 //! shown is one a reader needs to act — rule identity, byte span, excerpt, description — and the excerpt is
 //! already neutralised before it reaches here, so a payload cannot forge this report's own structure.
@@ -7,9 +12,7 @@
 //! The ordering matters and is the same discipline throughout: **sanitise the payload, then style it.**
 //! Never the reverse.
 
-use please_core::verdict::{
-    Outcome, QuotingContext, RiskLevel, SpanJudgement, SuppressedBy, Verdict,
-};
+use please_core::verdict::{Outcome, QuotingContext, SuppressedBy, Verdict};
 
 /// Render one verdict.
 pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
@@ -42,7 +45,7 @@ pub fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         Outcome::RiskFound => {
             out.push_str(&format!(
                 "{name} — RISK FOUND ({}, score {})\n",
-                band(v.risk()),
+                v.risk().as_str(),
                 v.score()
             ));
         }
@@ -162,10 +165,7 @@ fn judgement(out: &mut String, v: &Verdict) {
         out.push_str(&format!(
             "    span {:<3}   {:<10}  relation {:<38} role {}\n",
             span.reason_index,
-            match span.judgement {
-                SpanJudgement::Confirmed => "confirmed",
-                SpanJudgement::Demoted => "demoted",
-            },
+            span.judgement.as_str(),
             span.relation.as_str(),
             span.role.as_str(),
         ));
@@ -273,16 +273,6 @@ pub fn summary(out: &mut String, verdicts: &[Verdict]) {
         "\n{} target(s): {clean} clean, {risk} with findings, {inconclusive} inconclusive\n",
         verdicts.len()
     ));
-}
-
-fn band(level: RiskLevel) -> &'static str {
-    match level {
-        RiskLevel::None => "none",
-        RiskLevel::Low => "low",
-        RiskLevel::Medium => "medium",
-        RiskLevel::High => "high",
-        RiskLevel::Critical => "critical",
-    }
 }
 
 /// Short severity label, so a reader can scan a column rather than compare numbers.
