@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc a9f73d5eeb8e26f7896cec31890083abf43792b0bcbadd651298bb7eb3b08024 # shrinks to features = Features { addressed_to: DocumentRecipient, imperative_source: DocumentAuthor, framing: PresentedAsExample, stated_purpose_explains_content: Yes }, judgements = [SpanVerdict { reason_index: 0, role: Instruction, judgement: Demoted }], model_severity = None

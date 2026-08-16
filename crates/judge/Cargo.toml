@@ -24,3 +24,9 @@ please-core = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+
+[dev-dependencies]
+# SC-406. The claim is that NO judge response — malformed, hostile, or maximally permissive — can remove a
+# finding or raise a severity. A handful of hand-written cases would demonstrate that for the cases someone
+# thought of, which is the weaker half of the claim.
+proptest = { workspace = true }

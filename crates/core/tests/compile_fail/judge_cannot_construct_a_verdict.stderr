@@ -1,0 +1,21 @@
+error[E0624]: method `demote_by_judge` is private
+ --> tests/compile_fail/judge_cannot_construct_a_verdict.rs
+  |
+  |     reason.demote_by_judge();
+  |            ^^^^^^^^^^^^^^^ private method
+  |
+ ::: src/finalize/types.rs
+  |
+  |     pub(super) fn demote_by_judge(&mut self) {
+  |     ---------------------------------------- private method defined here
+
+error[E0624]: method `with_judge` is private
+ --> tests/compile_fail/judge_cannot_construct_a_verdict.rs
+  |
+  |     let _judged = verdict.with_judge(report);
+  |                           ^^^^^^^^^^ private method
+  |
+ ::: src/finalize/types.rs
+  |
+  |     pub(super) fn with_judge(mut self, report: JudgeReport) -> Self {
+  |     --------------------------------------------------------------- private method defined here

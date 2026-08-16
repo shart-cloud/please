@@ -839,6 +839,7 @@ name = "please-judge"
 version = "0.1.0"
 dependencies = [
  "please-core",
+ "proptest",
  "serde",
  "serde_json",
  "ureq",

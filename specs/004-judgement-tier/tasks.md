@@ -153,14 +153,14 @@ verdict and no severity rises.
 **Why first**: it is the constraint the rest is built inside. Establishing it before any code can return a
 judgement means nothing later has to be audited for it.
 
-- [ ] T015 [US2] Write the failing property test in `crates/judge/tests/adversarial_responses.rs`: over
+- [X] T015 [US2] Write the failing property test in `crates/judge/tests/adversarial_responses.rs`: over
       generated decision sets including maximally permissive and self-contradictory ones, assert
       `judged.reasons() ∪ judged.suppressed() == structural.reasons() ∪ structural.suppressed()` and
       `max severity judged ≤ max severity structural` (SC-406)
-- [ ] T016 [US2] Write the failing test asserting a demoted observation is still present, readable, and
+- [X] T016 [US2] Write the failing test asserting a demoted observation is still present, readable, and
       annotated with the judge as what suppressed it
-- [ ] T017 [US2] Make them pass against `finalize::rejudge`
-- [ ] T018 [P] [US2] Write the failing compile-fail case asserting the judge crate cannot construct a
+- [X] T017 [US2] Make them pass against `finalize::rejudge`
+- [X] T018 [P] [US2] Write the failing compile-fail case asserting the judge crate cannot construct a
       `Verdict`, in `crates/core/tests/compile_fail/judge_cannot_construct_a_verdict.rs`, with its `.stderr`
 
 **Checkpoint**: the bypass is not representable. Everything after this is safe to build.
