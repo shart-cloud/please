@@ -121,6 +121,51 @@ one-character look-behind, which a finite-automaton engine does not have — and
 every rule linear-time, so this is a consequence of a guarantee rather than an oversight. The failure
 direction is a missed detection on an unusual construction, not a false positive. Pinned by test.
 
+## Invisible characters in social text are a false-positive source
+
+**Status: measured, unfixed, and previously unrecorded. This section exists because the gap was found in a
+research note and never made it here.**
+
+The concealment detectors recognise a mechanism rather than a phrase, and they are deliberately exempt from
+quoting suppression: a document that *actually contains* zero-width or variation-selector characters is
+carrying them whatever the surrounding text says. That is the right call for a payload. It is the wrong call
+for an emoji.
+
+Emoji ZWJ sequences, skin-tone modifiers, and variation selectors are ordinary in social and multilingual
+text, and they are indistinguishable at the byte level from the smuggling channel. Measured over the 4,492
+stratified benign documents in the corpus cache:
+
+```text
+documents where a structural detector fires                 47
+documents where it is the ONLY finding                      40   (0.9% of the set)
+
+  concealment.zero_width               20
+  concealment.variation_selectors      16
+  concealment.control_characters        7
+  concealment.bidi_override             2
+  confusable.homoglyph_token            1
+```
+
+Concentrated exactly where you would predict: `InTheWild-Jailbreaks` (18) and
+`PolyglotToxicityPrompts` (12) — social text and non-English text.
+
+**These are not reachable by the judgement tier either, and that is now measured rather than argued.** The
+judge was run over a stratified sample of this false-positive population
+(`docs/research/judge-precision-results.md`): it demoted **nothing** in 12 of 12 `PolyglotToxicityPrompts`
+documents, and the per-span answers say why — `unrelated` on 6 of 6 spans. An emoji ZWJ sequence genuinely is
+unrelated to what a document is about, and `unrelated` confirms by design, because if irrelevance demoted
+findings the cheapest attack on the tier would be to make a payload look like noise.
+
+So the honest fix is to teach the detector which sequences are decoration — a ZWJ between two emoji is a
+grapheme cluster, a ZWJ between two Latin letters is a smuggling channel — and that is a change to
+`detect::concealment`, not a tuning knob and not a second opinion.
+
+`docs/research/actionable-directive-results.md` §2.1 records this gap with substantially larger figures
+(262 hits: zero_width 99, variation_selectors 98, control_characters 65). Those were produced against a
+different assembly of the benign corpus and I could not reproduce them; the numbers above are from the
+current `neg_benign_strat` staging with the shipped rule set. The direction is the same and the magnitude
+is not, which is itself a reason to want `please-eval` rather than two ad-hoc runs.
+
 ## Quoted payloads can suppress detection
 
 **Status: accepted false negative, unquantified.**
