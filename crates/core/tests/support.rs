@@ -235,7 +235,14 @@ fn every_case_loads_and_is_well_formed() {
         assert!(
             matches!(
                 case.context.as_str(),
-                "email_body" | "tool_result" | "skill_md" | "mcp_tool_description" | "file_read"
+                "email_body"
+                    | "tool_result"
+                    | "skill_md"
+                    | "mcp_tool_description"
+                    | "file_read"
+                    | "repo_config"
+                    | "manifest"
+                    | "issue_body"
             ),
             "{}: unknown context {:?} — add it to tests/fixtures/README.md first, so metrics keep \
              reporting per vector",

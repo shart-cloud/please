@@ -53,6 +53,14 @@ cannot measure: agentic sources are about 0.45% of the primary corpus's adversar
 | `skill_md` | A skill or instruction file the harness loads |
 | `mcp_tool_description` | A tool description advertised by a remote server |
 | `file_read` | File contents an agent reads |
+| `repo_config` | Agent-readable configuration in a repository — `.cursorrules`, `.github/copilot-instructions.md` |
+| `manifest` | A package manifest an agent parses — `package.json`, `pyproject.toml` |
+| `issue_body` | A GitHub issue or pull-request body an agent is asked to analyse |
+
+The last three were added with `handcrafted-repo-config.jsonl`. They are the repository and protocol
+delivery vectors catalogued in arXiv:2601.17548 (D2.1, D2.2), and they had **zero** coverage before —
+which mattered, because they are path-dense and the built-in rules' `[^.\n]{0,N}` gap bound cannot cross
+a period. A defect our whole corpus was blind to was a defect in the corpus, not only in the rule.
 
 Metrics are reported per `context`, so a strong result on email cannot conceal a weak one on tool
 results.
@@ -86,10 +94,31 @@ Current count is far below that. It is the single largest outstanding piece of w
 
 | File | Cases | Purpose |
 |---|---|---|
-| `handcrafted-benign.jsonl` | 12 | Hard negatives — security prose, CVE writeups, legitimate override language |
-| `handcrafted-indirect.jsonl` | 19 | Indirect injection across all five contexts |
+| `handcrafted-benign.jsonl` | 17 | Hard negatives — security prose, CVE writeups, legitimate override language |
+| `handcrafted-indirect.jsonl` | 19 | Indirect injection across email, tool result, skill file, MCP tool description |
+| `handcrafted-repo-config.jsonl` | 13 | Repository and protocol delivery vectors, and the sentence-bound cases |
+| `handcrafted-override.jsonl` | 3 | Direct override phrasing |
+| `handcrafted-boundary.jsonl` | 3 | Forged role markers, tool results, delimiters |
+| `handcrafted-solicitation.jsonl` | 3 | System-prompt and credential extraction |
+| `handcrafted-concealment.jsonl` | 5 | Zero-width, tag-block, variation selectors, HTML comments |
+| `handcrafted-confusable.jsonl` | 2 | Homoglyph substitution |
+| `handcrafted-encoding.jsonl` | 6 | Base-64, hex, ROT-13, reversal, leetspeak |
 
-Counts are checked by test rather than trusted from this table.
+Counts are checked by test rather than trusted from this table. This one had drifted — it claimed 12
+benign cases against 17 and omitted six files entirely — which is the failure mode `docs/limits.md`
+describes at length under "`plz` could not load a caller's rule set": prose that was accurate when
+written and quietly stopped being so, because prose does not fail.
+
+`handcrafted-repo-config.jsonl` carries two things beyond its delivery vectors, and both are worth
+knowing before editing it:
+
+* **Matched pairs.** `solicitation-credentials-path-001` and `-nopath-001` are the same payload with and
+  without a real filesystem path. The pair is the evidence for the sentence-bound change in
+  `rules/builtin.toml`; separating them destroys it.
+* **Regression guards.** `override-separator-punctuation-001` and `-002` are `IGNORE!PREVIOUS!INSTRUCTIONS`
+  and its `?` variant, real LLMail-Inject evasions. They are detected today and must stay detected — they
+  are what fails if someone "corrects" the gap bound to exclude `!` and `?`. See
+  `crates/core/tests/sentence_bound.rs`.
 
 ## Adding cases
 

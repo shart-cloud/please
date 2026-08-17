@@ -25,3 +25,7 @@
 *.swp
 *~
 .DS_Store
+
+# WSL alternate-data-stream artifacts. Windows writes one of these beside every file
+# downloaded through a browser; they are machine-local provenance metadata, not content.
+*:Zone.Identifier
