@@ -183,6 +183,7 @@ fn parse_class(name: &str) -> Option<DetectionClass> {
         "boundary" => DetectionClass::Boundary,
         "solicitation" => DetectionClass::Solicitation,
         "agent_directed" => DetectionClass::AgentDirected,
+        "external_action" => DetectionClass::ExternalAction,
         _ => return None,
     })
 }

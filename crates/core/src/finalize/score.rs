@@ -79,10 +79,11 @@ pub fn aggregate(hits: &[(u8, DetectionClass)]) -> u8 {
 
 /// Number of detection classes, and the width of the corroboration array.
 ///
-/// Six. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile error
-/// rather than a silent change in scoring — see the note on the wildcard arm. It has now caught the guard
-/// twice: 002 removing `Encoding`, and 003 adding `AgentDirected`.
-const CLASS_COUNT: usize = 6;
+/// Seven. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile
+/// error rather than a silent change in scoring — see the note on the wildcard arm. It has now caught the
+/// guard three times: 002 removing `Encoding`, 003 adding `AgentDirected`, and the actionable-directive
+/// measurement adding `ExternalAction`.
+const CLASS_COUNT: usize = 7;
 
 /// Stable index for the fixed-size presence array.
 ///
@@ -99,6 +100,7 @@ fn class_index(class: DetectionClass) -> usize {
         DetectionClass::Boundary => 3,
         DetectionClass::Solicitation => 4,
         DetectionClass::AgentDirected => 5,
+        DetectionClass::ExternalAction => 6,
     }
 }
 

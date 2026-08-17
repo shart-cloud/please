@@ -189,6 +189,7 @@ pub enum Class {
     Boundary,
     Solicitation,
     AgentDirected,
+    ExternalAction,
 }
 
 impl From<Class> for DetectionClass {
@@ -200,6 +201,7 @@ impl From<Class> for DetectionClass {
             Class::Boundary => DetectionClass::Boundary,
             Class::Solicitation => DetectionClass::Solicitation,
             Class::AgentDirected => DetectionClass::AgentDirected,
+            Class::ExternalAction => DetectionClass::ExternalAction,
         }
     }
 }

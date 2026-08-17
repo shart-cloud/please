@@ -17,18 +17,20 @@
 use please_core::score::{aggregate, BONUS_CAP, BONUS_PER_CLASS};
 use please_core::verdict::DetectionClass;
 
-/// Every class: six, after 002 removed `Encoding` and 003 added `AgentDirected`.
+/// Every class: seven, after 002 removed `Encoding`, 003 added `AgentDirected`, and the
+/// actionable-directive measurement added `ExternalAction`.
 ///
 /// Kept as a local constant rather than reading `policy::ALL_CLASSES` so that a change to the class set is a
 /// visible edit to this file: the corroboration cap depends on how many classes exist, and it should not
 /// change silently underneath a test asserting the cap is reachable.
-const ALL: [DetectionClass; 6] = [
+const ALL: [DetectionClass; 7] = [
     DetectionClass::Override,
     DetectionClass::Concealment,
     DetectionClass::Confusable,
     DetectionClass::Boundary,
     DetectionClass::Solicitation,
     DetectionClass::AgentDirected,
+    DetectionClass::ExternalAction,
 ];
 
 /// `(severity, class)` pairs, the shape aggregation consumes.

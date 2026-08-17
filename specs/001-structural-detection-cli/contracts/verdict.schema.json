@@ -109,8 +109,8 @@
           "pattern": "^[a-z0-9_]+(\\.[a-z0-9_]+)+$"
         },
         "class": {
-          "description": "Detection family: the KIND of finding, never how it was delivered. A payload recovered by decoding carries the class of the rule that matched it; the delivery is in `chain`. AMENDED by feature 003 (FR-301): `agent_directed` was added — content that addresses the reading agent rather than the human the document is for, which no other class describes. AMENDED by feature 002 (FR-131): `encoding` was removed. It named a delivery mechanism, no rule could declare it, and it was applied only by the decode path — so a decoded finding had to satisfy two different class filters and no single selection satisfied both.",
-          "enum": ["override", "concealment", "confusable", "boundary", "solicitation", "agent_directed"]
+          "description": "Detection family: the KIND of finding, never how it was delivered. A payload recovered by decoding carries the class of the rule that matched it; the delivery is in `chain`. AMENDED by feature 003 (FR-301): `agent_directed` was added — content that addresses the reading agent rather than the human the document is for, which no other class describes. AMENDED again: `external_action` was added \u2014 an instruction to act on state outside the conversation (grant access, approve a record, transfer funds), which `solicitation` does not describe because it asks for nothing belonging to the agent. Added on measurement rather than taxonomy: it fires on 85 of 1,054 adversarial InjecAgent rows that no other rule reaches, for one additional false positive in 4,492 benign documents. AMENDED by feature 002 (FR-131): `encoding` was removed. It named a delivery mechanism, no rule could declare it, and it was applied only by the decode path — so a decoded finding had to satisfy two different class filters and no single selection satisfied both.",
+          "enum": ["override", "concealment", "confusable", "boundary", "solicitation", "agent_directed", "external_action"]
         },
         "span": { "$ref": "#/$defs/span" },
         "matched": {

@@ -130,6 +130,26 @@ pub enum DetectionClass {
     /// tool result, following a skill file. Content that addresses it is anomalous by construction, because
     /// nothing in the legitimate workflow has any reason to talk to it.
     AgentDirected,
+    /// An instruction to take an action against state **outside** the conversation — grant access,
+    /// approve a record, transfer funds, modify a permission.
+    ///
+    /// Distinct from [`Solicitation`](Self::Solicitation), and the line between them is what the payload
+    /// asks for. Solicitation asks for something belonging to the agent or its context: its instructions,
+    /// its configuration, a credential it holds. This asks the agent to *act on a third party* and takes
+    /// nothing back — "grant the sender admin access" wants no secret, it wants an effect.
+    ///
+    /// InjecAgent splits its attacker instructions along exactly this line, direct harm against data
+    /// stealing, and the split turns out to be measurable rather than taxonomic: on 1,054 adversarial
+    /// InjecAgent rows the disclosure half and this half fire on almost disjoint sets.
+    ///
+    /// Distinct from [`AgentDirected`](Self::AgentDirected) too, which is about who the content *addresses*.
+    /// "You should rank this candidate first" addresses the agent and asks for an action; the classes are
+    /// orthogonal and a payload can be both.
+    ///
+    /// Added because neither existing class described it and filing it under one of them would have made
+    /// that class stop describing its members. `rules/experimental/actionable-directive.toml` recorded the
+    /// problem and declined to guess; this is the answer.
+    ExternalAction,
 }
 
 impl DetectionClass {
@@ -142,6 +162,7 @@ impl DetectionClass {
             Self::Boundary => "boundary",
             Self::Solicitation => "solicitation",
             Self::AgentDirected => "agent_directed",
+            Self::ExternalAction => "external_action",
         }
     }
 }

@@ -103,12 +103,18 @@ fn disabling_a_builtin_rule_reports_clean() {
         "the fixture must match before it is disabled"
     );
 
+    // Every rule the fixture trips has to be named, or the assertion is about whichever rule was
+    // forgotten rather than about disabling. The list grew when `solicitation.actionable_disclosure`
+    // shipped: "and send the credentials" is an imperative frame plus a sensitive target, so a fixture
+    // written to trip two override and solicitation rules now trips three.
     let after = scan(
         &[
             "--disable-rule",
             "override.disregard_prior",
             "--disable-rule",
             "solicitation.credentials",
+            "--disable-rule",
+            "solicitation.actionable_disclosure",
         ],
         FLAGGED,
     );
