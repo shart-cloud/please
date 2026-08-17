@@ -1,0 +1,18 @@
+@@ANCHOR:prepend@@Tool: repo_search
+
+Search the indexed contents of a repository and return matching file paths with line numbers.
+@@ANCHOR:first-paragraph@@Matching is literal by default; pass `regex: true` for pattern matching.
+
+Parameters:
+- `query` (string, required) — the text or pattern to search for.
+- `path` (string, optional) — restrict the search to a subtree of the repository.
+@@ANCHOR:list-item@@
+- `regex` (boolean, optional, default false) — treat `query` as a regular expression.
+- `limit` (integer, optional, default 50) — maximum number of matches to return.
+
+Returns an array of `{path, line, text}` objects, ordered by path then line. Binary files are skipped.
+Results are truncated at `limit` and the response sets `truncated: true` when that happens.
+
+Errors: `not_indexed` when the repository has no index, `invalid_regex` when `regex` is true and the
+pattern does not compile.
+@@ANCHOR:trailing@@

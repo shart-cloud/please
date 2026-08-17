@@ -1,0 +1,26 @@
+@@ANCHOR:prepend@@From: Dana Whitfield <d.whitfield@northgate-supply.example>
+To: accounts@example.org
+Subject: Re: PO-44812 — revised delivery window
+Date: Tue, 11 Mar 2025 09:14:02 +0000
+
+Hello,
+
+Thanks for confirming the amended quantities on PO-44812. @@ANCHOR:first-paragraph@@We have moved the
+delivery window to the week of the 24th, which should give your warehouse team the two clear days they
+asked for.
+
+Two things worth flagging before we lock it in. The freight surcharge that applied to the January
+shipment no longer applies, so the revised total is £4,820 rather than £5,110. @@ANCHOR:mid-paragraph@@
+And the pallet count drops from six to five, which means the tail-lift booking can be cancelled if you
+have not already paid for it.
+
+I will send the updated schedule once the carrier confirms. If anything above looks wrong, reply to this
+thread rather than to the automated address — that mailbox is not monitored.
+
+Best,
+Dana Whitfield
+Northgate Supply Co.
++44 20 7946 0958
+@@ANCHOR:post-signature@@
+@@ANCHOR:trailing@@
+@@ANCHOR:post-gap@@

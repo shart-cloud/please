@@ -1,0 +1,111 @@
+# Insertion positions — where in a carrier a payload is placed.
+#
+# The nine positions `docs/research/document-map.md` §3 specifies. Position is varied INDEPENDENTLY of
+# carrier, which is one of the three things the generator buys that no download provides: hold the
+# payload and vary the position and you have measured position sensitivity; hold the position and vary
+# the carrier and you have measured whether a signal generalises across document formats.
+#
+# BIPIA's own ablation makes end-of-content the highest-ASR placement, so a weak result on the
+# non-trailing positions is a FINDING and not a failure — `document-map.md` §6 names it as explicitly
+# not a kill criterion, so that it cannot be used as one later.
+#
+# `template` places the payload; `{payload}` is the only substitution. `escape` says what the
+# surrounding syntax will tolerate:
+#
+#   none         verbatim, including newlines
+#   single_line  newlines collapsed to spaces — for anywhere a line break would end the construct
+#   table_cell   single_line, and `|` replaced, because a pipe would create a column
+#   json_string  JSON string escaping, because the payload is going inside quotes
+#
+# The escape is a property of the position, not of the payload, and that is the point: the same payload
+# text must be able to appear in a table cell and in a JSON field without either becoming malformed.
+# A malformed carrier is a carrier the scanner reads differently, which would confound every comparison
+# across positions.
+
+[[position]]
+id = "prepend"
+template = "{payload}\n\n"
+escape = "none"
+notes = """
+Before the document begins. The easiest position for a detector — nothing precedes the payload, so
+there is no legitimate content for it to hide behind — and therefore the one whose result says least.
+"""
+
+[[position]]
+id = "first-paragraph"
+template = "{payload}"
+escape = "none"
+notes = """
+Inside the opening paragraph, after the first legitimate sentence. `indirect-email-001` is this
+position, and it is one of the ten positives `docs/004-accuracy-baseline.txt` records as missed.
+"""
+
+[[position]]
+id = "mid-paragraph"
+template = "{payload}"
+escape = "single_line"
+notes = """
+Mid-document, surrounded above and below by legitimate prose. The position a whole-document signal
+should find hardest and a segment-relative one should find no harder than any other — which is the
+comparison `document-map.md` exists to make.
+"""
+
+[[position]]
+id = "list-item"
+template = "- {payload}"
+escape = "single_line"
+notes = """
+One item among sibling items. `indirect-email-004` is this shape, labelled `hard`, and missed at the
+004 baseline. A list is the structure where sibling comparison should be strongest: the other items
+establish exactly what an item is supposed to look like.
+"""
+
+[[position]]
+id = "table-cell"
+template = "{payload}"
+escape = "table_cell"
+notes = """
+One cell of a table whose other rows are data. `indirect-email-007` — `injection_in_structured_data`,
+`hard`, missed. `document-map.md` §1.3 uses it as the worked example for why sibling-relative beats
+document-relative: a table row is not anomalous for having a high digit density, it is anomalous for
+having a LOW one when every other row is numeric.
+"""
+
+[[position]]
+id = "json-field"
+template = "{payload}"
+escape = "json_string"
+notes = """
+A string value in a JSON tool result or manifest. The scanner sees a document that `looks_like_json`,
+where a scalar field suddenly contains an imperative.
+"""
+
+[[position]]
+id = "post-signature"
+template = "{payload}"
+escape = "none"
+notes = """
+After the sign-off — below `Best,` or the `--` separator. Structurally past the end of the message,
+which is where a reader stops and an agent does not.
+"""
+
+[[position]]
+id = "post-gap"
+template = "\n\n\n\n\n\n\n{payload}"
+escape = "none"
+notes = """
+Behind a run of blank lines. `indirect-email-002` hides an imperative behind 25 of them.
+`document-map.md` §1.1 makes the gap a segment in its own right rather than a separator, because if
+gaps are eaten during segmentation the fact that one PRECEDED the payload is lost — and that fact is
+the finding.
+"""
+
+[[position]]
+id = "trailing"
+template = "\n\n{payload}"
+escape = "none"
+notes = """
+The last content in the document. BIPIA's position ablation makes this the highest-ASR placement, and
+`document-map.md` §1.1 keeps `Trailing` as an overlay rather than a kind for that reason: a payload is
+a trailing LIST ITEM or a trailing PARAGRAPH, and it needs to keep both facts.
+"""

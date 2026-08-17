@@ -3,25 +3,20 @@
 # It is not a workspace member (see the root Cargo.toml `exclude`) and it carries its own lockfile.
 # Two reasons, both load-bearing:
 #
-#  1. Its corpus tooling needs data-frame and query dependencies far heavier than anything the
-#     shipping crates may carry, and its adapters reach the network. Excluding it means a
-#     `cargo build --workspace` resolution over please-core and please-cli is byte-for-byte
-#     unaffected by its existence.
-#  2. tests/dep_guard.rs asserts the default build's dependency set against an allow-list. If eval
-#     were a member, a transitive edge from a development tool could defeat that guard silently —
-#     which is precisely the failure the guard exists to prevent.
+#  1. Its corpus tooling reaches the network and its dependency appetite is not the shipping crates'.
+#     Excluding it means a `cargo build --workspace` resolution over please-core, please-cli and
+#     please-judge is byte-for-byte unaffected by its existence.
+#  2. tests/dep_guard.rs — now ci/check-dependencies.sh — asserts the default build's dependency set
+#     against an allow-list. If eval were a member, a transitive edge from a development tool could
+#     defeat that guard silently, which is precisely the failure the guard exists to prevent.
 #
-# The harness itself is a SEPARATE FEATURE and is not implemented here. This manifest exists now so
-# the exclusion is real from the first commit rather than retrofitted later, when a stray dependency
-# has already crept in.
-#
-# When it is built out it will own: corpus adapters, the sampling manifest (row ids, labels, source,
-# and content hashes — NEVER prompt text, whose 41 upstream sources retain their own licences), and
-# per-source stratified metrics with the false-positive gate.
+# What it owns: corpus adapters, the sampling manifest (row identity, labels, source and content
+# hashes — NEVER prompt text, whose 41 upstream sources retain their own licences), the
+# carrier x payload x position generator, per-source stratified metrics, and the false-positive gate.
 
 [package]
 name = "please-eval"
-description = "Evaluation harness for PLEASE: corpus adapters, sampling manifests, and per-source stratified metrics."
+description = "Evaluation harness for PLEASE: corpus adapters, sampling manifests, a span-labelled generator, and per-source stratified metrics."
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -33,5 +28,44 @@ publish = false
 name = "please_eval"
 path = "src/lib.rs"
 
+[[bin]]
+name = "please-eval"
+path = "src/main.rs"
+
 [dependencies]
-# Intentionally empty. Corpus and metrics dependencies arrive with the harness feature.
+# The engine under measurement, by path. An instrument that measured a *published* version of the
+# thing would report on a different artifact than the one in the tree, which is the whole point of
+# having it here.
+#
+# `features = ["serde"]` because results are serialised. Enabling it from here cannot affect the
+# shipping crates: eval is outside the workspace, so it takes part in no shared feature resolution
+# with them, and `cargo build --workspace` never sees this edge.
+please-core = { path = "../core", features = ["serde"] }
+
+# Subcommands. Same major version as the CLI's, so the two behave the same way at the prompt.
+clap = { version = "4", features = ["derive"] }
+
+# Manifests, results and reports. JSONL throughout for the same reasons tests/fixtures/README.md
+# gives: files append cleanly, diff per-row, and filter with ordinary line tools.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# corpus/slices.toml, corpus/positions.toml and the payload files. TOML because a corpus definition
+# is a reviewable artifact whose comments carry its justification — constitution Principle III's
+# argument for rules, applied to the data that measures them.
+toml = "1"
+
+# Row identity. The upstream dataset has no id column, so the content hash IS the identity — see
+# src/manifest.rs. SHA-256 rather than a std hasher for the reason the root manifest already gives:
+# a digest whose job is attribution has to outlive the compiler that produced it.
+sha2 = "0.10"
+
+# NB: no HTTP client and no parquet reader. Corpus access shells out to the `hf` CLI, which is the
+# reproduction recipe docs/research/corpus-analysis.md already documents — so the recipe in the
+# documentation and the code path in the harness are the same thing, and neither can drift.
+#
+# NB: no anyhow, no thiserror. Nothing in this repository uses them; errors here are `Box<dyn Error>`
+# with messages written for the operator who has to fix the cause.
+
+[dev-dependencies]
+tempfile = "3"

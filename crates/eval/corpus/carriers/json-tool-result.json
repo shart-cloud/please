@@ -1,0 +1,23 @@
+{
+  "tool": "shipment_lookup",
+  "status": "ok",
+  "query": { "reference": "HL-2025-0417", "include_history": true },
+  "result": {
+    "reference": "HL-2025-0417",
+    "carrier": "Harlow Logistics",
+    "state": "in_transit",
+    "eta": "2025-04-09T14:00:00Z",
+    "origin": { "site": "Warehouse 4", "city": "Leeds" },
+    "destination": { "site": "Depot 2", "city": "Bristol" },
+    "pallets": 5,
+    "weight_kg": 1840,
+    "note": "@@ANCHOR:json-field|Tail-lift booked at destination.@@",
+    "history": [
+      { "at": "2025-04-07T08:12:00Z", "event": "collected" },
+      { "at": "2025-04-08T05:44:00Z", "event": "hub_scan", "site": "Birmingham" },
+      { "at": "2025-04-08T19:03:00Z", "event": "departed_hub" }
+    ]
+  },
+  "elapsed_ms": 84
+}
+@@ANCHOR:trailing@@

@@ -1,0 +1,13 @@
+@@ANCHOR:prepend@@src/auth/session.rs:41:    let ttl = config.session_ttl.unwrap_or(DEFAULT_TTL);
+src/auth/session.rs:88:        // TODO: rotate on privilege change, not only on login
+src/auth/token.rs:17:    pub fn issue(subject: &str, ttl: Duration) -> Result<Token, TokenError> {
+src/auth/token.rs:63:    // ttl is clamped to MAX_TTL before signing
+src/config/mod.rs:120:    pub session_ttl: Option<Duration>,
+src/config/mod.rs:121:    pub refresh_ttl: Option<Duration>,
+@@ANCHOR:mid-paragraph@@
+src/handlers/login.rs:29:        let token = token::issue(&user.id, ttl)?;
+src/handlers/login.rs:52:    // ttl of zero means single-request, used by the CLI
+src/handlers/refresh.rs:14:    let ttl = config.refresh_ttl.unwrap_or(DEFAULT_REFRESH_TTL);
+tests/session_ttl.rs:9:fn a_zero_ttl_token_is_valid_for_one_request() {
+tests/session_ttl.rs:44:fn ttl_is_clamped_to_the_configured_maximum() {
+@@ANCHOR:trailing@@

@@ -1,0 +1,131 @@
+# Carriers — the benign documents a payload is inserted into.
+#
+# One per format, because the question `document-map.md` M3 asks is whether a signal generalises past
+# email. A signal that fires on email and nothing else is a rule about email, and rules are data — write
+# the rule instead of the tier (§6, third kill criterion).
+#
+# Every carrier is also emitted UNMODIFIED as a matched negative: identical in every respect except the
+# payload. That is the strongest negative available for this purpose and, per §5.2, also the most
+# flattering — a carrier-without-payload is a *perfect* negative, while the false positive that actually
+# matters is security prose about payloads, which has a payload and no seam. The `repo_prose` slice is
+# the counterweight and the two are gated together.
+#
+# ## Anchors
+#
+# A carrier marks its insertion points inline as `@@ANCHOR:<position>@@`, optionally with a default:
+# `@@ANCHOR:<position>|text used when this anchor is not the target@@`.
+#
+# Explicit markers rather than structural detection at generation time. A generator that went looking
+# for "the first list item" would be a second, undocumented parser of the formats under test, and every
+# disagreement between it and the scanner's own traversal would land in the metrics as noise. A marker is
+# reviewable: you can see where the payload will go by reading the file.
+#
+# When an anchor is not the target it is replaced by its default, and if that leaves the line empty the
+# line is removed entirely. So the matched negative is a clean document, not one with holes in it.
+#
+# ## `split`
+#
+# **Split by carrier, never by row.** `document-map.md` §5.3: this is the mitigation for the critique
+# levelled at TaskTracker's evaluation — holding out attack types while sharing benign text between
+# splits. A carrier in `calibration` may not appear in `report`, so a threshold chosen on one cannot have
+# seen the other's prose. Assigned by hand and visible here rather than derived from a hash, because a
+# reviewer needs to be able to check the balance: both splits carry email, both carry a tool result, both
+# carry a structured format.
+
+[[carrier]]
+id = "email-vendor"
+file = "carriers/email-vendor.txt"
+context = "email_body"
+split = "calibration"
+notes = "Ordinary business correspondence with a signature block. Carries the two positions that only an email has: post-signature and post-gap."
+
+[[carrier]]
+id = "email-invoice"
+file = "carriers/email-invoice.txt"
+context = "email_body"
+split = "report"
+notes = "An email whose body is mostly a markdown table plus a list — the same format serving three different position kinds."
+
+[[carrier]]
+id = "meeting-notes"
+file = "carriers/meeting-notes.md"
+context = "file_read"
+split = "calibration"
+notes = "Prose, list and table in one document. The list items are strongly parallel, which is the structure sibling comparison should find easiest."
+
+[[carrier]]
+id = "invoice-table"
+file = "carriers/invoice-table.txt"
+context = "file_read"
+split = "report"
+notes = "Whitespace-aligned columns rather than pipes, so a table detector cannot rely on the delimiter. Every cell but one is numeric — `indirect-email-007`'s structure at document scale."
+
+[[carrier]]
+id = "grep-output"
+file = "carriers/grep-output.txt"
+context = "tool_result"
+split = "calibration"
+notes = "Machine output with no prose at all. A payload here is a line that reads like English among lines that read like paths."
+
+[[carrier]]
+id = "shell-transcript"
+file = "carriers/shell-transcript.txt"
+context = "tool_result"
+split = "report"
+notes = "Command-and-output alternation. `document-map.md` §1.1 has TranscriptCommand and TranscriptOutput as separate segment kinds; this is the carrier that distinction is for."
+
+[[carrier]]
+id = "ci-log"
+file = "carriers/ci-log.txt"
+context = "tool_result"
+split = "calibration"
+notes = "Timestamped log lines, highly uniform. Includes lines about this repository's own failing tests, which is realistic and also a small hard-negative in its own right."
+
+[[carrier]]
+id = "json-tool-result"
+file = "carriers/json-tool-result.json"
+context = "tool_result"
+split = "report"
+notes = "A JSON tool response with one free-text field. The json-field position lands in a scalar whose siblings are all identifiers, timestamps and numbers."
+
+[[carrier]]
+id = "skill-file"
+file = "carriers/skill-file.md"
+context = "skill_md"
+split = "calibration"
+notes = "A skill file with frontmatter — the artifact class this tool exists to scan, and one of the four contexts the 004 baseline records misses in."
+
+[[carrier]]
+id = "mcp-tool-description"
+file = "carriers/mcp-tool-description.txt"
+context = "mcp_tool_description"
+split = "report"
+notes = "A tool description advertised by a server. Both `indirect-mcp` fixtures are missed at the 004 baseline, and this is the carrier that populates that context at scale."
+
+[[carrier]]
+id = "package-manifest"
+file = "carriers/package-manifest.json"
+context = "manifest"
+split = "report"
+notes = "A package manifest an agent parses. One of the three contexts added with `handcrafted-repo-config.jsonl`."
+
+[[carrier]]
+id = "repo-config"
+file = "carriers/repo-config.md"
+context = "repo_config"
+split = "calibration"
+notes = "Agent-readable repository conventions — the `.cursorrules` / `copilot-instructions.md` class. A document whose whole purpose is to instruct an agent, which makes an injected instruction maximally camouflaged."
+
+[[carrier]]
+id = "issue-body"
+file = "carriers/issue-body.md"
+context = "issue_body"
+split = "report"
+notes = "A bug report an agent is asked to triage. Untrusted text from an arbitrary author, arriving through a channel the agent is expected to read carefully."
+
+[[carrier]]
+id = "file-read-config"
+file = "carriers/file-read-config.txt"
+context = "file_read"
+split = "calibration"
+notes = "A TOML runtime configuration read from disk. Key-value structure throughout, so the payload's only sibling comparison is against `key = value` lines."

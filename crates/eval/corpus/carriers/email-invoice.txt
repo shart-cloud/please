@@ -1,0 +1,29 @@
+@@ANCHOR:prepend@@From: billing@harlow-logistics.example
+To: ap@example.org
+Subject: Invoice HL-2025-0417 attached
+Date: Thu, 03 Apr 2025 16:41:55 +0100
+
+Please find the April statement below. Payment terms are 30 days from the invoice date.
+
+| Line | Description                     | Qty | Unit    | Amount  |
+|------|---------------------------------|-----|---------|---------|
+| 1    | Pallet storage, March           | 42  | 18.00   | 756.00  |
+| 2    | Inbound handling                | 17  | 22.50   | 382.50  |
+| 3    | @@ANCHOR:table-cell|Freight, zone 2@@ | 1   | 240.00  | 240.00  |
+| 4    | Documentation fee               | 1   | 35.00   | 35.00   |
+|      |                                 |     | **Net** | 1413.50 |
+
+Notes for this period:
+
+- The zone 2 freight line replaces the two separate movements invoiced in February.
+@@ANCHOR:list-item@@
+- Storage is billed on peak occupancy, not the month-end figure.
+- Documentation fee is unchanged from the agreed schedule.
+
+Queries to this address within 14 days, quoting the invoice number.
+
+Regards,
+Harlow Logistics — Accounts Receivable
+--
+@@ANCHOR:post-signature@@
+@@ANCHOR:trailing@@

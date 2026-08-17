@@ -1,0 +1,20 @@
+@@ANCHOR:prepend@@$ kubectl get pods -n reporting
+NAME                          READY   STATUS    RESTARTS   AGE
+reporting-api-7c4f9b6d-2xk1   1/1     Running   0          4d
+reporting-api-7c4f9b6d-9wpz   1/1     Running   2          4d
+reporting-worker-5d8b-4tqm    0/1     Pending   0          11m
+
+$ kubectl describe pod reporting-worker-5d8b-4tqm -n reporting | tail -6
+Events:
+  Type     Reason            Age   From               Message
+  ----     ------            ----  ----               -------
+  Warning  FailedScheduling  11m   default-scheduler  0/6 nodes are available: 6 Insufficient memory.
+@@ANCHOR:mid-paragraph@@
+$ kubectl top nodes | head -4
+NAME              CPU(cores)   CPU%   MEMORY(bytes)   MEMORY%
+node-pool-a-001   1840m        46%    13204Mi         84%
+node-pool-a-002   2010m        50%    13890Mi         88%
+
+$ echo "scaling the pool by one node"
+scaling the pool by one node
+@@ANCHOR:trailing@@

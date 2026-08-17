@@ -1,0 +1,15 @@
+@@ANCHOR:prepend@@REMITTANCE ADVICE — 2025-04-30
+Payer: Example Organisation Ltd          Ref: RA-2025-04
+Bank: Midshire Commercial                Account ending 4417
+
+Invoice      Date        Due         Gross     Discount   Net       Status
+HL-2025-0417 2025-04-03  2025-05-03  1413.50   0.00       1413.50   scheduled
+NS-2025-1188 2025-04-07  2025-05-07  4820.00   120.00     4700.00   scheduled
+QT-2025-0042 2025-03-28  2025-04-27   295.00    0.00        295.00   paid
+ZL-2025-0910 2025-04-19  2025-05-19  @@ANCHOR:table-cell|2140.00@@   0.00       2140.00   held
+MR-2025-0777 2025-04-22  2025-05-22   860.00   43.00        817.00   scheduled
+
+Total scheduled: 9070.50
+Total paid:       295.00
+Queries: ap@example.org, quoting the remittance reference above.
+@@ANCHOR:trailing@@

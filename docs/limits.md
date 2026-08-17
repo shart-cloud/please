@@ -6,27 +6,40 @@ a security tool whose limits you discover in production has already cost you som
 
 Read this before trusting a clean verdict.
 
-## Accuracy is fixture-verified, not corpus-measured
+## Accuracy is corpus-measured, and there is no single number
 
-**Status: open until the evaluation harness ships.**
+**Status: closed as of 2026-08-17. `please-eval` exists and has been run — see
+`docs/research/eval-baseline.md`.** What replaces it is narrower than "accuracy is now known", and the
+shape of the limit has changed rather than gone away.
 
-Feature 001 verifies detection against curated fixtures: at least one positive per detection class, and
-at least 200 hard negatives including technical security prose. It does **not** measure performance
-against real attack corpora.
+This entry read *"no accuracy claim about PLEASE may be published until `please-eval` exists"* for four
+features. That block is lifted. The measurement covers 14 slices and roughly 74,000 rows, is reproducible
+from committed manifests, and is reported per source.
 
-This means the tool can pass every success criterion it sets itself while its real-world accuracy
-remains unknown. Fixtures bound the risk — they catch regressions and prove the mechanisms work — but
-they are chosen by the same people who wrote the detectors, which is exactly the bias a real corpus
-exists to break.
+**What it found is that there is no single accuracy number, and there is not going to be one.** Per-source
+detection on the stratified adversarial slice ranges from 0% to 100% across twenty-one sources, and the
+source supplying 49.2% of the corpus sits at 4.0%. An aggregate over that is a weighted average of
+populations measuring different things. So a claim from this tool must name its slice:
 
-**No accuracy claim about PLEASE may be published until `please-eval` exists.** Not a percentage, not a
-comparison, not a "catches most". This is recorded in the constitution and in four planning artifacts
-because it is the single easiest thing to accidentally overstate.
+* **41.9%** on InjecAgent (1,054 rows) — agentic tool-output injection, the closest public data to the
+  product.
+* **37.8%** on LLMail-Inject (27,963 rows) — with the asterisk that these are attacks selected for
+  evading deployed classifiers.
+* **0.0%** on 3,000 OR-Bench rows, and **1.0%** on 12,769 stratified non-adversarial rows — the
+  false-positive side, which is where SC-003's budget is met.
 
-That applies to the figures quoted elsewhere in this file. "False positives 8 → 1" is a true statement about
-**twelve hand-written benign cases**, which is 6% of the two hundred SC-003 asks for. It says the mechanism
-that produced eight of them has stopped producing them. It does not say the false-positive rate is 8%, and a
-corpus of two hundred would very likely find causes these twelve do not contain.
+Every figure is at the `Low` detection floor, not at the shipped default, and each is reproducible via
+`please-eval report`.
+
+**Still not claimable:** a single accuracy figure; anything about multilingual detection (see the next
+entry, which the run confirms rather than closes); anything about BIPIA-style instruction-data separation;
+anything about the decode tier from the obfuscation slice. `docs/research/eval-baseline.md` §7 lists these
+explicitly.
+
+The fixture caveat below stands and is worth keeping. "False positives 8 → 1" is a true statement about
+**twelve hand-written benign cases** — twenty now — which is a tenth of the two hundred SC-003 asks for. It
+says the mechanism that produced eight of them has stopped. It does not say the false-positive rate is 8%.
+The corpus figures above are the ones to quote.
 
 ## Multilingual detection is unmeasured, not supported
 
@@ -44,6 +57,12 @@ So: PLEASE makes **no multilingual detection claim.** Its confusable analysis (F
 avoid the opposite failure — mistaking ordinary non-English prose for an evasion attempt, which would
 actively harm non-English users. Closing the detection gap needs a corpus that does not yet exist.
 
+**The half that could be measured, was.** The 2026-08-17 run scanned 7,211 non-English negatives across 36
+languages and found a **0.6%** false-positive rate — 19 rows of 3,196 on the dedicated slice, all 19
+concealment-only. So the opposite failure is small and now has a figure. The detection side scanned **zero**
+non-English positives, because the corpus contains none, and `please-eval report` generates that sentence
+into every report's known-gaps section rather than leaving it to a reader to notice the missing column.
+
 ## The structural tier recognises form, not intent
 
 **Status: inherent to the tier; addressed by later tiers.**
@@ -54,6 +73,32 @@ override phrasing, concealment, encoding, boundary forgery, solicitation — not
 A novel phrasing that no rule anticipates will pass. An attacker who reads `rules/builtin.toml` knows
 exactly what is checked. This is not a defect to be fixed within this tier; it is what the tier is, and
 the model-backed and judgement tiers exist because of it.
+
+**Measured, rather than argued, as of 2026-08-17.** The generated corpus varies placement independently of
+payload — 14 carrier formats, 9 insertion positions, 20 payloads, 1,060 rows. Detection is 17.5–20.0%
+across *every* carrier and 15.0–20.0% across *every* position, and per payload it is binary: four payloads
+detected at 88.7–100%, sixteen at 0%. Detection is a function of the payload's words and nothing else.
+
+That is what a lexical tier is, and the number to keep from it is the sixteen: **placement made no
+difference to a single one of them.** `docs/research/eval-baseline.md` §6.
+
+## Two rules miss for reasons worth naming
+
+**Status: open. Found by the first corpus-measured run; recorded rather than fixed, because building the
+instrument is not licence to adjust the thing measured (`docs/002-accuracy-baseline.txt`).**
+
+**`boundary.forged_role_marker` requires a colon.** Its pattern ends
+`(system|assistant)\s*(\]|\|>)?\s*:`, so `[SYSTEM] Maintenance mode is active` is not detected — on any
+carrier, in any position, across 53 generated rows. The rule's literal prefilter *includes* `[system]`, so
+the intent to catch the bracketed form is there and the pattern does not deliver it. The same colon
+requirement is why SPML and TensorTrust fire on 400 of 400 rows each: their serialisation is `[System:`.
+
+**The actionable-directive frame requirement fails inside structured containers.** The rule needs a frame —
+line-initial, or following `.!?:;` — and a payload placed in a markdown table cell (after `| `) or a JSON
+string value (after `"`) has neither. A payload detected at the end of a document is missed in a table cell
+of the same document. This is the `injection_in_structured_data` case `docs/004-accuracy-baseline.txt`
+records as a missed fixture, now reproduced across 100 rows with the cause identified. It is **not**
+suppression: nothing was moved to the suppressed channel on any of those rows.
 
 ## A period is not a sentence end, and four rules used to think it was
 
@@ -132,22 +177,35 @@ carrying them whatever the surrounding text says. That is the right call for a p
 for an emoji.
 
 Emoji ZWJ sequences, skin-tone modifiers, and variation selectors are ordinary in social and multilingual
-text, and they are indistinguishable at the byte level from the smuggling channel. Measured over the 4,492
-stratified benign documents in the corpus cache:
+text, and they are indistinguishable at the byte level from the smuggling channel.
+
+**The figure, reproducibly.** Measured 2026-08-17 by `please-eval` over `neg_clean` — 6,240 gated rows,
+clean-benign, stratified at 400 per source — at rule-set digest `3f5b7d5ab13ee9e2`:
 
 ```text
-documents where a structural detector fires                 47
-documents where it is the ONLY finding                      40   (0.9% of the set)
+false-positive rows, total                                 110   (1.8% of the slice)
+  of which concealment is the ONLY cause                    32
+  of which concealment contributes at all                   33
+  remaining (override, solicitation, agent-directed)        77
 
-  concealment.zero_width               20
-  concealment.variation_selectors      16
-  concealment.control_characters        7
-  concealment.bidi_override             2
-  confusable.homoglyph_token            1
+findings, by rule
+  concealment.control_characters                           109
+  concealment.variation_selectors                           49
+  concealment.zero_width                                    42
+
+on neg_multilingual (3,196 rows), all 19 false positives are concealment-only
 ```
 
-Concentrated exactly where you would predict: `InTheWild-Jailbreaks` (18) and
-`PolyglotToxicityPrompts` (12) — social text and non-English text.
+Concentrated exactly where you would predict — `InTheWild-Jailbreaks` 9.5%, `AgentHarm` 12.5%,
+`Aegis-2.0` 4.5%, `PolyglotToxicityPrompts` 4.3% — social text, agent-instruction text, and non-English
+text.
+
+**This supersedes two earlier figures that could not be reconciled**, and that irreconcilability is why
+this crate exists. This section previously reported 40 documents over a 4,492-row cache;
+`docs/research/actionable-directive-results.md` §2.1 reported 262 findings over a differently-assembled
+one; and the note here read *"the direction is the same and the magnitude is not, which is itself a reason
+to want `please-eval` rather than two ad-hoc runs."* The number above is derived from a committed manifest
+with a named negative definition, and `please-eval report` will produce it again.
 
 **These are not reachable by the judgement tier either, and that is now measured rather than argued.** The
 judge was run over a stratified sample of this false-positive population
@@ -160,15 +218,19 @@ So the honest fix is to teach the detector which sequences are decoration — a 
 grapheme cluster, a ZWJ between two Latin letters is a smuggling channel — and that is a change to
 `detect::concealment`, not a tuning knob and not a second opinion.
 
-`docs/research/actionable-directive-results.md` §2.1 records this gap with substantially larger figures
-(262 hits: zero_width 99, variation_selectors 98, control_characters 65). Those were produced against a
-different assembly of the benign corpus and I could not reproduce them; the numbers above are from the
-current `neg_benign_strat` staging with the shipped rule set. The direction is the same and the magnitude
-is not, which is itself a reason to want `please-eval` rather than two ad-hoc runs.
+`docs/research/actionable-directive-results.md` §2.1 records this gap with larger figures (262 hits:
+zero_width 99, variation_selectors 98, control_characters 65) against a differently-assembled benign
+corpus. Both that assembly and this section's earlier one are now superseded by the measurement above, and
+the cause of the disagreement turned out to be exactly what it looked like: **there are two defensible
+definitions of "benign" in this corpus and the two runs used different ones.** `neg_clean` (both labels
+zero) and `neg_nonadversarial` (`prompt_adversarial = 0`, harmful permitted) are now defined separately in
+`crates/eval/corpus/slices.toml`, and a false-positive rate is comparable only to another rate over the
+same definition.
 
 ## Quoted payloads can suppress detection
 
-**Status: accepted false negative, unquantified.**
+**Status: accepted false negative. The population it acts on is now measured; the rate it costs is still
+not.**
 
 To avoid flagging documents that *discuss* prompt injection — threat models, advisories, rule
 definitions, this repository's own specification — matches inside quoting contexts (fenced code, inline
@@ -185,8 +247,21 @@ The trade is deliberate. Without this suppression the tool flags security docume
 unusable by the people most likely to evaluate it — and a firewall that gets switched off protects
 nothing. `--no-suppress-in-quotes` disables the behaviour for callers who prefer the noise.
 
-**The false-negative rate this costs has not been measured.** It cannot be, without the evaluation
-harness. Stating it as "accepted" is honest only as far as that; do not read it as "small".
+**The false-negative rate this costs is still not measured, but the population it acts on now is.** Over
+the 2026-08-17 run, suppression moved at least one finding to the suppressed channel on **726 positive
+rows** — 641 of them in LLMail-Inject, 11 of the 42 documents in this repository's own `docs/` and
+`specs/`. That is the size of what the mechanism touches. It is not the false-negative rate, because this
+harness cannot tell a correct suppression (a document discussing an attack) from an incorrect one (a live
+payload in a code fence); telling those apart needs the judgement tier or a hand-labelled sample of the
+726.
+
+One thing the generated corpus does settle. Placing a payload inside a JSON string value or a markdown
+table cell — both quoting contexts — suppressed **nothing** across 100 such rows
+(`docs/research/eval-baseline.md` §6). Detection there was lower, but for a different reason: the rule's
+frame requirement never matched. So the intuition that structured containers silence findings *through
+suppression* is wrong, and the real cause is now named.
+
+Stating the trade as "accepted" is honest as far as that goes; do not read it as "small".
 
 ## Displayed payloads in tool output cannot be told from live ones
 
@@ -474,6 +549,18 @@ Public data is therefore weakest exactly where the product is aimed. Purpose-aut
 the artifact-scanning case, and their metrics are reported **separately** from public-corpus metrics
 rather than blended into them, because blending would let a strong result on direct jailbreaks conceal a
 weak one on the case that matters.
+
+**Partly addressed as of 2026-08-17.** `please-eval generate` produces 1,060 rows across 14 carrier
+formats — a `SKILL.md`, an MCP tool description, a JSON tool result, a `package.json`, a `.cursorrules`, an
+issue body, a shell transcript, a CI log — each carrying the byte range of the injected payload and each
+with a matched negative. Generated text is ours, so unlike the 41 upstream sources it is committed at
+`crates/eval/corpus/generated.jsonl`.
+
+That closes the *volume* gap for the artifact vectors and gives span-level ground truth no public corpus
+provides. It does not close the *authenticity* gap, and `docs/research/document-map.md` §5.1 names why: the
+carriers were written by the same people as the detectors, so a strong result on them with a weak result on
+the held-out hand-written fixtures would mean the generator was fitted rather than the signal found. The
+two are reported side by side for that reason.
 
 ## Scope: this is not a content moderator
 

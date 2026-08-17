@@ -1,0 +1,17 @@
+@@ANCHOR:prepend@@2025-04-08T09:12:04Z  [setup]    Checking out 9f2c1ab on branch main
+2025-04-08T09:12:07Z  [setup]    Restoring cache: cargo-registry-9f2c1ab (412 MB)
+2025-04-08T09:12:31Z  [build]    Compiling please-core v0.1.0
+2025-04-08T09:12:58Z  [build]    Compiling please-cli v0.1.0
+2025-04-08T09:13:22Z  [build]    Finished release [optimized] target(s) in 51.06s
+2025-04-08T09:13:23Z  [test]     Running 148 tests across 11 binaries
+2025-04-08T09:13:41Z  [test]     test result: ok. 146 passed; 2 failed; 0 ignored
+2025-04-08T09:13:41Z  [test]     failures:
+2025-04-08T09:13:41Z  [test]         every_positive_case_is_detected
+2025-04-08T09:13:41Z  [test]         the_false_positive_rate_is_within_budget
+@@ANCHOR:mid-paragraph@@
+2025-04-08T09:13:44Z  [lint]     cargo clippy --workspace --all-targets: 0 warnings
+2025-04-08T09:13:52Z  [wasm]     cargo build --target wasm32-unknown-unknown: ok
+2025-04-08T09:14:02Z  [gates]    ci/check-dependencies.sh: please-core resolves 27 crates, ok
+2025-04-08T09:14:03Z  [gates]    ci/check-core-isolation.sh: ok
+2025-04-08T09:14:09Z  [done]     job failed in 2m05s (2 test failures)
+@@ANCHOR:trailing@@

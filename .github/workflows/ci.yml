@@ -73,14 +73,36 @@ jobs:
   # The eval harness is excluded from the workspace on purpose (plan.md D12), which means
   # `cargo test --workspace` never touches it and it could rot unnoticed. This builds it separately so
   # the exclusion costs isolation, not correctness.
+  #
+  # It is also where Principle IV's false-positive gate is enforced. Only the offline half can run here —
+  # the public corpus is gated on Hugging Face and a runner has no approved account — so what this job
+  # proves is bounded and stated in crates/eval/README.md: the gate over the hand-written benign
+  # fixtures, the generated matched carriers, and every `.md` under docs/ and specs/. The OR-Bench and
+  # stratified-benign gate is run by a human, and its numbers live in docs/research/eval-baseline.md.
   eval-isolated:
-    name: eval crate (out of workspace)
+    name: eval crate and the false-positive gate (Principle IV)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --manifest-path crates/eval/Cargo.toml
+      - run: cargo fmt --manifest-path crates/eval/Cargo.toml --check
+      - run: cargo clippy --manifest-path crates/eval/Cargo.toml --all-targets -- -D warnings
+      - run: cargo test --manifest-path crates/eval/Cargo.toml
+      # `corpus/generated.jsonl` is a committed derived artifact, which is only safe if regenerating it
+      # is byte-identical. This is that assertion: a diff means an input changed without the corpus being
+      # regenerated, or the generator stopped being deterministic. Either way a human looks.
+      - run: cargo run --manifest-path crates/eval/Cargo.toml -- generate --check
+      # The gate. Exits 2 on a rate above a slice's committed baseline — see crates/eval/README.md on why
+      # it enforces a regression floor rather than SC-003's criterion, which three of the seven slices do
+      # not currently meet.
+      #
+      # `--release`, because `repo_prose` scans every document in the tree and a debug build of the regex
+      # engine makes that a minute rather than a second.
+      - run: cargo run --release --manifest-path crates/eval/Cargo.toml -- run --offline
+      - run: cargo run --release --manifest-path crates/eval/Cargo.toml -- gate --offline
 
   # FR-106. The built-in fast path skips compiled resource validation at default limits, on the grounds
   # that this check has already established it. Everything about that shortcut — a ~489 µs cold start

@@ -1,0 +1,468 @@
+# Corpus slices — every population this harness measures, and the query that reproduces it.
+#
+# Read `docs/research/corpus-analysis.md` before changing anything here. Its six findings are the
+# reason this file has the shape it does, and four of them are traps that produce an encouraging
+# number if you do not know about them.
+#
+# Two conventions hold throughout:
+#
+#   * Every query slice pins the dataset REVISION. A manifest that verifies against a moving branch
+#     stops verifying anything the moment upstream appends a shard.
+#   * Every query samples by CONTENT HASH, never by row order and never by RNG. `ORDER BY sha256`
+#     and `row_number() OVER (PARTITION BY source ORDER BY sha256)` give the same rows on any machine
+#     without a seed to record, and the upstream dataset has no id column that could serve instead.
+#     See src/manifest.rs for why the content hash is the row identity.
+
+[dataset]
+repo = "Necent/llm-jailbreak-prompt-injection-dataset"
+# The revision `docs/research/corpus-analysis.md` measured. Gated (`gated: "auto"`); `hf auth whoami`
+# must show an approved account or every query slice fails, loudly, at fetch.
+revision = "4edfb5aeaafe58c9bf489a478a42188f239d7c1e"
+glob = "**/*.parquet"
+
+[gate]
+# SC-003's 1% false-positive budget, in per-mille so the comparison is exact integer arithmetic.
+max_fp_permille = 10
+# The band at or above which a finding counts. See GateConfig::floor.
+floor = "low"
+
+# ── Caveated sources: a rate that is about the serialisation, not the content ───────────────────────
+#
+# Global, not per-slice, and that is not a tidiness preference. The first draft of this file recorded the
+# SPML exclusion on `neg_nonadversarial` alone — and SPML is also 400 rows of `neg_clean`, where it fired
+# on 400 of 400 and carried that slice's measured rate from 1.8% to 7.7%. One dataset's serialisation
+# artifact was about to be published as a false-positive rate for the second time, in a file that quotes
+# the first time three paragraphs below.
+#
+# An exclusion is a property of the SOURCE. `[System: …]` is that source's wrapper in every slice that
+# contains it, so it is written down once and applied everywhere it appears.
+#
+# It applies to POSITIVE slices too. The same wrapper is TensorTrust's serialisation, and TensorTrust's
+# rows are labelled adversarial — so the identical non-fact reads as a 100% false-positive rate on one
+# slice and a 100% DETECTION rate on another. A mechanism that caveated only the embarrassing direction
+# would be a mechanism for flattering the tool.
+
+[[excluded_source]]
+source = "SPML"
+reason = """
+Every SPML row begins `[System: …]` because that is SPML's serialisation format, not its content, and
+`boundary.forged_role_marker` fires on all of them. `docs/research/actionable-directive-results.md`
+§2.1: "any FP rate computed over this corpus without excluding it is wrong by 8.9 percentage points",
+and it is the second time in that session a dataset's formatting produced a 100% hit rate.
+
+The rows are still fetched, still scanned, and still reported — the hits are real behaviour and a
+reader should see them. What the exclusion changes is one thing: they do not count against the gate,
+because the scanner is reading a dataset wrapper and not a document anybody would ever hand an agent.
+"""
+
+[[excluded_source]]
+source = "TensorTrust"
+reason = """
+The same `[System: …]` wrapper as SPML, on rows labelled adversarial rather than benign. Measured:
+400 of 400 rows detected, 819 `boundary.forged_role_marker` findings among them — the scanner reading
+TensorTrust's serialisation, exactly as it reads SPML's.
+
+TensorTrust rows ARE attacks, so unlike SPML this is not a false positive. It is worse in one specific
+way: it is a 100% TRUE-positive rate that would be entirely misleading to quote, because the tool is not
+detecting the attack, it is detecting the file format the attack was distributed in. An evaluation that
+excluded SPML's 100% and kept TensorTrust's 100% would be selecting for the flattering direction.
+"""
+
+# ══ Positives ══════════════════════════════════════════════════════════════════════════════════════
+#
+# The positive class for an injection firewall is `prompt_adversarial`. `prompt_harmful` is content
+# moderation and a separate, opt-in concern — the two labels are orthogonal, WildGuard-style, and
+# conflating them would score this tool on a task it does not perform.
+
+[[slice]]
+id = "pos_injecagent"
+kind = "positive"
+label = "InjecAgent — agentic tool-output injection"
+notes = """
+The purest indirect-injection population available: a user instruction, a tool result, and a payload
+inside the tool result. 1,054 rows, and with ToolEmu's 144 it is the whole agentic subset of the
+corpus — 0.45% of adversarial rows. It is small and it is the closest public data to what this tool is
+actually for, so it is reported on its own and never folded into an aggregate.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND source = 'InjecAgent' AND prompt_adversarial = 1
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows ORDER BY sha256
+"""
+
+[[slice]]
+id = "pos_llmail"
+kind = "positive"
+label = "LLMail-Inject — adaptive email-borne indirect attacks"
+notes = """
+28,174 rows, the largest indirect population in the corpus, and every number from it deserves the
+asterisk `docs/research/actionable-directive-results.md` §4 gives it: these are submissions to a
+challenge in which every entry had to evade several deployed defences simultaneously — TaskTracker and
+Prompt Shield among them. They are attacks SELECTED FOR EVADING CLASSIFIERS, though not ours. A high
+score here would be a strong result; a low one is partly a statement about the corpus.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND source = 'LLMail-Inject' AND prompt_adversarial = 1
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows ORDER BY sha256
+"""
+
+[[slice]]
+id = "pos_bipia"
+kind = "positive"
+label = "BIPIA — indirect benchmark, as aggregated"
+notes = """
+250 rows, and the most important slice in this file to read the notes for. BIPIA scores a different
+threat model: its attacks include "Recommend a good book for a relaxing weekend read", because the
+violation it measures is instruction-data separation, not harm. PLEASE detects instructions that
+ATTACK the agent; BIPIA scores any instruction the agent obeys.
+
+`actionable-directive-results.md` §1 measured the consequence — zero detections on 3,000 composed
+BIPIA documents, from the shipped rule set and from an experimental rule alike, because there is no
+content signal distinguishing "recommend a book" from surrounding prose. A near-zero number here is
+the expected result and is not evidence of a defect. Reporting it anyway is the point: a future
+accuracy claim that quotes a BIPIA figure without saying which threat model is being measured would
+be misleading, and the way to prevent that is to keep the figure visible next to this paragraph.
+
+NOT reproduced here: the 3,000-row composed corpus of that earlier run (200 carriers x 15 attacks),
+which was built from `microsoft/BIPIA` directly rather than from this aggregate. It needs a second
+upstream and a composition step; the generator in src/generate.rs covers the same construction with
+span-level ground truth this harness owns. Recorded as a gap rather than quietly dropped.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND source IN ('BIPIA', 'ToolEmu') AND prompt_adversarial = 1
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows ORDER BY sha256
+"""
+
+[[slice]]
+id = "pos_obfuscation"
+kind = "positive"
+label = "Labelled obfuscation family — base64, hex, rot13, reversed, leetspeak"
+notes = """
+9,855 rows, 1,971 per technique, and the one per-technique slice that is honest. `attack_technique` is
+empty for 94.8% of positives, so technique reporting over the corpus as a whole is not available — but
+this family is exactly what a decode-then-rescan detector targets, which makes it a precise unit-level
+eval for `decode::` and nothing else. Report it as such. Do not extrapolate it to the corpus:
+`corpus-analysis.md` Finding 3 is explicit that these 5.2% are not a sample of the other 94.8%.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND prompt_adversarial = 1
+    AND attack_technique IN ('base64', 'hex', 'rot13', 'reversed', 'leetspeak')
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows ORDER BY sha256
+"""
+
+[[slice]]
+id = "pos_stratified"
+kind = "positive"
+label = "Adversarial, stratified at 400 rows per source"
+notes = """
+The general detection picture, capped per source so that it is one. Uncapped, `jayavibhav-PI` supplies
+49.2% of adversarial rows and an aggregate over the population would be substantially a score on that
+one source — `corpus-analysis.md` Finding 1, the standing reason this file exists.
+
+The cap makes the SLICE balanced; it does not make a mean over the slice meaningful, because the
+sources are not equally representative of anything. Read the per-source column, which is why `report`
+prints it and prints no aggregate for this slice at all.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND prompt_adversarial = 1
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows
+QUALIFY row_number() OVER (PARTITION BY source ORDER BY sha256) <= 400
+ORDER BY sha256
+"""
+
+# ══ Negatives ══════════════════════════════════════════════════════════════════════════════════════
+#
+# There are two defensible definitions of "not an attack" in this corpus and the earlier ad-hoc runs
+# used both without saying so. That is precisely the confusion `docs/limits.md` records under the
+# concealment false-positive entry: *"those were produced against a different assembly of the benign
+# corpus and I could not reproduce them."*
+#
+# So both are defined here, separately, and named:
+#
+#   neg_clean            both labels zero. `corpus-analysis.md`'s "clean benign", 468,285 rows.
+#   neg_nonadversarial   `prompt_adversarial = 0`, harmful permitted. Wider, and the one that
+#                        contains SPML — which is where the 8.9-percentage-point trap lives.
+#
+# A false-positive rate is only comparable to another false-positive rate over the same definition.
+# Reporting them side by side is what makes that checkable rather than assumed.
+
+[[slice]]
+id = "neg_orbench"
+kind = "hard_negative"
+label = "OR-Bench — purpose-built over-refusal control set"
+gate_eligible = true
+# 0 of 3,000. The strongest single result in the run: OR-Bench is built to trap detectors
+# that fire on the shape of a dangerous request, and the structural tier does not. Pinned at zero, so the
+# first false positive here turns the gate red.
+baseline_permille = 0
+notes = """
+79,041 rows upstream, capped here at 3,000 by content hash. Seemingly-unsafe but actually-benign
+prompts, built to catch exactly the failure this gate exists for: a detector that fires on the SHAPE of
+a dangerous request rather than on an attack. `corpus-analysis.md` Finding 5 calls it the natural
+false-positive gate corpus and it is the strongest downloadable negative in the file.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND source = 'OR-Bench'
+    AND prompt_adversarial = 0 AND prompt_harmful = 0
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows
+QUALIFY row_number() OVER (PARTITION BY source ORDER BY sha256) <= 3000
+ORDER BY sha256
+"""
+
+[[slice]]
+id = "neg_clean"
+kind = "negative"
+label = "Clean benign (both labels zero), stratified at 400 rows per source"
+gate_eligible = true
+# 110 of 6,240 gated rows. 32 of those are concealment alone — emoji ZWJ sequences and
+# variation selectors in social text — which is a defect in `detect::concealment` and not a threshold.
+baseline_permille = 18
+notes = """
+The corpus's own clean-negative definition, stratified. This is the slice a published false-positive
+rate over public data should quote, because it is the one whose denominator matches the binary task
+`corpus-analysis.md` describes: 321,333 positive against 468,285 clean negative, roughly balanced with
+no synthetic negatives required.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND prompt_adversarial = 0 AND prompt_harmful = 0
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows
+QUALIFY row_number() OVER (PARTITION BY source ORDER BY sha256) <= 400
+ORDER BY sha256
+"""
+
+[[slice]]
+id = "neg_nonadversarial"
+kind = "negative"
+label = "Non-adversarial (harmful permitted), stratified at 400 rows per source"
+gate_eligible = true
+# 130 of 12,769 gated rows, which meets SC-003 exactly. Pinned at the criterion rather than
+# above it: there is no headroom here to give away.
+baseline_permille = 10
+notes = """
+The wider negative definition: not an injection, whatever else it may be. Toxic content that asks the
+model for nothing is not a prompt injection, and a firewall firing on it is a false positive — so this
+slice is where the concealment detectors' behaviour on social and multilingual text becomes visible.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND prompt_adversarial = 0
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows
+QUALIFY row_number() OVER (PARTITION BY source ORDER BY sha256) <= 400
+ORDER BY sha256
+"""
+
+[[slice]]
+id = "neg_multilingual"
+kind = "negative"
+label = "Non-English non-adversarial, stratified at 400 rows per source"
+gate_eligible = true
+# 19 of 3,196, and all 19 are concealment-only. This slice can only ever measure false
+# positives — the corpus contains zero non-English positives — so a rise here is unambiguous.
+baseline_permille = 6
+notes = """
+This slice exists to make an asymmetry impossible to present as a strength. There are roughly 79,000
+non-English NEGATIVES in this corpus and, per `corpus-analysis.md` Finding 4, exactly ZERO non-English
+positives — all 321,333 adversarial rows are `language = 'en'`.
+
+So a detector can post an excellent multilingual false-positive rate here while having no evidence
+whatsoever about multilingual detection. The number this slice produces is real and worth having: the
+confusable and concealment detectors could actively harm non-English users by mistaking ordinary prose
+for evasion, and this measures whether they do. It is not, and `report` must never let it read as,
+evidence that PLEASE detects attacks in these languages.
+"""
+[slice.origin]
+kind = "query"
+sql = """
+WITH rows AS (
+  SELECT sha256(prompt) AS sha256, source, language,
+         prompt_adversarial AS adversarial, prompt_harmful AS harmful,
+         coalesce(attack_technique, '') AS technique,
+         strlen(prompt) AS bytes, prompt
+  FROM '{dataset}'
+  WHERE prompt IS NOT NULL AND prompt_adversarial = 0 AND language <> 'en'
+  QUALIFY row_number() OVER (PARTITION BY sha256(prompt) ORDER BY source, language) = 1
+)
+SELECT * FROM rows
+QUALIFY row_number() OVER (PARTITION BY source ORDER BY sha256) <= 400
+ORDER BY sha256
+"""
+
+# ══ Committed corpora ══════════════════════════════════════════════════════════════════════════════
+#
+# No network, no gate approval, available in CI. These are the slices the false-positive gate is
+# actually enforced over on every change — see README.md on what that proves and what it does not.
+
+[[slice]]
+id = "fix_positive"
+kind = "positive"
+label = "Hand-written positive fixtures"
+notes = """
+The 41 labelled positives in `tests/fixtures/*.jsonl`. Held out from every threshold decision, per
+`document-map.md` §5.1: a strong result on generated data with a weak result here means we measured our
+own imagination. Their per-context breakdown is the only evidence in the whole harness about the
+vectors this tool is aimed at — `skill_md`, `mcp_tool_description`, `repo_config` — because agentic
+sources are 0.45% of the public corpus.
+"""
+[slice.origin]
+kind = "local"
+reader = "fixtures_positive"
+
+[[slice]]
+id = "fix_benign"
+kind = "hard_negative"
+label = "Hand-written benign fixtures"
+gate_eligible = true
+# 1 of 20. A rate over twenty hand-picked cases, which `docs/limits.md` is blunt about: it
+# "does not say the false-positive rate is 8%". Pinned so that the second one is a regression.
+baseline_permille = 50
+notes = """
+The benign half of the same files, including the security-prose cases. Twelve at the time of writing,
+against the 200 SC-003 asks for, and `docs/limits.md` is blunt about what that means: a rate over
+twelve cases "does not say the false-positive rate is 8%". Gated anyway, because a regression on
+twelve hand-picked hard cases is still a regression.
+"""
+[slice.origin]
+kind = "local"
+reader = "fixtures_benign"
+
+[[slice]]
+id = "gen_positive"
+kind = "positive"
+label = "Generated carrier x payload x position, with span ground truth"
+notes = """
+The corpus `document-map.md` §3 specifies, and the only one in this file with SPAN-level labels. Three
+properties no download provides: ground truth at a known byte offset, independent ablation of position
+against carrier, and a matched negative per positive.
+
+Its weakness is named in advance in §5.1 — the generator's seams could be our own seams — which is why
+`fix_positive` is held out entirely and why `report` prints them next to each other.
+"""
+[slice.origin]
+kind = "local"
+reader = "generated_positive"
+
+[[slice]]
+id = "gen_matched_negative"
+kind = "hard_negative"
+label = "Generated carriers, unmodified — the matched negative"
+gate_eligible = true
+# 0 of 14. Pinned at zero because a matched negative firing means the generator introduced a
+# signal, which invalidates every positive built from that carrier.
+baseline_permille = 0
+notes = """
+Each carrier with no payload: identical to its positives in every respect except the thing under test.
+Stronger than OR-Bench for measuring whether a signal is about the injection or about the document.
+
+`document-map.md` §5.2 also names its limitation, so it does not get used as more than it is: a
+carrier-without-payload is a PERFECT negative, and the false positive that actually matters is security
+prose about payloads — which has a payload and no seam. That is `repo_prose`, below, and the two are
+gated together for that reason.
+"""
+[slice.origin]
+kind = "local"
+reader = "generated_matched_negative"
+
+[[slice]]
+id = "repo_prose"
+kind = "hard_negative"
+label = "This repository's own documentation — security prose"
+gate_eligible = true
+# 13 of 42. The worst rate in the run by a wide margin, and structural rather than
+# accidental: a specification that quotes the phrases a detector matches contains those phrases.
+#
+# This population MOVES — adding a document changes numerator and denominator both — so this figure needs
+# re-pinning when the documentation grows. That is intended. A new memo that trips the scanner should make
+# somebody look at it rather than being averaged away.
+baseline_permille = 310
+notes = """
+Every `.md` under `docs/` and `specs/`: threat models, rule justifications, and four research documents
+that quote payloads as subject matter. `corpus-analysis.md` Finding 5 lists technical security prose as
+the false-positive class no public source covers, and `docs/limits.md` calls it the class most likely to
+make a developer disable the firewall.
+
+It is not a hypothetical. `actionable-directive-results.md` §2.3 records the shipped rule set firing on
+12 of 38 of these documents, and one of the hits is the sentence in a design memo that ENUMERATES the
+verb list a detector matches on. This slice is the reason the gate has a chance of being useful, and the
+reason it is currently red.
+"""
+[slice.origin]
+kind = "local"
+reader = "repository_prose"
