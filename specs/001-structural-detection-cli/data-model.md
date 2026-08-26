@@ -69,7 +69,7 @@ Three properties this is chosen for, each corresponding to a way the obvious alt
   eventually crosses any threshold. Here a 50-page document and a one-line snippet with the same worst
   finding and the same class mix score identically.
 - **Insensitive to match count.** Twenty matches of one rule score exactly as one match of it. Only
-  *distinct classes* add, and there are at most six, so the bonus is bounded by construction rather
+  *distinct classes* add, and there are at most eight, so the bonus is bounded by construction rather
   than by a cap that has to be tuned.
 - **Rewards corroboration.** An override phrase plus concealment plus an encoded payload is genuinely
   more suspicious than any alone, and this is the term that says so.
@@ -162,7 +162,24 @@ one carries an accuracy criterion.
 | `boundary` | Forged role markers, system-instruction or tool-result impersonation, delimiter breakout | FR-012 |
 | `solicitation` | Requests for an agent's instructions, configuration, or credentials | FR-013 |
 | `agent_directed` | Content addressing the reading agent rather than the document's human recipient | 003 FR-301 |
+| `external_action` | An instruction to act on state **outside** the conversation — grant access, approve a record, transfer funds | actionable-directive measurement |
+| `privilege` | Content that widens the agent's **own** authority — auto-approval, a permission allow-list, a bypass mode, a safety flag removed | 005 FR-506 |
 
+> **Amended by feature 005 (FR-506, FR-522).** An eighth class, `privilege`, has been **added**. It is the
+> third class change, and the third time the exhaustive slot match in `finalize/score.rs` was the thing
+> that caught every site needing an update.
+>
+> It exists because of a distinction seven classes could not express. `external_action` acts on state
+> outside the agent — a record, an account, a candidate's status. `privilege` acts on the control plane
+> that decides what the agent may do *without asking*. One is an action taken through the guardrail; the
+> other is an attack on the guardrail, and a caller's policy may reasonably block the second while merely
+> logging the first (Principle I).
+>
+> The argument was made against the same FR-130 bar that removed `encoding` below and admitted
+> `agent_directed` above, and against measurement rather than taxonomy: before the class existed,
+> `external_action.actionable_directive` caught the CVE-2025-53773 auto-approve payload on the incidental
+> words "update … configuration" and missed four of four other permission-widening payloads.
+>
 > **Amended by feature 002 (FR-130, FR-131, T054).** A sixth class, `encoding` — "payloads recovered by
 > bounded decoding", FR-011 — has been **removed**.
 >

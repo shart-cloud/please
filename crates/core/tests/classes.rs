@@ -376,11 +376,12 @@ fn no_detection_class_names_a_delivery_mechanism() {
 }
 
 #[test]
-fn there_are_exactly_seven_classes() {
+fn there_are_exactly_eight_classes() {
     // The count is load-bearing in two places that cannot check each other: the corroboration-bonus array in
     // scoring is sized by it, and the CLI's `--classes` enumeration mirrors it. Five after 002 removed
-    // `Encoding`; six after 003 added `AgentDirected`; seven after `ExternalAction`.
-    assert_eq!(please_core::policy::ALL_CLASSES.len(), 7);
+    // `Encoding`; six after 003 added `AgentDirected`; seven after `ExternalAction`; eight after 005 added
+    // `Privilege`.
+    assert_eq!(please_core::policy::ALL_CLASSES.len(), 8);
 }
 
 // ── FR-135: decoding is disabled by the depth bound, not by class selection ─────────────────────

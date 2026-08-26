@@ -126,6 +126,7 @@ mod tests {
             literals: vec!["x".to_string()],
             pattern: pattern.to_string(),
             fires_in_quotes: false,
+            anchor: crate::Anchor::Anywhere,
             enabled: true,
             description: "test".to_string(),
             provenance,

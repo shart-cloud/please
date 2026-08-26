@@ -40,7 +40,7 @@ pub const DEFAULT_MAX_EXCERPT_BYTES: u32 = 256;
 /// Seven. Five after 002's T048 removed `Encoding`, which named a delivery mechanism rather than a kind of
 /// finding; six after 003 added `AgentDirected`; seven after `ExternalAction`, which names the half of
 /// indirect injection that asks the agent to act rather than to disclose. See [`DetectionClass`].
-pub const ALL_CLASSES: [DetectionClass; 7] = [
+pub const ALL_CLASSES: [DetectionClass; 8] = [
     DetectionClass::Override,
     DetectionClass::Concealment,
     DetectionClass::Confusable,
@@ -48,6 +48,7 @@ pub const ALL_CLASSES: [DetectionClass; 7] = [
     DetectionClass::Solicitation,
     DetectionClass::AgentDirected,
     DetectionClass::ExternalAction,
+    DetectionClass::Privilege,
 ];
 
 /// Configuration governing one scan.
@@ -126,7 +127,7 @@ mod tests {
         for class in ALL_CLASSES {
             assert!(p.is_active(class), "{class:?} should be active by default");
         }
-        assert_eq!(p.classes.len(), 7, "ALL_CLASSES must cover every variant");
+        assert_eq!(p.classes.len(), 8, "ALL_CLASSES must cover every variant");
     }
 
     #[test]

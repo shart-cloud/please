@@ -76,6 +76,9 @@ impl Prefilter {
         } else {
             // `LeftmostFirst` would stop at the leftmost match; we need to know about *every* literal
             // present, so `Standard` semantics with a full iteration is what this needs.
+            //
+            // `Standard` is necessary and was not sufficient — see `candidates` on why the iteration has
+            // to be the OVERLAPPING one.
             AhoCorasickBuilder::new()
                 .ascii_case_insensitive(true)
                 .match_kind(MatchKind::Standard)
@@ -102,7 +105,25 @@ impl Prefilter {
         }
 
         if let Some(matcher) = &self.matcher {
-            for hit in matcher.find_iter(haystack) {
+            // **Overlapping**, and the distinction is a correctness bug rather than a tuning choice.
+            //
+            // `find_iter` is non-overlapping: it reports a match and resumes *after* it. So when one
+            // rule's literal is a prefix of another's, the shorter one consumes the span and the longer
+            // one is never reported — and a rule whose every literal is shadowed that way is silently
+            // never evaluated. It does not misfire; it does not run.
+            //
+            // Found when `privilege.permission_widening` declared the literal `bypasspermissions` and
+            // did not fire on the word `bypasspermissions`. `override.disregard_prior` had declared
+            // `bypass` four features earlier, so the automaton reported `bypass` at offset 0, resumed at
+            // offset 6, and the privilege rule was gated out of its own payload. Its pattern was correct
+            // throughout, which is what made it look like a regex problem.
+            //
+            // The rest of this crate already knew: `structure.rs` uses `find_overlapping_iter` for the
+            // attributive-marker automaton, for exactly this reason.
+            //
+            // Cost is bounded: overlapping iteration reports at most one hit per (position, pattern) and
+            // the literal set is small. The gate stays a linear pass.
+            for hit in matcher.find_overlapping_iter(haystack) {
                 for &index in &self.owners[hit.pattern().as_usize()] {
                     enabled[index] = true;
                 }
@@ -136,6 +157,7 @@ mod tests {
             literals: literals.iter().map(|s| s.to_string()).collect(),
             pattern: "x".to_string(),
             fires_in_quotes: false,
+            anchor: crate::Anchor::Anywhere,
             enabled: true,
             description: "test".to_string(),
             provenance: crate::prepare::Provenance::supplied(),

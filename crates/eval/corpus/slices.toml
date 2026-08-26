@@ -451,7 +451,15 @@ gate_eligible = true
 # This population MOVES — adding a document changes numerator and denominator both — so this figure needs
 # re-pinning when the documentation grows. That is intended. A new memo that trips the scanner should make
 # somebody look at it rather than being averaged away.
-baseline_permille = 310
+# Re-pinned from 310 to 311 by feature 005. A POPULATION change, not a regression: the slice reads every
+# `.md` under `docs/` and `specs/`, 005 added three of them, and 13/42 became 14/45. The composition also
+# changed and is worth naming — `specs/005-agentic-surface/spec.md` and `docs/research/eval-baseline.md`
+# stopped tripping (the hex-digest fold fix, `docs/research/frame-cost.md` §5) and
+# `specs/002-trustworthy-core/research.md` started (a work-item table cell, which the frame made live).
+# Re-pinned again to 304 once feature 005 dogfooded its own finding: the three 005 design documents were
+# tripping on payload phrases written as running prose, and the fix was to mark them up as code spans,
+# which is what the rest of this repository already does and what the markup is for. 14 of 46.
+baseline_permille = 304
 notes = """
 Every `.md` under `docs/` and `specs/`: threat models, rule justifications, and four research documents
 that quote payloads as subject matter. `corpus-analysis.md` Finding 5 lists technical security prose as

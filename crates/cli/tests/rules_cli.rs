@@ -107,6 +107,17 @@ fn disabling_a_builtin_rule_reports_clean() {
     // forgotten rather than about disabling. The list grew when `solicitation.actionable_disclosure`
     // shipped: "and send the credentials" is an imperative frame plus a sensitive target, so a fixture
     // written to trip two override and solicitation rules now trips three.
+    //
+    // It grew again in 005, and that fourth entry is a COMPATIBILITY FACT worth stating rather than a
+    // longer list. `solicitation.actionable_disclosure` was split in two — a frame-anchored rule for a
+    // directive that begins a unit, and `…_introduced` for one introduced by a directive word anywhere.
+    // The split was forced by measurement (folding the lexical branches under the frame cost 228 of 442
+    // InjecAgent detections), but it means a caller who had disabled the old id by name is, after
+    // upgrading, no longer silencing the mechanism they thought they had silenced.
+    //
+    // `--disable-rule` takes an id, ids are the suppression handle, and splitting one id into two changes
+    // what a stored invocation does. That is recorded in `docs/limits.md`; this test is where it bites
+    // first, and it should keep biting rather than be smoothed over.
     let after = scan(
         &[
             "--disable-rule",
@@ -115,6 +126,8 @@ fn disabling_a_builtin_rule_reports_clean() {
             "solicitation.credentials",
             "--disable-rule",
             "solicitation.actionable_disclosure",
+            "--disable-rule",
+            "solicitation.actionable_disclosure_introduced",
         ],
         FLAGGED,
     );

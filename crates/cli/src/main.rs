@@ -189,6 +189,15 @@ fn run() -> i32 {
                     engine.ruleset_id().clone(),
                 )
             }
+            // Read successfully, and not text. Reported as an explicit gap rather than skipped: a target
+            // that vanishes from the output reads as a clean scan, which is the failure Principle I names.
+            Target::NotText { reference, detail } => {
+                eprintln!(
+                    "plz: not text, not examined: {} ({detail})",
+                    reference.name.as_deref().unwrap_or("?")
+                );
+                please_core::finalize::not_text(reference, detail, engine.ruleset_id().clone())
+            }
             // A symbolic link to a directory. Reported, never skipped, for the same reason.
             Target::NotTraversed { reference, detail } => {
                 eprintln!(
