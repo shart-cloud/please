@@ -126,6 +126,52 @@ impl Bands {
     }
 }
 
+/// Where in a document's structure a rule is allowed to match.
+///
+/// # Why this is rule data rather than pattern syntax
+///
+/// Before feature 005 a rule anchored itself by writing the anchor into its own regex, as a line-start
+/// assertion followed by a hand-written prefix character class:
+///
+/// ```text
+/// ^[\s>*+\-•\d.)\]]{0,8}(\[|<\|)?(system|assistant)\s*(\]|\|>)?\s*:
+/// ```
+///
+/// Two things were wrong with that, and only the second one is obvious.
+///
+/// **It is unreviewable.** Principle III says a rule's meaning must be reviewable in a pull request
+/// without running it. Deciding whether that prefix class admits a markdown table cell requires reading
+/// eleven escaped characters and knowing what the engine does with them. `anchor = "frame"` is one word.
+///
+/// **Every structured container introduces a prefix character nobody listed.** `<!--` for an HTML
+/// comment, `|` for a table cell, `"` for a JSON string value. Each omission is a silent evasion, and
+/// each is fixed by editing every rule that carries a copy of the class — which is how one defect came
+/// to be recorded in `docs/limits.md` as two unrelated open rules, and how four copies of the same
+/// hand-rolled frame alternation came to drift apart inside `rules/`.
+///
+/// Moving the anchor into data fixes the next container once instead of once per rule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
+pub enum Anchor {
+    /// Match anywhere in live text. The default, and what a rule gets by saying nothing.
+    #[default]
+    Anywhere,
+    /// Match only at a frame boundary — a position that begins a semantic unit.
+    ///
+    /// See [`crate::structure::StructureMap::is_frame`] for what counts as one.
+    Frame,
+}
+
+impl Anchor {
+    /// The wire name, as written in TOML and as hashed into the rule-set digest.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Anchor::Anywhere => "anywhere",
+            Anchor::Frame => "frame",
+        }
+    }
+}
+
 /// One declarative detection definition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Rule {
@@ -143,6 +189,13 @@ pub struct Rule {
     pub pattern: String,
     /// Whether this rule survives the quoting pre-pass (FR-014).
     pub fires_in_quotes: bool,
+    /// Where in the document's structure this rule may match (005 FR-501).
+    ///
+    /// Sibling of `fires_in_quotes` in every sense: declarative, defaulted, and consumed by a filter in
+    /// [`crate::detect`] rather than by the matcher. The two are independent and are applied in order —
+    /// the frame decides whether a match was ever a finding, and suppression decides whether a finding
+    /// is reported. A frame boundary inside a fenced block is still inside a fenced block.
+    pub anchor: Anchor,
     pub enabled: bool,
     /// Why this rule exists. **Required**, and shown in output so a finding explains itself without a
     /// lookup — an unexplained finding is one a user cannot act on, and it is the first thing that
@@ -366,6 +419,10 @@ fn digest_of(name: &str, version: &str, rules: &[Rule], bands: &Bands) -> String
             hasher.update([0]);
         }
         hasher.update([u8::from(rule.fires_in_quotes), u8::from(rule.enabled)]);
+        // The anchor changes which text a rule matches, so two rule sets differing only in it are
+        // different rule sets. A digest whose job is attribution has to say so (SC-012).
+        hasher.update(rule.anchor.as_str().as_bytes());
+        hasher.update([0]);
         hasher.update(rule.description.as_bytes());
         hasher.update([0]);
     }
@@ -406,6 +463,10 @@ pub enum RulesetError {
     UnknownClass {
         rule: String,
         class: String,
+    },
+    UnknownAnchor {
+        rule: String,
+        anchor: String,
     },
     SeverityOutOfRange {
         rule: String,
@@ -476,6 +537,12 @@ impl core::fmt::Display for RulesetError {
                 f,
                 "rule `{rule}`: unknown detection class `{class}`. A rule in an unknown class could \
                  never be reported on or disabled"
+            ),
+            Self::UnknownAnchor { rule, anchor } => write!(
+                f,
+                "rule `{rule}`: unknown anchor `{anchor}`. Expected `anywhere` or `frame`. \
+                 An unrecognised anchor is rejected rather than defaulted, because defaulting it to \
+                 `anywhere` would silently widen where the rule matches"
             ),
             Self::SeverityOutOfRange { rule, severity } => {
                 write!(f, "rule `{rule}`: severity {severity} outside 0..=100")
@@ -549,6 +616,7 @@ mod tests {
             literals: vec!["x".into()],
             pattern: "x".into(),
             fires_in_quotes: false,
+            anchor: Anchor::Anywhere,
             enabled: true,
             description: "d".into(),
             provenance: Provenance::supplied(),

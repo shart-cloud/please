@@ -225,6 +225,24 @@ pub fn leetspeak(input: &[u8]) -> Option<String> {
 fn shows_deliberate_substitution(text: &str) -> bool {
     for run in text.split(|c: char| !c.is_ascii_alphanumeric()) {
         let bytes = run.as_bytes();
+
+        // A hex identifier is not leetspeak, and this tool emits them.
+        //
+        // The list above — `v2.4`, `CVE-2026`, `MD5`, `SHA256`, `base64` — is a list of tokens whose
+        // digits sit at the EDGES. A hex digest interleaves them: `3f5b7d5ab13ee9e2` has letters on both
+        // sides of `13`, so it qualified as deliberate substitution and enabled a whole-document fold.
+        //
+        // That token is PLEASE's own rule-set digest. It appears in every verdict this tool emits, so any
+        // document quoting a verdict — a bug report, a spec, a CI log, `docs/research/eval-baseline.md` —
+        // became an unsuppressable copy of itself, and every payload it correctly quoted inside a code
+        // fence was re-reported through the copy. Isolated to a single token: delete the digest from a
+        // 22 KB document and the same document is clean.
+        //
+        // Seven, because a shorter all-hex run is more plausibly a word than an identifier: `4dd`,
+        // `d3add`, `bad` are three, five and three. Commit shorthands start at seven.
+        if bytes.len() >= 7 && bytes.iter().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
         let mut first_letter = None;
         let mut last_letter = None;
         for (index, byte) in bytes.iter().enumerate() {

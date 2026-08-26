@@ -51,7 +51,7 @@ pub use engine::{Engine, EngineBuilder};
 pub use finalize::evidence::{CoverageGap, Evidence, Observation};
 pub use finalize::plan::{Bounds, ScanPlan};
 pub use policy::ScanPolicy;
-pub use ruleset::{Rule, Ruleset, RulesetError, RulesetLimits};
+pub use ruleset::{Anchor, Rule, Ruleset, RulesetError, RulesetLimits};
 /// The judgement tier's vocabulary (feature 004, plan D10).
 ///
 /// Here because [`Verdict`] carries a [`JudgeReport`] and `Verdict` is a core type — core cannot depend on

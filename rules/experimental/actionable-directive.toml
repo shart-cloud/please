@@ -40,6 +40,7 @@ version = "0.1.0"
 id = "solicitation.actionable_directive"
 class = "solicitation"
 severity = 75
+anchor = "frame"
 # The gate is the verb set. Note the cost: `send`, `share`, `access`, `update`, and `output` are ordinary
 # English, so this rule's pattern will be compiled on a large fraction of all input — unlike
 # `override.disregard_prior`, whose literals are rare. Measured in the results table as gate hit rate.
@@ -57,7 +58,7 @@ literals = [
 # The leading alternation is CONSUMING, because a finite-automaton engine has no look-behind — that is
 # what makes every accepted rule linear-time. So sentence-initial position is expressed as "start of
 # line, optionally past bullet or list punctuation" and "after a sentence terminator plus space".
-pattern = '''(?im)(?:^[\s>*+\-•\d.)\]]{0,8}|[.!?:;]\s+|\bplease\s+|\byou\s+(?:must|should|need\s+to|have\s+to|are\s+required\s+to)\s+)(?:forward|send|grant|approve|update|modify|delete|execute|transfer|share|reveal|output|exfiltrate)\b(?:[^.\n]|\.[^\s\n]){0,80}\b(?:emails?|credentials?|api[ _-]?keys?|access|permissions?|passwords?|tokens?|accounts?|admin|system\s+prompts?|candidates?|records?|configurations?)\b'''
+pattern = '''(?i)(?:please\s+|and\s+(?:then\s+)?|then\s+|you\s+(?:must|should|need\s+to|have\s+to|are\s+required\s+to)\s+)?(?:forward|send|grant|approve|update|modify|delete|execute|transfer|share|reveal|output|exfiltrate)\b(?:[^.\n]|\.[^\s\n]){0,80}\b(?:emails?|credentials?|api[ _-]?keys?|access|permissions?|passwords?|tokens?|accounts?|admin|system\s+prompts?|candidates?|records?|configurations?)\b'''
 description = "An imperative directing the reading agent to act on a sensitive resource. Content being summarised or read as data has no reason to issue one."
 
 # ── v2, derived from the measurement rather than from the design ────────────────────────────────────
@@ -80,6 +81,7 @@ description = "An imperative directing the reading agent to act on a sensitive r
 id = "solicitation.actionable_directive_v2"
 class = "solicitation"
 severity = 75
+anchor = "frame"
 literals = [
   "forward", "send", "grant", "approve", "update", "modify", "delete",
   "execute", "transfer", "share", "reveal", "output", "exfiltrate",
@@ -121,5 +123,5 @@ literals = [
 #
 # The four built-in rules using `[^.\n]{0,N}` have defect 1 and not defect 2. See the plan in
 # `docs/research/` and `docs/limits.md`.
-pattern = '''(?im)(?:^[\s>*+\-•\d.)\]]{0,8}|[.!?:;,]\s+|\bplease\s+|\band\s+(?:then\s+)?|\bthen\s+|\byou\s+(?:must|should|need\s+to|have\s+to|are\s+required\s+to)\s+)(?:forward|send|grant|approve|update|modify|delete|execute|transfer|share|reveal|output|exfiltrate)\b(?:[^.\n]|\.[^\s\n]){0,80}(?:\b(?:emails?|credentials?|api[ _-]?keys?|access|permissions?|passwords?|tokens?|accounts?|admin|system\s+prompts?|candidates?|records?|configurations?)\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|https?://|www\.)'''
+pattern = '''(?i)(?:please\s+|and\s+(?:then\s+)?|then\s+|you\s+(?:must|should|need\s+to|have\s+to|are\s+required\s+to)\s+)?(?:forward|send|grant|approve|update|modify|delete|execute|transfer|share|reveal|output|exfiltrate)\b(?:[^.\n]|\.[^\s\n]){0,80}(?:\b(?:emails?|credentials?|api[ _-]?keys?|access|permissions?|passwords?|tokens?|accounts?|admin|system\s+prompts?|candidates?|records?|configurations?)\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|https?://|www\.)'''
 description = "An imperative directing the reading agent to act on a sensitive resource or to deliver content to an external address."

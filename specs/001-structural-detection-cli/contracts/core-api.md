@@ -210,6 +210,26 @@ and the first addition should not break every embedder.
 > the pattern worth naming rather than the individual edits. `non_exhaustive` makes the addition compatible
 > for `match`, and does nothing for either change to an embedder comparing `class.as_str()` against a literal.
 > Anyone doing that should be reading `policy::ALL_CLASSES` instead.
+>
+> **Correction 7 (005).** Four changes now: `Encoding` removed, then `AgentDirected`, `ExternalAction` and
+> `Privilege` added. The addition side has behaved exactly as `non_exhaustive` promises and has cost an
+> embedder nothing on any of the three.
+>
+> What each addition *has* cost is a compile error inside this crate, at
+> `finalize::score::class_index` — an exhaustive match with no wildcard arm, sized by `CLASS_COUNT`. That
+> is deliberate and it has now earned its keep four times: it is the thing that finds every site needing
+> an update, including the CLI enumeration and the verdict schema, without anyone having to remember they
+> exist. A wildcard there would let a new class silently contribute no corroboration bonus, which shows
+> up months later as a drifting false-negative rate and never as a failure.
+>
+> **A new field on `Rule`.** 005 adds `anchor: Anchor`, defaulting to `Anchor::Anywhere`. `Rule` is a
+> plain public struct, so an embedder constructing one with a struct literal must add the field; an
+> embedder loading rules from TOML is unaffected, and a rule set that says nothing gets the previous
+> behaviour. `Anchor` is `non_exhaustive` for the same reason `DetectionClass` is.
+>
+> **And a new `IncompleteCause`.** `TargetNotText`, for a target read successfully and declined as
+> non-text. Same enum, same `non_exhaustive`, same advice: match on `is_bound()` or `as_str()` rather
+> than enumerating variants.
 
 ---
 

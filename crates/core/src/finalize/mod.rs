@@ -432,6 +432,22 @@ pub fn unreadable_target(
     )
 }
 
+/// A verdict for a target that was read but is not decodable text.
+///
+/// Beside [`unreadable_target`] and [`not_traversed`], and for the same reason: the core takes bytes and
+/// has no concept of a file, so the caller that owns the filesystem owns the decision about what is worth
+/// handing over. Deciding it here would give the core an opinion about file formats, which is exactly what
+/// keeps it out of a browser (Principle V).
+///
+/// Inconclusive, never clean, and never a finding.
+pub fn not_text(target: TargetRef, detail: impl Into<String>, ruleset: RulesetId) -> Verdict {
+    gap_only(
+        CoverageGap::failure(IncompleteCause::TargetNotText, detail),
+        target,
+        ruleset,
+    )
+}
+
 /// A verdict for a target a walk deliberately did not descend into.
 ///
 /// A symbolic link to a directory, in practice: following one may be a cycle, and refusing is how a walk

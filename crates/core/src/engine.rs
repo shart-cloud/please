@@ -208,6 +208,23 @@ impl Engine {
         );
         let decoded = self.observe_decoded(&plan, &expansion, &mut evidence);
 
+        // ── Frame ───────────────────────────────────────────────────────────────────────────────
+        //
+        // Before suppression, and on direct matches only. A frame-anchored rule that matched outside a
+        // frame was never a finding, so it goes into no channel at all — see `detect::apply_frame` for
+        // why that distinction is worth the extra pass.
+        //
+        // Decoded observations are EXEMPT, for the same reason they are exempt from suppression one stage
+        // below: a decoded candidate has no meaningful structure of its own. Its offsets index a
+        // transformed buffer, and the structure map describes the original — asking whether byte 400 of a
+        // base64 decode begins a markdown table cell is not a question with an answer. The whole-input
+        // transforms make this concrete: their span is the entire document, so every decoded observation
+        // would sit at offset 0, which is a frame, and the filter would be a no-op that looked like a
+        // check.
+        let direct = detect::apply_frame(direct, input, &quoting, |rule_id| {
+            self.matcher.is_frame_anchored(rule_id)
+        });
+
         // ── Suppression ─────────────────────────────────────────────────────────────────────────
         //
         // Rule-driven observations from the original input only. A documentation example of an override

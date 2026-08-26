@@ -27,6 +27,9 @@ pub(super) struct RawRule {
     pub literals: Vec<String>,
     pub pattern: String,
     pub fires_in_quotes: bool,
+    /// Kept as a `String` here for the same reason `severity` is kept as `i64`: an unrecognised value
+    /// must survive parsing so validation can report the word the author actually wrote.
+    pub anchor: String,
     pub enabled: bool,
     pub description: String,
 }
@@ -47,6 +50,7 @@ const RULE_FIELDS: &[&str] = &[
     "literals",
     "pattern",
     "fires_in_quotes",
+    "anchor",
     "enabled",
     "description",
 ];
@@ -128,6 +132,7 @@ pub(super) fn parse(source: &str) -> Result<RawRuleset, RulesetError> {
                 literals: optional_string_array(t, "literals", &at)?,
                 pattern: required_string(t, "pattern", &at)?,
                 fires_in_quotes: optional_bool(t, "fires_in_quotes", false, &at)?,
+                anchor: optional_string(t, "anchor", "anywhere", &at)?,
                 enabled: optional_bool(t, "enabled", true, &at)?,
                 description: required_string(t, "description", &at)?,
                 id,
@@ -211,6 +216,26 @@ fn optional_bool(
             field: field.to_string(),
             expected: "a boolean",
         }),
+    }
+}
+
+/// A string field with a default. Sibling of [`optional_bool`].
+fn optional_string(
+    table: &Table,
+    field: &str,
+    default: &str,
+    rule: &Option<String>,
+) -> Result<String, RulesetError> {
+    match table.get(field) {
+        None => Ok(default.to_string()),
+        Some(value) => value
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| RulesetError::WrongType {
+                rule: rule.clone(),
+                field: field.to_string(),
+                expected: "a string",
+            }),
     }
 }
 

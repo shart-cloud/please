@@ -30,7 +30,7 @@
 //! deliberately weakened one.
 
 use super::parse::{RawRule, RawRuleset};
-use super::{Rule, Ruleset, RulesetError, RulesetLimits};
+use super::{Anchor, Rule, Ruleset, RulesetError, RulesetLimits};
 use crate::finalize::types::DetectionClass;
 use crate::prepare::Provenance;
 
@@ -84,6 +84,17 @@ fn validate_rule(
         class: raw.class.clone(),
     })?;
 
+    let anchor = match raw.anchor.as_str() {
+        "anywhere" => Anchor::Anywhere,
+        "frame" => Anchor::Frame,
+        _ => {
+            return Err(RulesetError::UnknownAnchor {
+                rule: raw.id.clone(),
+                anchor: raw.anchor.clone(),
+            })
+        }
+    };
+
     let severity = u8::try_from(raw.severity)
         .ok()
         .filter(|s| *s <= 100)
@@ -125,6 +136,7 @@ fn validate_rule(
         literals: raw.literals,
         pattern: raw.pattern,
         fires_in_quotes: raw.fires_in_quotes,
+        anchor,
         enabled: raw.enabled,
         description: raw.description,
         // Anything reaching this function came from TOML a caller handed us, so it is `Supplied`
@@ -184,6 +196,7 @@ fn parse_class(name: &str) -> Option<DetectionClass> {
         "solicitation" => DetectionClass::Solicitation,
         "agent_directed" => DetectionClass::AgentDirected,
         "external_action" => DetectionClass::ExternalAction,
+        "privilege" => DetectionClass::Privilege,
         _ => return None,
     })
 }

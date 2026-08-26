@@ -90,6 +90,19 @@ impl Matcher {
             .is_some_and(|rule| rule.fires_in_quotes)
     }
 
+    /// Does this rule only match at a frame boundary (005 FR-501)?
+    ///
+    /// Looked up by id, like [`Self::fires_in_quotes`], and false for an unknown rule for the same
+    /// reason: an id the rule set does not know cannot have declared anything, and defaulting an unknown
+    /// rule to *frame-anchored* would silently drop its findings.
+    pub fn is_frame_anchored(&self, rule_id: &str) -> bool {
+        self.ruleset
+            .all_rules()
+            .iter()
+            .find(|rule| rule.id == rule_id)
+            .is_some_and(|rule| rule.anchor == crate::Anchor::Frame)
+    }
+
     /// Every match of every candidate rule against `haystack`.
     ///
     /// The literal prefilter runs first, in one linear pass, so text matching no literal — nearly all text —
@@ -127,17 +140,41 @@ impl Matcher {
         max_matches: u32,
         evidence: &mut Evidence,
     ) -> Vec<&'a Rule> {
+        // Still lazy, though [`FrameMap::build`] is now cheap — it is one `looks_like_json` probe rather
+        // than the boundary map it used to be. This function is the decoded path's inner loop: it runs
+        // once per decoded candidate, and a whole-input transform yields a copy of the entire document.
+        // Not paying even a cheap probe on candidates that match nothing is free to keep.
+        let mut frames: Option<crate::structure::FrameMap> = None;
         let rules = self.ruleset.all_rules();
         let mut found = Vec::new();
         for index in self.prefilter.candidates(haystack) {
             let rule = &rules[index];
-            if !self
+            // A frame-anchored rule is anchored inside a decoded buffer too. The buffer is a document —
+            // a whole-input fold is a copy of the ENTIRE document — and a rule declaring that its payload
+            // only means something at the start of a unit cannot abandon that claim just because the text
+            // arrived through a transform.
+            //
+            // Leaving it unanchored here is not a small omission. `docs/limits.md` records that a
+            // whole-input transform is "a copy of the document that suppression does not cover"; making it
+            // a copy the ANCHOR does not cover either turned three of this repository's own documents into
+            // findings, through a leetspeak fold triggered by a hex digest.
+            let spans = self
                 .patterns
-                .matches(index, rule, haystack, max_matches, evidence)
-                .is_empty()
-            {
-                found.push(rule);
+                .matches(index, rule, haystack, max_matches, evidence);
+            if spans.is_empty() {
+                continue;
             }
+            if rule.anchor == crate::Anchor::Frame {
+                let frames =
+                    frames.get_or_insert_with(|| crate::structure::FrameMap::build(haystack));
+                if !spans
+                    .iter()
+                    .any(|span| frames.is_frame(haystack, span.start))
+                {
+                    continue;
+                }
+            }
+            found.push(rule);
         }
         found
     }

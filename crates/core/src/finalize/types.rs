@@ -150,6 +150,30 @@ pub enum DetectionClass {
     /// that class stop describing its members. `rules/experimental/actionable-directive.toml` recorded the
     /// problem and declined to guess; this is the answer.
     ExternalAction,
+    /// Content that widens the agent's **own** authority — auto-approval, permission allow-lists,
+    /// bypass modes, safety flags removed (005 FR-506).
+    ///
+    /// Distinct from [`ExternalAction`](Self::ExternalAction), which is the class it has to be argued
+    /// against rather than merely distinguished from. That one acts on state **outside** the agent: a
+    /// record, an account, a candidate's status. This one acts on the control plane that decides what the
+    /// agent may do *without asking*. One is an action taken through the guardrail; the other is an attack
+    /// on the guardrail.
+    ///
+    /// The distinction is **reflexivity**, and the codebase already draws it once: `solicitation.system_prompt`
+    /// is separate from a generic request for data because the agent's own instructions are a different
+    /// object from the world's. Its own configuration is the same kind of different.
+    ///
+    /// Two things make that more than taxonomy. A caller's policy may reasonably block this while merely
+    /// logging an ordinary directive — Principle I puts that decision in the caller's hands, which requires
+    /// the verdict to carry the difference. And the empirical overlap is thin: measured before this class
+    /// existed, `external_action.actionable_directive` caught the auto-approve payload on the incidental
+    /// words "update … configuration" and missed four of four other permission-widening payloads.
+    ///
+    /// The consequence is what sets its severity. CVE-2025-53773 is one payload that writes
+    /// `chat.tools.autoApprove` into a settings file, after which **every later injection executes
+    /// silently**. That is a different magnitude from "approve this record" and is why this sits with
+    /// forged system authority rather than with ordinary directives.
+    Privilege,
 }
 
 impl DetectionClass {
@@ -163,6 +187,7 @@ impl DetectionClass {
             Self::Solicitation => "solicitation",
             Self::AgentDirected => "agent_directed",
             Self::ExternalAction => "external_action",
+            Self::Privilege => "privilege",
         }
     }
 }
@@ -774,6 +799,19 @@ pub enum IncompleteCause {
     /// The path is perfectly readable; the caller declined. Filed under the same fail-open rule either
     /// way: unexamined content is inconclusive, never clean.
     TargetNotTraversed,
+    /// A target was read but is not decodable text, so the text analysers were never run on it.
+    ///
+    /// A PDF, an image, a compiled binary, an NTFS alternate data stream. Distinct from
+    /// [`Self::TargetUnreadable`] because the read succeeded — the bytes are here and were declined,
+    /// which sends a reader somewhere different from a permissions problem.
+    ///
+    /// **Never a finding, and never clean.** Measured before this existed: a PDF produced 64 findings
+    /// and a three-line Windows provenance stub scored 80 on its trailing NUL, because compression
+    /// streams and binary padding are, to a text detector, a dense field of control characters and
+    /// accidental literals. Reporting `critical` on a PDF is how a scanner gets switched off, which
+    /// Principle IV's rationale names as the worse outcome. Dropping it silently is the other failure:
+    /// a target that vanishes from the output reads as a clean scan.
+    TargetNotText,
     DecodeFailed,
     RulesetUnavailable,
     /// An optional detection tier was unavailable, which degrades to inconclusive and never to clean.
@@ -802,6 +840,7 @@ impl IncompleteCause {
             Self::ExcerptLength => "excerpt_length",
             Self::TargetUnreadable => "target_unreadable",
             Self::TargetNotTraversed => "target_not_traversed",
+            Self::TargetNotText => "target_not_text",
             Self::DecodeFailed => "decode_failed",
             Self::RulesetUnavailable => "ruleset_unavailable",
             Self::TierUnavailable => "tier_unavailable",

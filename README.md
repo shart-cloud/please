@@ -89,4 +89,48 @@ This is barely a weekend project so to say it's in a final state would be untrue
 
 The most useful thing it found is not a percentage. Varying placement independently of payload across 1,060 generated documents, detection is flat across every carrier format and every insertion position, and binary per payload: four of twenty payloads detected everywhere, sixteen detected nowhere. Detection is a function of the payload's words and nothing else — which is what a lexical tier *is*, but it is better to have measured it than to have argued it.
 
+## Please Tell Me What Changed:
+
+**Feature 005 covers the agentic coding-assistant surface**, and it started from a probe rather than an
+idea: six prompt-injection attacks published in the literature — the Invariant Labs MCP tool-poisoning
+payload, the AIShellJack `.cursorrules` backdoor, CVE-2025-53773's `autoApprove` escalation, the GitHub
+MCP toxic-agent-flow issue, a rug-pull tool description, and a permission allow-list widening. Scanned
+with the shipped rules, **five of the six came back `clean`.**
+
+Four of the five missed for one reason, and it was not the one that looked likely. Every structural rule
+wrote its own anchor into its own regex as `^[\s>*+\-•\d.)\]]{0,8}` — a line start plus a hand-written
+list of characters that may precede a payload. Every structured container introduces a character nobody
+listed, and agentic artifacts are structured containers by construction: an MCP tool description is a
+JSON string value, a toxic issue hides in an HTML comment, a poisoned work item sits in a table cell. The
+same payload was detected at the start of a line and clean four bytes later inside `<!-- `.
+
+So the anchor became rule data (`anchor = "frame"`) with one shared definition of where a semantic unit
+begins, an eighth detection class `privilege` was added for content that widens the agent's *own*
+authority, and three rules were added or extended. All six probes are now detected.
+
+The measured effect, at the `Low` floor, against a baseline captured from a build of the previous commit:
+
+| | before | after |
+|---|---:|---:|
+| generated corpus | 206 | **316** |
+| LLMail-Inject | 10,562 | **10,925** |
+| stratified adversarial | 1,703 | **1,757** |
+| InjecAgent | 442 | 442 |
+| OR-Bench false positives | 0 | **0** |
+| sources that fell | — | **none of 41** |
+
+One number is worth more than the rest. `docs/research/eval-baseline.md` had reported detection as
+binary per payload — four of twenty payloads detected everywhere, sixteen detected nowhere — and
+concluded detection was "a function of the payload's words and nothing else". One of the sixteen,
+`phrase-role-01`, went from **0.0% to 98.1%** without a word of it changing. Detection was a function of
+the payload's words *and of one structural fact nobody had isolated.*
+
+Getting there cost two measurements that nearly ended the feature — a repair that dropped InjecAgent from
+442 to 214, and one that dropped SPML from 100% to 13% — plus a false positive found in this
+repository's own specification, traced to a whole-document fold triggered by PLEASE's own rule-set
+digest. All of it is in `docs/research/frame-cost.md`, including what it cost: about 10% of sustained
+throughput, and one design decision that `docs/limits.md` now argues was wrong.
+
+## Please Don't Overstate This, Part Two:
+
 `docs/limits.md` is the honest list of what this does not do: quoted payloads can suppress detection, a structural tier reads form and not intent, multilingual *detection* is unmeasured (the corpus has zero non-English attacks, so only the false-positive half could be measured — 0.6%), sustained throughput misses its own criterion by about 4%, two named rules miss for reasons the eval run identified, and the fixture suite has known misses that are named in the tests rather than hidden. Read it before trusting a clean verdict.

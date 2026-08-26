@@ -43,6 +43,15 @@ pub struct QuotingMap {
     /// Holding them in the same vector with a "does this one suppress?" flag would put the guarantee in
     /// every reader's hands; two collections put it in the type.
     concealing: Vec<(usize, usize, ConcealingContext)>,
+    /// Frame support (005 FR-501).
+    ///
+    /// Not a collection, and that is the point: a frame boundary is a *local* property, decided on
+    /// demand by [`frame_at`] from the bytes around an offset. Precomputing them all was measured and
+    /// removed — see [`FrameMap`].
+    ///
+    /// Whether a double quote attributes, computed once by [`looks_like_json`]. The only whole-document
+    /// input the frame predicate needs.
+    quotes_attribute: bool,
 }
 
 /// Phrases that introduce an example rather than an instruction.
@@ -278,6 +287,7 @@ impl QuotingMap {
         Self {
             regions,
             concealing,
+            quotes_attribute: double_quotes_attribute,
         }
     }
 
@@ -300,6 +310,13 @@ impl QuotingMap {
             .rev()
             .find(|(start, end, _)| offset >= *start && offset < *end)
             .map(|(_, _, context)| *context)
+    }
+
+    /// Does a semantic unit begin at `offset`?
+    ///
+    /// Consulted once per match, for rules declaring [`crate::Anchor::Frame`]. Constant time.
+    pub fn is_frame(&self, input: &[u8], offset: usize) -> bool {
+        frame_at(input, offset, self.quotes_attribute)
     }
 
     /// True when any part of `start..end` is quoted.
@@ -399,6 +416,178 @@ fn looks_like_json(input: &[u8]) -> bool {
 }
 
 /// True when the apostrophe at `at` is inside a word — a contraction or a possessive, never a delimiter.
+/// Frame lookup over a buffer, without the quoting and concealment machinery.
+///
+/// # Why this is a predicate and not a map
+///
+/// The first implementation precomputed every boundary in the document into a sorted `Vec<usize>` and
+/// binary-searched it. That is the natural shape if you think of the frame as a *property of the
+/// document*. It is the wrong shape, and it cost 15–18% of sustained throughput: a megabyte of prose has
+/// a boundary at every sentence, every line, every list marker and every backtick — well over a hundred
+/// thousand of them — so the map paid an extra byte walk, a large allocation, and an `O(n log n)` sort,
+/// on every scan, to answer a question asked once per *match*. Most documents have no matches at all.
+///
+/// A frame boundary is **local**. Whether a unit begins at some offset depends on a handful of bytes
+/// immediately before it and nothing else, so it can be decided on demand in constant time with a
+/// bounded backward scan. The map is now a predicate, the extra pass is gone, and the answer is
+/// identical.
+///
+/// The only whole-document input it needs is whether double quotes attribute, which
+/// [`looks_like_json`] already computes once.
+#[derive(Debug, Clone, Copy)]
+pub struct FrameMap {
+    quotes_attribute: bool,
+}
+
+impl FrameMap {
+    pub fn build(input: &[u8]) -> Self {
+        Self {
+            quotes_attribute: !looks_like_json(input),
+        }
+    }
+
+    pub fn is_frame(&self, input: &[u8], offset: usize) -> bool {
+        frame_at(input, offset, self.quotes_attribute)
+    }
+}
+
+/// Does a semantic unit begin at `offset`?
+///
+/// # What this replaced
+///
+/// Before feature 005, each rule carried its own answer, written into its pattern as
+/// `^[\s>*+\-•\d.)\]]{0,8}` — a line-start assertion plus a hand-written set of characters that may
+/// precede the payload. Three rules in `rules/builtin.toml` carried a copy; two of them extended it with
+/// a hand-rolled alternation (`[.!?:;,]\s+|\bplease\s+|\band\s+(?:then\s+)?|…`) that is this function
+/// spelled in regex. The experimental rule set carried two more copies, and **they had already drifted**:
+/// one dropped the comma from `[.!?:;,]` and both the `and then` and `then` branches, so a directive
+/// after a comma was framed by three rules and not by the fourth, for no reason anybody recorded.
+///
+/// Four hand-maintained copies of one concept, in a file whose premise is that rules are reviewable data.
+///
+/// # What counts, and why each one is here
+///
+/// | boundary | the container it unlocks |
+/// |---|---|
+/// | start of input | a document begins a unit |
+/// | start of line, past list/quote/heading markers | what the old prefix class approximated |
+/// | after `.!?;:,` and whitespace | a clause begins a unit |
+/// | after a markdown table cell `\|` | a cell is a unit |
+/// | after an HTML comment open `<!--` | the toxic-issue vector |
+/// | after an opening `[` | `[System:`, `[Injected:` |
+/// | after a backtick | inline code, so the suppressed channel stays honest |
+/// | at the start of a serialised string value | tool-description poisoning |
+///
+/// # Cost
+///
+/// Constant time. The backward scan over line-start markers is bounded at eight bytes — the width the
+/// old prefix class used — and the whitespace scan is bounded by the run it walks. No allocation, no
+/// clock, and nothing that depends on the length of the document.
+fn frame_at(input: &[u8], offset: usize, quotes_attribute: bool) -> bool {
+    if offset == 0 {
+        return true;
+    }
+    if offset > input.len() {
+        return false;
+    }
+
+    let previous = input[offset - 1];
+
+    // ── Immediate single-byte openers ───────────────────────────────────────────────────────────
+    match previous {
+        // A line break, and the start of a line is the start of a unit.
+        b'\n' => return true,
+        // `[System: …`, `[Injected: …`. An opening square bracket opens a unit wherever it appears,
+        // not only at a line start.
+        //
+        // **Square only.** An earlier version also admitted `(` and `{`. The parenthesis cost a false
+        // positive immediately — `(Output) \n ![IMG](https://…` frames `Output`, which is on the
+        // disclosure rule's verb list, with a URL inside its gap. `{` was redundant: a serialised
+        // document's string values are framed by the quote arm below, which is conditional on the
+        // document actually looking serialised.
+        b'[' => return true,
+        // A backtick opens an inline-code span whose content is a unit, so a rule may reach inside it —
+        // and then suppression excuses it, because inline code is a quoting context.
+        //
+        // **Reaching and then suppressing is the point, not a wasted step.** `--no-suppress-in-quotes`
+        // is advertised as showing the user what the heuristic is hiding from them. If a frame-anchored
+        // rule could not reach into a quoting context at all, that channel would be quietly incomplete:
+        // the payload would be absent from the report AND absent from the list of things withheld from
+        // it, which is the worst of both.
+        b'`' => return true,
+        // Only when the document looks serialised. In prose this same byte means the opposite thing —
+        // an author attributing a quotation rather than a serialiser delimiting a value.
+        b'"' if !quotes_attribute => return true,
+        _ => {}
+    }
+
+    // ── After a table cell separator or a comment open, past any spaces ─────────────────────────
+    //
+    // `| id | SYSTEM: … |` — a cell is a unit, and a table is where a payload goes when its author has
+    // read the rules. `<!-- SYSTEM: … -->` is probe row 4 of the 005 specification, and the guarantee
+    // `docs/limits.md` recorded as enforced by test: a comment is not a quoting context, but no rule
+    // could *reach* inside one, because `<!--` is not a line start.
+    {
+        let mut back = offset;
+        while back > 0 && matches!(input[back - 1], b' ' | b'\t') {
+            back -= 1;
+        }
+        if back > 0 {
+            if input[back - 1] == b'|' {
+                return true;
+            }
+            if back >= 4 && &input[back - 4..back] == b"<!--" {
+                return true;
+            }
+        }
+    }
+
+    // ── After a clause terminator plus whitespace ───────────────────────────────────────────────
+    //
+    // The payload the whole feature started from sits here: `Here is prose. SYSTEM: …`. Whitespace is
+    // REQUIRED so that a version string (`v2.4`), a path (`./x`) and a decimal do not each open a frame
+    // — the same distinction `docs/limits.md` records four rules getting wrong in the other direction.
+    //
+    // The comma is in the set because three of the four hand-rolled copies this replaces had it
+    // (`[.!?:;,]`) and the fourth did not. Taking the majority reading is a decision, not a default: it
+    // widens the frame for every anchored rule, and `docs/research/frame-cost.md` is where it is priced.
+    {
+        let mut back = offset;
+        let mut saw_space = false;
+        while back > 0 && matches!(input[back - 1], b' ' | b'\t' | b'\r') {
+            back -= 1;
+            saw_space = true;
+        }
+        if saw_space
+            && back > 0
+            && matches!(input[back - 1], b'.' | b'!' | b'?' | b';' | b':' | b',')
+        {
+            return true;
+        }
+        // ── Start of line, past the markers a unit may hide behind ─────────────────────────────
+        //
+        // A payload after `- `, `> `, `## `, `1. ` or leading whitespace is at the start of its unit;
+        // the marker is presentation. Bounded at eight bytes, which is the width the old prefix class
+        // used and is enough for `> > 1. ` without letting a long run of punctuation carry a frame
+        // arbitrarily far into a line.
+        let mut cursor = offset;
+        let limit = offset.saturating_sub(8);
+        while cursor > limit
+            && matches!(
+                input[cursor - 1],
+                b' ' | b'\t' | b'>' | b'*' | b'+' | b'-' | b'#' | b'.' | b')' | b']' | b'0'..=b'9'
+            )
+        {
+            cursor -= 1;
+            if cursor == 0 || input[cursor - 1] == b'\n' {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 fn is_intraword(input: &[u8], at: usize) -> bool {
     let before = at.checked_sub(1).and_then(|i| input.get(i));
     let after = input.get(at + 1);

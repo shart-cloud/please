@@ -53,6 +53,15 @@ pub enum Target {
         reference: TargetRef,
         detail: String,
     },
+    /// A path that was read successfully but is not decodable text.
+    ///
+    /// Distinct from [`Target::Unreadable`] because the read worked. The bytes are here and we declined
+    /// to hand them to a text analyser, which sends a reader somewhere different from a permissions
+    /// problem — the same distinction [`Target::NotTraversed`] draws for a different reason.
+    NotText {
+        reference: TargetRef,
+        detail: String,
+    },
     /// A path the walk deliberately did not descend into.
     ///
     /// Distinct from [`Target::Unreadable`] because the difference is true: a symlinked directory is
@@ -145,7 +154,14 @@ fn read_stdin() -> Result<Target, String> {
         .read_to_end(&mut bytes)
         .map_err(|e| format!("cannot read standard input: {e}"))?;
     let reference = TargetRef::stdin(bytes.len());
-    Ok(Target::Content { bytes, reference })
+    // Applied to stdin as well as to files. `curl … | plz scan` is an advertised way to use this tool and
+    // is exactly as capable of delivering a PDF as a walk is. The cost is that text in a non-UTF-8 legacy
+    // encoding is declined rather than scanned — recorded in `docs/limits.md`, and it fails to
+    // inconclusive rather than to clean, which is the direction Principle I requires it to fail in.
+    match is_text(&bytes) {
+        Ok(()) => Ok(Target::Content { bytes, reference }),
+        Err(detail) => Ok(Target::NotText { reference, detail }),
+    }
 }
 
 /// Read one file, preserving the path exactly as the caller wrote it.
@@ -155,7 +171,10 @@ fn read_file(path: &Path, as_given: &str) -> Target {
     match std::fs::read(path) {
         Ok(bytes) => {
             let reference = TargetRef::path(display, bytes.len());
-            Target::Content { bytes, reference }
+            match is_text(&bytes) {
+                Ok(()) => Target::Content { bytes, reference },
+                Err(detail) => Target::NotText { reference, detail },
+            }
         }
         Err(e) => Target::Unreadable {
             reference: TargetRef::path(display, 0),
@@ -167,6 +186,39 @@ fn read_file(path: &Path, as_given: &str) -> Target {
 /// How a path is named in output.
 ///
 /// Never absolutised: output must not vary with the working directory it was produced from (SC-011).
+/// Is this content decodable text?
+///
+/// # Why UTF-8 validity plus a NUL check, and not a heuristic
+///
+/// The tempting version counts printable bytes and guesses. It is the wrong instrument here, and the
+/// reason is the population it would guess wrong about: dense non-English prose. This project has spent
+/// more effort than anything else on not harming non-English users — the confusable analysis exists
+/// partly for it, and the multilingual false-positive rate is one of the few numbers it can defend. A
+/// byte-frequency test on UTF-8 Japanese or Arabic sees a great many bytes above 0x7F and, tuned by
+/// anyone reasoning from English, calls it binary. The file would then be reported as unexaminable, which
+/// is a quieter version of the same harm.
+///
+/// UTF-8 validity is not a guess. Text that decodes is text.
+///
+/// The NUL check is the second half, and it is what the measurements needed. A Windows
+/// `Zone.Identifier` alternate data stream is *valid UTF-8* — `[ZoneTransfer]\r\nZoneId=3\0` — and
+/// scored 80 on `concealment.control_characters` for its single trailing NUL. A NUL byte does not occur
+/// in text anyone wrote; it occurs in text something padded.
+///
+/// # What this deliberately does not do
+///
+/// It does not extract text from a PDF, and a PDF can certainly carry a payload. Declining to parse one
+/// is a scope boundary, not a solved problem, and `docs/limits.md` records it as one.
+fn is_text(bytes: &[u8]) -> Result<(), String> {
+    if bytes.contains(&0) {
+        return Err("contains NUL bytes; not decodable text".to_string());
+    }
+    match std::str::from_utf8(bytes) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(format!("not valid UTF-8 at byte {}", e.valid_up_to())),
+    }
+}
+
 fn display_name(path: &Path, as_given: &str) -> String {
     if path.as_os_str() == as_given {
         as_given.to_string()

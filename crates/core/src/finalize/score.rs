@@ -12,7 +12,7 @@
 //!   engineering document accumulates innocuous matches until it crosses any threshold — the tool would
 //!   behave worst on exactly the large, important files a team most wants scanned.
 //! * **Insensitive to match count.** Twenty matches of one rule score exactly as one. Only *distinct
-//!   classes* add, and there are at most six, so the bonus is bounded by construction rather than by a
+//!   classes* add, and there are at most eight, so the bonus is bounded by construction rather than by a
 //!   cap somebody has to tune.
 //! * **Rewards corroboration.** An override phrase plus concealment plus a forged role marker is genuinely
 //!   more suspicious than any alone, and this is the term that says so. Pure maximum discards it.
@@ -79,16 +79,16 @@ pub fn aggregate(hits: &[(u8, DetectionClass)]) -> u8 {
 
 /// Number of detection classes, and the width of the corroboration array.
 ///
-/// Seven. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile
+/// Eight. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile
 /// error rather than a silent change in scoring — see the note on the wildcard arm. It has now caught the
-/// guard three times: 002 removing `Encoding`, 003 adding `AgentDirected`, and the actionable-directive
-/// measurement adding `ExternalAction`.
-const CLASS_COUNT: usize = 7;
+/// guard four times: 002 removing `Encoding`, 003 adding `AgentDirected`, the actionable-directive
+/// measurement adding `ExternalAction`, and 005 adding `Privilege`.
+const CLASS_COUNT: usize = 8;
 
 /// Stable index for the fixed-size presence array.
 ///
 /// Deliberately **exhaustive with no wildcard arm**. [`DetectionClass`] is `non_exhaustive` for
-/// downstream crates, but inside this one every variant is known — so adding a seventh class makes this
+/// downstream crates, but inside this one every variant is known — so adding an eighth class makes this
 /// function fail to compile, which is exactly the right outcome. A wildcard here would let a new class
 /// silently contribute no corroboration bonus, and a scoring term that quietly stops applying is the
 /// kind of bug that shows up as a drifting false-negative rate months later.
@@ -101,6 +101,7 @@ fn class_index(class: DetectionClass) -> usize {
         DetectionClass::Solicitation => 4,
         DetectionClass::AgentDirected => 5,
         DetectionClass::ExternalAction => 6,
+        DetectionClass::Privilege => 7,
     }
 }
 
