@@ -612,6 +612,165 @@ impl JudgeReport {
     // When there is a corpus and a calibration study to run, add the accessor in the commit that reads it.
 }
 
+// ── The ML vocabulary (feature 006, contracts/ml-tier.md) ───────────────────────────────────────
+//
+// Here for the reason the judgement vocabulary is here, and it is the same reason: `Verdict` carries an
+// `MlReport`, `Verdict` is a core type, and core depending on `please-ml` would invert the arrow that keeps
+// core's dependency pin, its `#![forbid(unsafe_code)]`, and its wasm32 build true. Core may DESCRIBE a
+// classification; only `please-ml` may OBTAIN one.
+//
+// That split matters more here than it did for the judge. `please-ml` links Candle — 112 crates, a build
+// script, and unsafe memory mapping — and none of it can reach core through a type definition.
+
+/// Which half of the ML tier produced a segment's numbers (006 FR-650).
+///
+/// Recorded per segment rather than per report because a single run may do both: the classifier reads the
+/// segments selective inference chose, and the embedder reads every sibling in the group in order to rank
+/// one of them. A report that named one mode for the whole document could not express that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum MlMode {
+    /// The prompt-injection classifier ran on this segment.
+    Classify,
+    /// The embedder ran on this segment, contributing an outlier score.
+    Embed,
+    /// Both ran.
+    Both,
+}
+
+impl MlMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Classify => "classify",
+            Self::Embed => "embed",
+            Self::Both => "both",
+        }
+    }
+}
+
+/// One segment's ML numbers.
+///
+/// Both scores are optional and their absence is meaningful: `probability: None` says the classifier did
+/// not read this segment, which under selective inference (FR-652) is the ordinary case and NOT a claim
+/// that the segment is benign.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MlSegmentResult {
+    span: Span,
+    mode: MlMode,
+    /// Probability of the malicious class, in per-mille: `0..=1000`.
+    ///
+    /// An integer rather than the `f32` the classifier produced, and the quantisation is the determinism
+    /// argument rather than a storage convenience. Candle's f32 arithmetic varies across SIMD, FMA and
+    /// denormal handling; a verdict that recorded `0.87421` would differ between two machines that agree
+    /// about every decision made from it. Per-mille is finer than any threshold worth setting and coarse
+    /// enough to absorb that variance — the same trade the structural tier makes by counting bytes rather
+    /// than timing them.
+    probability: Option<u16>,
+    /// Per-mille distance from the segment's siblings — `1000 - mean_cosine * 1000`.
+    ///
+    /// **Reported, never gating.** T008 measured this score as a document-level detector at 3.1% TPR
+    /// against a 25% criterion and `document-map.md` §6 answers a failed M2 with *abandon rather than
+    /// tune*. It stays in the verdict because ranking siblings is a different question from separating
+    /// documents, and the ranking half measured 55.6% top-1 — useful to a human reading the output, and
+    /// not sound as a threshold. Nothing in `finalize` reads it.
+    outlier: Option<u16>,
+}
+
+impl MlSegmentResult {
+    pub fn new(span: Span, mode: MlMode, probability: Option<u16>, outlier: Option<u16>) -> Self {
+        Self {
+            span,
+            mode,
+            probability,
+            outlier,
+        }
+    }
+
+    pub fn span(&self) -> Span {
+        self.span
+    }
+
+    pub fn mode(&self) -> MlMode {
+        self.mode
+    }
+
+    /// The malicious-class probability in per-mille, or `None` if the classifier did not read this
+    /// segment. `None` is not a claim of benignity — see the field.
+    pub fn probability(&self) -> Option<u16> {
+        self.probability
+    }
+
+    pub fn outlier(&self) -> Option<u16> {
+        self.outlier
+    }
+}
+
+/// What the ML tier adds to a verdict (006 FR-654).
+///
+/// Attribution is the whole of it. Model weights are not reviewable the way a rule file is — the spec
+/// records that as a genuine loss against constitution Principle III — and what compensates is that every
+/// verdict names the exact bytes that produced it: the model id, the revision it was fetched at, the digest
+/// of the weights on disk, and the threshold it was compared against. A finding nobody can attribute to a
+/// specific artifact is a finding nobody can reproduce or dispute.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MlReport {
+    model: String,
+    revision: String,
+    digest: String,
+    threshold: u16,
+    segments: Vec<MlSegmentResult>,
+}
+
+impl MlReport {
+    /// Build a report. Public because `please-ml` is a different crate and must be able to produce one —
+    /// and, as with [`JudgeReport::new`], producing a report is not producing a verdict. Only
+    /// [`crate::finalize::with_ml`] can apply one.
+    pub fn new(
+        model: impl Into<String>,
+        revision: impl Into<String>,
+        digest: impl Into<String>,
+        threshold: u16,
+        segments: Vec<MlSegmentResult>,
+    ) -> Self {
+        Self {
+            model: model.into(),
+            revision: revision.into(),
+            digest: digest.into(),
+            threshold,
+            segments,
+        }
+    }
+
+    /// The resolved model id. A verdict produced by one classifier is not evidence about another.
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+
+    /// The upstream revision the weights were fetched at. A repo id alone names a moving target.
+    pub fn revision(&self) -> &str {
+        &self.revision
+    }
+
+    /// SHA-256 over the weights as loaded. The revision is a claim about provenance; this is a claim
+    /// about the bytes, and only the second one survives a mirror, a re-tag, or a corrupted download.
+    pub fn digest(&self) -> &str {
+        &self.digest
+    }
+
+    /// The threshold this run compared against, in per-mille.
+    ///
+    /// On the verdict because it is the entire false-positive control. With corroboration dropped
+    /// (contracts/ml-tier.md), a finding's existence is a function of this number and nothing else, so a
+    /// verdict that did not carry it would be uninterpretable a month later.
+    pub fn threshold(&self) -> u16 {
+        self.threshold
+    }
+
+    pub fn segments(&self) -> &[MlSegmentResult] {
+        &self.segments
+    }
+}
+
 /// One transformation recognised while decoding (FR-011).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -1003,6 +1162,11 @@ pub struct Verdict {
     /// `None` on every default scan, and its absence is the machine-readable form of "this verdict is
     /// purely structural, and 001's determinism guarantee applies to it unchanged" (FR-417).
     judge: Option<JudgeReport>,
+    /// Present only on a verdict the ML tier acted on (feature 006, FR-654).
+    ///
+    /// `None` on every default scan, exactly as [`judge`](Self::judge) is, and carrying the same meaning:
+    /// this verdict is purely structural and 001's determinism guarantee applies to it unchanged.
+    ml: Option<MlReport>,
 }
 
 impl Verdict {
@@ -1054,6 +1218,7 @@ impl Verdict {
             // through `rejudge` — which is what keeps the judged path strictly additive to a path that
             // already works (FR-418).
             judge: None,
+            ml: None,
         }
     }
 
@@ -1066,6 +1231,22 @@ impl Verdict {
     pub(super) fn with_judge(mut self, report: JudgeReport) -> Self {
         self.judge = Some(report);
         self
+    }
+
+    /// Attach an ML report. Visible to finalization only, for the reason [`with_judge`](Self::with_judge)
+    /// is: attaching the report is how a verdict claims the tier ran, and a caller able to make that claim
+    /// without running it could manufacture attribution for weights that never loaded.
+    pub(super) fn with_ml(mut self, report: MlReport) -> Self {
+        self.ml = Some(report);
+        self
+    }
+
+    /// The ML tier's report, if one ran (006 FR-654).
+    ///
+    /// `None` means no ML tier ran — **not** that it ran and found nothing. A tier that loaded and cleared
+    /// every segment still returns a report, with the segments it read and no findings from them.
+    pub fn ml(&self) -> Option<&MlReport> {
+        self.ml.as_ref()
     }
 
     pub fn outcome(&self) -> Outcome {
@@ -1218,6 +1399,7 @@ mod serialisation {
         IncompleteCause,
         TargetKind,
         SpanJudgement,
+        MlMode,
         SpanRole,
         SpanRelation,
         AddressedTo,
@@ -1362,9 +1544,42 @@ mod serialisation {
         }
     }
 
+    impl Serialize for MlSegmentResult {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            // Both scores skip when absent rather than writing null, because absence is a statement:
+            // `probability` missing means the classifier never read this segment, which under selective
+            // inference is ordinary and is NOT a claim that the segment is benign (FR-652).
+            let len = 2 + usize::from(self.probability.is_some()) + usize::from(self.outlier.is_some());
+            let mut o = s.serialize_struct("MlSegmentResult", len)?;
+            o.serialize_field("span", &self.span)?;
+            o.serialize_field("mode", &self.mode)?;
+            match &self.probability {
+                Some(v) => o.serialize_field("probability", v)?,
+                None => o.skip_field("probability")?,
+            }
+            match &self.outlier {
+                Some(v) => o.serialize_field("outlier", v)?,
+                None => o.skip_field("outlier")?,
+            }
+            o.end()
+        }
+    }
+
+    impl Serialize for MlReport {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut o = s.serialize_struct("MlReport", 5)?;
+            o.serialize_field("model", &self.model)?;
+            o.serialize_field("revision", &self.revision)?;
+            o.serialize_field("digest", &self.digest)?;
+            o.serialize_field("threshold", &self.threshold)?;
+            o.serialize_field("segments", &self.segments)?;
+            o.end()
+        }
+    }
+
     impl Serialize for Verdict {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            let len = 11 + usize::from(self.judge.is_some());
+            let len = 11 + usize::from(self.judge.is_some()) + usize::from(self.ml.is_some());
             let mut o = s.serialize_struct("Verdict", len)?;
             o.serialize_field("outcome", &self.outcome)?;
             o.serialize_field("score", &self.score)?;
@@ -1382,6 +1597,12 @@ mod serialisation {
             match &self.judge {
                 Some(report) => o.serialize_field("judge", report)?,
                 None => o.skip_field("judge")?,
+            }
+            // Absent, not null, for the same reason `judge` is: `ml: null` would say the tier ran and
+            // produced nothing, which is a different claim from not having run (006 FR-654).
+            match &self.ml {
+                Some(report) => o.serialize_field("ml", report)?,
+                None => o.skip_field("ml")?,
             }
             o.end()
         }

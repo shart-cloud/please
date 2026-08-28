@@ -198,6 +198,19 @@ Add `please-ml` to `ci/check-cli-dependencies.sh` exclusion: the default CLI mus
 
 **Acceptance**: `cargo check -p please-ml` succeeds. `ci/check-cli-dependencies.sh` passes.
 
+**Done, with one correction.** `ci/check-cli-dependencies.sh` does not exist and never did — the scripts
+are `ci/check-dependencies.sh` (which guards `please-core`, and guards it *structurally*: a crate depending
+on core cannot appear in core's own tree) and `ci/check-core-isolation.sh`. The CLI had no guard at all.
+
+Written as **`ci/check-ml-isolation.sh`**, asserting the default `please-cli` tree contains none of
+`please-ml`, `candle-*`, `tokenizers`, `ug` or `gemm`. It exists *before* the Phase 2 edge does, which is
+the point: a guard added after the mistake has to argue for a revert.
+
+Candle is behind a non-default `candle` feature on the crate itself, so `cargo check -p please-ml` costs
+none of T001's +112 crates and the outlier arithmetic, observation builder and config validation are all
+testable without it. Both configurations compile and are clippy-clean; core's pin still reports exactly 27
+crates.
+
 ### T011 — `MlModel` and the loading contract
 
 Implement `MlModel::load(config)` returning `MlLoadResult`. Load tokenizer from `tokenizer.json`, weights
@@ -207,6 +220,15 @@ from `model.safetensors` (or `*.onnx`), in the directory `config.model_path` poi
 **Acceptance**: a test loading a model from a valid path succeeds. A test loading from `/dev/null` returns
 `Unavailable`. A test loading from a directory with a corrupt safetensors file returns `Unavailable` with
 the cause.
+
+**Done.** `MlModel::load` in `crates/ml/src/model.rs`. Validation runs before any I/O, so a misconfigured
+run is refused in microseconds rather than after T003's measured 2.3 s load. The SHA-256 is computed from
+the file at load rather than trusted from a manifest — a manifest records what was *downloaded*, and
+between that and this sit a mirror, a cache and a filesystem.
+
+The manifest itself is deliberately **not** read by this crate. `please-eval` owns `corpus/models.toml`
+because fetching needs a catalogue; inference does not, and keeping it out leaves `toml` off the shipping
+graph.
 
 ### T012 — Classifier: tokenize, forward, probability
 
@@ -220,12 +242,35 @@ split into chunks and return the maximum probability across chunks.
 **Acceptance**: the proof-of-concept from T002 is a test in `crates/ml/tests/`. Classifier probability for
 a known injection is ≥ 0.7. Classifier probability for known benign text is ≤ 0.3.
 
+**Done, acceptance restated against T002's measurement.** `crates/ml/tests/real_weights.rs`, eight tests
+against real weights from the eval cache, skipping rather than failing when it is cold.
+
+The `≤ 0.3` benign bar is **not** asserted, because T002 measured ProtectAI scoring the benign case at
+0.3882 and no threshold below ~400 per-mille is available on that model. Asserting a number nobody measured
+produces a red test whose only fix is to weaken the assertion, which teaches the suite to be ignored. What
+is asserted is **separation** — injection ≥ 900, benign ≤ 500, gap ≥ 400 — which is the property that makes
+a classifier useful and which both models clear decisively.
+
+FR-612's chunking is tested rather than assumed: a payload placed after ~2,000 tokens of filler, well past
+the 512-token window, still scores ≥ 900. That is the test that would fail under mean pooling or silent
+truncation, and it passes.
+
 ### T013 — Embedder: tokenize, forward, pool
 
 Implement `MlModel::embed(text) -> Vec<f32>`. Tokenize, forward pass, mean-pool the last hidden layer.
 
 **Acceptance**: the proof-of-concept from T004 is a test in `crates/ml/tests/`. Cosine similarity between
 two similar sentences is > 0.7.
+
+**Done, acceptance restated — and T004 predicted this exactly.** T004's note said the > 0.7 bar "should be
+restated against a measured baseline before it is written, or it will fail for the same reason". It was,
+and it would have.
+
+`all-MiniLM-L6-v2` scores T004's paraphrase pair at 0.6485, an ordinary value for that model. The test
+asserts the **ordering** — paraphrase > 0.55, unrelated < 0.35, gap > 0.3 — because ordering is what the
+outlier ranker actually consumes; it never compares against an absolute threshold. Also asserted: 384
+dimensions, and that vectors arrive L2-normalised, without which the outlier score's anchor at 1000 stops
+meaning anything.
 
 ### T014 — Outlier score computation
 
@@ -235,6 +280,19 @@ for each (1000 - mean_similarity_to_siblings * 1000), quantized to u16.
 
 **Acceptance**: a test with a group of 5 segments (4 similar, 1 different) ranks the different one as the
 top outlier.
+
+**Done, and scoped down to what T006/T008 support.** `crates/ml/src/outlier.rs`. The acceptance test passes
+on hand-built vectors, and the same claim is made against real embeddings in `real_weights.rs` — four
+invoice paragraphs and one injected instruction, injection on top.
+
+**It is a ranker and gates nothing.** T008 is the reason, and the module says so at its definition: 55.6%
+top-1 at *locating* a known payload, 3.1% at *deciding whether there is one* against a 25% criterion.
+Nothing in `please-ml` or `please-core` compares this score against a threshold.
+
+Two details kept from the eval implementation because they are load-bearing: the range is `0..=2000` rather
+than clamped at 1000, since cosine runs `[-1, 1]` and clamping would collapse "unrelated" into "opposite";
+and a segment with fewer than two siblings scores nothing at all, rather than being handed a default that
+would put every one-paragraph document at the top of a ranking.
 
 ### T015 — Observation builder
 
@@ -248,6 +306,27 @@ Implement a function that takes a classifier probability, an outlier score, a st
 
 **Acceptance**: unit tests covering all four cases.
 
+**Done — and there are two cases, not four.** The corroboration requirement was dropped. Full argument in
+`contracts/ml-tier.md`, which keeps the old table struck through rather than deleting it, and in the module
+docs of `crates/ml/src/observe.rs`.
+
+Short version: row 2 of the table gated a finding on the embedding outlier score clearing an anomaly
+threshold, and T008 measured that score at 3.1% against a 25% kill criterion. Row 2 was also the only row
+that could produce a finding the structural tier had not already produced — so keeping the table minus row 2
+leaves a tier that reaches none of the sixteen payloads the rules cannot phrase, which is SC-601 and the
+reason the feature exists. The choice was a tier that cannot meet its success criterion, or a tier with one
+less layer of defence. **Dropped, deliberately, on the record.**
+
+The rule is now `prob >= threshold` and nothing else, inclusive at the boundary.
+
+**What this costs, and it should be read as a cost**: the threshold and SC-602 are now the *only*
+false-positive control. SC-602 stops being a checkbox and becomes the gate that decides whether `--ml` may
+ever be on by default. `docs/limits.md` needs this in T040.
+
+Severity is a bounded ramp — 40 at threshold, 75 at 1000 — rather than the probability itself, which would
+conflate "how likely is this real" with "how bad is it if real" and let model confidence outscore every
+auditable rule in the set. The ceiling sits below the structural maximum of 90 on purpose.
+
 ### T016 — `MlReport` type
 
 Add `MlReport` and `MlSegmentResult` to `please-core`'s verdict types (in `finalize::types`). Add
@@ -255,6 +334,16 @@ Add `MlReport` and `MlSegmentResult` to `please-core`'s verdict types (in `final
 it just carries the report struct.
 
 **Acceptance**: `Verdict` round-trips through JSON with and without `ml` populated.
+
+**Done.** `MlReport` and `MlSegmentResult` in `finalize::types`, `Option<MlReport>` on `Verdict`, absent
+rather than null when no tier ran — `ml: null` would claim the tier ran and produced nothing, a different
+statement.
+
+**One design change**: both the probability and the threshold are stored as **per-mille `u16`**, not `f32`.
+Two reasons, and the second is the real one. `Verdict` derives `Eq`, which an `f32` field forbids. And the
+contract's own determinism section already argues for the quantisation: a verdict recording `0.87421` would
+differ between two machines that agree about every decision made from it. Per-mille is finer than any
+defensible threshold and coarse enough to absorb SIMD/FMA variance.
 
 ### T017 — `finalize::with_ml`
 
@@ -264,6 +353,24 @@ observations are added. The score may increase; it may not decrease.
 
 **Acceptance**: a test where the structural verdict has score 50 and two ML observations are added.
 The merged verdict's score is ≥ 50. The structural reasons are unchanged.
+
+**Done.** `finalize::with_ml`, ten tests in `crates/core/tests/ml_merge.rs`.
+
+Monotonicity is **arithmetic, not a clamp**: `aggregate` is `max(severity) + bonus(distinct classes)`, and
+both terms are monotonic under adding hits. There is no branch that could be wrong.
+
+Three corrections to the contract, all recorded there:
+
+* it takes **five arguments**, not three — `bands` because the score moves and must be re-banded against
+  the scan's own table, `bounds` because ML excerpts must cross the same sanitisation boundary structural
+  ones do;
+* reasons **are** reordered, by byte offset, and must be: appending instead would make output depend on
+  which tiers ran, which breaks SC-011 for every `--ml` scan. The *set* of structural reasons is what is
+  preserved;
+* a **truncated verdict is refused** with a `TierUnavailable` gap and no report attached, on `rejudge`'s D9
+  argument — recomputing from survivors would lower the score while claiming to have added evidence.
+
+A judgement already applied is re-attached rather than dropped, since `assemble` builds a fresh verdict.
 
 ---
 

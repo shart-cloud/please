@@ -47,8 +47,8 @@ use evidence::{CoverageGap, Evidence, Observation, Suppression};
 use plan::Bounds;
 use score::aggregate;
 use types::{
-    DetectionClass, EngineId, IncompleteCause, Incompleteness, JudgeReport, Outcome, Reason,
-    RiskLevel, RulesetId, SpanJudgement, SuppressedBy, TargetRef, Verdict,
+    DetectionClass, EngineId, IncompleteCause, Incompleteness, JudgeReport, MlReport, Outcome,
+    Reason, RiskLevel, RulesetId, SpanJudgement, SuppressedBy, TargetRef, Verdict,
 };
 
 /// Everything a verdict needs that is **not** evidence: who scanned, what with, and the band table.
@@ -362,6 +362,149 @@ fn disassemble(
 ///
 /// The judgement tier is the first caller, but nothing here is judge-specific — any downstream tier that
 /// can fail needs exactly this.
+/// Merge ML observations into a structural verdict and re-finalize (006 T017, contracts/ml-tier.md).
+///
+/// **Structural findings are preserved; ML findings are added.** The score may rise and MUST NOT fall.
+///
+/// # Why this may add findings when the judge may only remove them
+///
+/// [`rejudge`] can only narrow, because the judge reads attacker-influenced text and a tier that could
+/// *raise* a score from such a reading would hand the attacker the amplifier. The ML tier is constrained
+/// differently: its weights are operator-chosen, fetched at a pinned revision, and verified by digest
+/// before they load. Content reaches the classifier as input, never as instruction — there is no prompt to
+/// override — so the amplification risk that bounds the judge does not apply here (plan D4).
+///
+/// That asymmetry is the entire point of the tier. Sixteen of twenty generated payloads are unreachable by
+/// the rules, and a tier that could only confirm what the rules already found could not reach any of them.
+///
+/// # Monotonicity is arithmetic, not a check
+///
+/// [`score::aggregate`] is `max(severity) + bonus(distinct classes)`, and both terms are monotonic under
+/// adding hits: a maximum cannot fall when an element is added, and neither can a count of distinct
+/// classes. So the invariant `with_ml(v, obs, r).score() >= v.score()` holds by construction over the
+/// combined hit list, without a clamp anywhere. There is no branch that could be wrong; the property test
+/// pins the reasoning rather than guarding a subtraction.
+///
+/// # Why a truncated verdict is refused
+///
+/// Verbatim [`rejudge`]'s argument (plan D9): [`finalize`] aggregates the score before truncation, so once
+/// a `Verdict` exists the severities past `max_reasons` are gone. Recomputing from the survivors would
+/// *lower* the score on a truncated verdict — here it would lower it while claiming to have added evidence,
+/// which is worse than the judge's version of the same bug. Refused, with a `TierUnavailable` gap.
+///
+/// # Bands and bounds are supplied, not remembered
+///
+/// `bands` for the reason [`rejudge`] needs them: the score moves, so it has to be re-banded, and against
+/// the same table the scan used rather than a default. `bounds` because ML observations arrive as raw
+/// observations and their excerpts have to cross the same sanitisation boundary every structural
+/// observation crosses — FR-021 is a property of the boundary, and a second entrance that skipped it would
+/// be a second entrance for unneutralised attacker text.
+///
+/// The contract in `contracts/ml-tier.md` writes this as a three-argument function. It is five, and the two
+/// extra are the two the contract's own invariants require.
+pub fn with_ml(
+    structural: Verdict,
+    observations: Vec<Observation>,
+    report: MlReport,
+    bounds: Bounds,
+    bands: &Bands,
+) -> Verdict {
+    if structural.reasons_truncated() {
+        return refuse_ml(
+            structural,
+            "verdict truncated before the ML tier ran; the score cannot be recomputed exactly",
+        );
+    }
+
+    let attribution = Attribution {
+        target: structural.target().clone(),
+        ruleset: structural.ruleset().clone(),
+        bands: *bands,
+    };
+    let judge = structural.judge().cloned();
+    let suppressions_truncated = structural.suppressions_truncated();
+    let suppressed: Vec<Reason> = structural.suppressed().to_vec();
+    let mut gaps: Vec<Incompleteness> = structural.incomplete().to_vec();
+
+    // Structural reasons first, unmodified. Not re-sanitised: they crossed that boundary in `finalize`
+    // and sanitising an excerpt twice is how a `...` truncation marker ends up inside another one.
+    let mut reasons: Vec<Reason> = structural.reasons().to_vec();
+
+    // ML observations cross the same boundary structural ones do.
+    for observation in observations {
+        let (reason, excerpt_truncated) =
+            into_reason(observation, bounds.max_excerpt_bytes as usize);
+        if excerpt_truncated {
+            gaps.push(
+                CoverageGap::bound(
+                    IncompleteCause::ExcerptLength,
+                    bounds.max_excerpt_bytes as u64,
+                    format!("excerpt for `{}` truncated", reason.rule_id()),
+                )
+                .into_incompleteness(),
+            );
+        }
+        reasons.push(reason);
+    }
+
+    // ── Score over the combined evidence, before truncation ─────────────────────────────────────
+    //
+    // Same ordering discipline as `finalize`: aggregate first, so a reason dropped by `max_reasons`
+    // below cannot understate the score it contributed to (FR-001b).
+    let severities: Vec<(u8, DetectionClass)> = reasons
+        .iter()
+        .map(|reason| (reason.severity(), reason.class()))
+        .collect();
+    let score = score::aggregate(&severities);
+    let risk = bands.band(score);
+
+    order(&mut reasons);
+    let mut reasons_truncated = false;
+    if reasons.len() > bounds.max_reasons as usize {
+        gaps.push(
+            CoverageGap::bound(
+                IncompleteCause::MaxReasons,
+                bounds.max_reasons as u64,
+                format!("{} reasons found", reasons.len()),
+            )
+            .into_incompleteness(),
+        );
+        reasons.truncate(bounds.max_reasons as usize);
+        reasons_truncated = true;
+    }
+
+    let verdict = assemble(
+        reasons,
+        reasons_truncated,
+        suppressed,
+        suppressions_truncated,
+        gaps,
+        score,
+        risk,
+        attribution,
+    )
+    .with_ml(report);
+
+    // `assemble` builds a fresh verdict, so a judgement already applied would be dropped on the floor —
+    // silently discarding the record of a tier that ran. Re-attached rather than reordered, because the
+    // judge's demotions are already reflected in the reasons we carried through.
+    match judge {
+        Some(report) => verdict.with_judge(report),
+        None => verdict,
+    }
+}
+
+/// Return the structural verdict with a `TierUnavailable` gap and **no ML report attached**.
+///
+/// The missing report is the point: `ml()` staying `None` says the tier did not act on this verdict, which
+/// is true, and is what a caller must be able to distinguish from a tier that acted and found nothing.
+fn refuse_ml(verdict: Verdict, detail: &str) -> Verdict {
+    add_gap(
+        verdict,
+        CoverageGap::failure(IncompleteCause::TierUnavailable, detail.to_string()),
+    )
+}
+
 pub fn add_gap(verdict: Verdict, gap: CoverageGap) -> Verdict {
     let attribution = Attribution {
         target: verdict.target().clone(),

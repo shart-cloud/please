@@ -1,0 +1,67 @@
+[package]
+name = "please-ml"
+description = "Optional local-inference tier for `please` — a prompt-injection classifier and a segment embedder, run on CPU with no network call"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+# ── The dependency direction IS the safety argument (contracts/ml-tier.md) ───────────────────────
+#
+# This crate depends on please-core. Core NEVER depends on this. The same arrow `please-judge` draws,
+# and it matters more here than it did there: this crate links Candle, which is 112 crates, a build
+# script, and memory-mapped weights. None of that can reach core through a type definition.
+#
+#   ci/check-dependencies.sh    runs `cargo tree -p please-core`, which cannot see a crate that
+#                               depends on core — so the 27-crate pin holds whatever this pulls in
+#   ci/check-ml-isolation.sh    asserts the DEFAULT `plz` build reaches none of it
+#   ci/check-core-isolation.sh  only reads crates/core/src
+#   wasm32-unknown-unknown      only builds core
+#
+# ── Why this crate does NOT carry `#![forbid(unsafe_code)]` ──────────────────────────────────────
+#
+# Loading a 1.08 GiB safetensors file through `VarBuilder::from_mmaped_safetensors` is an unsafe call,
+# and it is the right call: the alternative allocates a second full copy of the weights. Core forbids
+# unsafe and always will. This crate is where that right is earned, which is precisely why it is a
+# separate crate rather than a module behind a feature flag — the boundary is what makes the
+# forbid in core true rather than aspirational.
+
+[dependencies]
+please-core = { workspace = true }
+
+# Tokenization, unconditionally. Both backends need it, and it is the half of inference that decides
+# what the model actually saw — a mismatched tokenizer is a silent accuracy loss, not an error.
+#
+# `onig` is the DEFAULT regex backend and its `onig_sys` C build script has no wasm toolchain; T001
+# measured that as the blocker for the wasm32 build. `unstable_wasm` selects the pure-Rust backend.
+# Selected here rather than left to the consumer because a default that cannot cross-compile is a
+# default that fails at the least convenient moment.
+tokenizers = { version = "0.20", default-features = false, features = ["unstable_wasm"] }
+
+# Weight identity. The revision is a claim about provenance; this is a claim about the bytes, and only
+# the second one survives a mirror, a re-tag, or a truncated download. Same reasoning the rule-set
+# digest gives for not using a std hasher.
+sha2 = { workspace = true }
+
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# ── The inference backend, behind a feature (plan D2) ────────────────────────────────────────────
+#
+# Off by default so that `cargo check -p please-ml` — and every unit test of the outlier arithmetic,
+# the observation builder, and the manifest — costs none of Candle's 112 crates or 119 seconds.
+# T001 measured both. What is left with the feature off is a crate that compiles in about a second
+# and whose only unavailable path is inference itself, which returns `Unavailable` rather than
+# failing to build.
+candle-core = { version = "0.8", optional = true }
+candle-nn = { version = "0.8", optional = true }
+candle-transformers = { version = "0.8", optional = true }
+
+[features]
+default = []
+candle = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
+
+[dev-dependencies]
+proptest = { workspace = true }

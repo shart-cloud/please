@@ -4,6 +4,7 @@ members = [
     "crates/core",
     "crates/cli",
     "crates/judge",
+    "crates/ml",
 ]
 # crates/eval is deliberately EXCLUDED (plan.md D12).
 #
@@ -31,6 +32,12 @@ please-core = { path = "crates/core", version = "0.1.0" }
 # holds. `please-core` never depends on this crate, which is the arrow that keeps core's 27-crate pin and
 # its wasm32 build true regardless (plan D1).
 please-judge = { path = "crates/judge", version = "0.1.0" }
+# The local ML tier (feature 006). A workspace member for the same reason please-judge is: it is a
+# SHIPPING capability, so it must be built, tested, linted and version-locked with everything else
+# rather than drifting the way an excluded crate can. Its Candle backend is behind a non-default
+# `candle` feature, so a workspace check does not pay T001's measured +112 crates and +119s unless
+# something asks for inference.
+please-ml = { path = "crates/ml", version = "0.1.0" }
 
 # ── Matching engine ─────────────────────────────────────────────────────────────────────────────
 # `regex` is a finite-automaton engine: every search is worst-case O(m*n), and the syntax CANNOT
