@@ -60,6 +60,25 @@ toml = "1"
 # a digest whose job is attribution has to outlive the compiler that produced it.
 sha2 = "0.10"
 
+# Phase-0 model feasibility only. These stay optional so the ordinary evaluation/CI path pays no
+# compile-time or dependency cost for ML, just as the shipping CLI must eventually pay no cost unless
+# its ML feature is selected. The experiments are deliberately here, outside the workspace: evidence
+# comes before a `please-ml` production crate.
+candle-core = { version = "0.11", optional = true }
+candle-nn = { version = "0.11", optional = true }
+candle-transformers = { version = "0.11", optional = true }
+# Match candle-transformers' tokenizer line so this experiment does not resolve two copies.
+tokenizers = { version = "0.22.2", default-features = false, features = ["onig"], optional = true }
+
+[features]
+default = []
+ml = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:tokenizers",
+]
+
 # NB: no HTTP client and no parquet reader. Corpus access shells out to the `hf` CLI, which is the
 # reproduction recipe docs/research/corpus-analysis.md already documents — so the recipe in the
 # documentation and the code path in the harness are the same thing, and neither can drift.

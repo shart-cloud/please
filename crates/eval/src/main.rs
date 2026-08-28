@@ -1,6 +1,6 @@
 //! `please-eval` — the evaluation harness's command line.
 //!
-//! Six subcommands, in the order a run uses them:
+//! Corpus commands, plus an isolated phase-0 model feasibility workflow:
 //!
 //! ```text
 //! please-eval generate            build the span-labelled corpus (no network)
@@ -9,6 +9,10 @@
 //! please-eval run                 scan every slice
 //! please-eval report              per-source stratified metrics
 //! please-eval gate                the false-positive gate, as an exit code
+//!
+//! please-eval model fetch         explicit networked acquisition of pinned model assets
+//! please-eval model check         cache-only integrity and attribution
+//! please-eval model smoke         real Candle inference (`--features ml`)
 //! ```
 //!
 //! `run`, `report` and `gate` all take `--offline`, which restricts them to the committed corpora.
@@ -17,14 +21,15 @@
 //! prose is real, and the public-corpus half needs an approved dataset gate and a human.
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use please_eval::metrics::{parse_floor, Gate, Report, SliceMetrics};
+use please_eval::models::ModelManifest;
 use please_eval::rows::Row;
 use please_eval::scan::RuleSelection;
 use please_eval::slice::{Origin, Slice, SliceSet};
-use please_eval::{cases, fetch, generate, manifest, scan, Result};
+use please_eval::{cases, fetch, generate, manifest, models, scan, Result};
 
 /// Exit code for a gate failure.
 ///
@@ -108,6 +113,82 @@ enum Command {
         #[arg(long)]
         allow_unpinned: bool,
     },
+    /// Acquire, verify, and probe revision-pinned ML candidates without touching shipping crates.
+    Model {
+        #[command(subcommand)]
+        action: ModelCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum ModelCommand {
+    /// Show the committed candidates and whether their pinned revision is present locally.
+    List,
+    /// Download pinned runtime assets with `hf`, then verify every digest.
+    Fetch {
+        /// Model ids. Omit for every committed candidate.
+        models: Vec<String>,
+    },
+    /// Verify cached byte lengths/digests without accessing the network.
+    Check {
+        /// Model ids. Omit for every committed candidate.
+        models: Vec<String>,
+    },
+    /// Run real CPU inference and emit measured JSON. Requires `--features ml`.
+    Smoke {
+        /// Model ids. Omit for every committed candidate.
+        models: Vec<String>,
+        /// Timed inferences per model; the reported latency is the median.
+        #[arg(long, default_value_t = 10)]
+        runs: usize,
+    },
+    /// M2 / M7: document-level separation, and the held-out check on it.
+    ///
+    /// Freezes the zero-false-positive threshold on the generated matched negatives and applies it
+    /// unchanged to the hand-written fixtures and this repository's own prose — `document-map.md`
+    /// §5.1's mitigation for measuring our own imagination. Requires `--features ml`.
+    Holdout {
+        /// The embedder to measure with. Defaults to the manifest's only embedder.
+        #[arg(long)]
+        model: Option<String>,
+        /// Cut prose into sentences rather than paragraphs.
+        #[arg(long)]
+        sentences: bool,
+        /// Write the markdown report here instead of stdout.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Also write one JSON object per document here.
+        #[arg(long)]
+        docs: Option<PathBuf>,
+    },
+    /// T006 / SC-603: rank each generated row's injected segment against its siblings.
+    ///
+    /// The kill-criterion measurement for the embedding half of `specs/006-local-ml-tier/`. Requires
+    /// `--features ml` unless `--dry-run` is passed.
+    Outlier {
+        /// The embedder to measure with. Defaults to the manifest's only embedder.
+        #[arg(long)]
+        model: Option<String>,
+        /// Segment the corpus and report what would be scored, without loading a model. Answers
+        /// "what can this segmentation even see?" for the price of no inference at all.
+        #[arg(long)]
+        dry_run: bool,
+        /// Cut prose into sentences rather than paragraphs. The first run measured 68.9% top-1 on
+        /// payloads that became their own segment against 13.2% on those that did not; this is the
+        /// knob that tests whether granularity is what bounds the metric.
+        #[arg(long)]
+        sentences: bool,
+        /// Minimum sibling-group size. SC-603's wording is three.
+        #[arg(long, default_value_t = please_eval::outlier::MIN_SIBLINGS)]
+        min_siblings: usize,
+        /// Write the markdown report here instead of stdout.
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Also write one JSON object per scored row here, for chasing a surprising stratum back to
+        /// the document that produced it.
+        #[arg(long)]
+        rows: Option<PathBuf>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -153,6 +234,427 @@ fn run() -> Result<ExitCode> {
             strict,
             allow_unpinned,
         } => check_gate(&run, offline, strict, allow_unpinned),
+        Command::Model { action } => match action {
+            ModelCommand::List => list_models(),
+            ModelCommand::Fetch { models } => fetch_models(&models),
+            ModelCommand::Check { models } => check_models(&models),
+            ModelCommand::Smoke { models, runs } => smoke_models(&models, runs),
+            ModelCommand::Holdout {
+                model,
+                sentences,
+                out,
+                docs,
+            } => measure_holdout(
+                model.as_deref(),
+                if sentences {
+                    please_eval::segment::Granularity::Sentence
+                } else {
+                    please_eval::segment::Granularity::Paragraph
+                },
+                out.as_deref(),
+                docs.as_deref(),
+            ),
+            ModelCommand::Outlier {
+                model,
+                dry_run,
+                sentences,
+                min_siblings,
+                out,
+                rows,
+            } => measure_outlier(
+                model.as_deref(),
+                dry_run,
+                if sentences {
+                    please_eval::segment::Granularity::Sentence
+                } else {
+                    please_eval::segment::Granularity::Paragraph
+                },
+                min_siblings,
+                out.as_deref(),
+                rows.as_deref(),
+            ),
+        },
+    }
+}
+
+fn list_models() -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    for model in &manifest.models {
+        let directory = models::directory(model)?;
+        println!(
+            "{:<30} {:<10} {:<8} {}",
+            model.id,
+            model.kind.as_str(),
+            if directory.is_dir() {
+                "cached"
+            } else {
+                "missing"
+            },
+            directory.display()
+        );
+        if !model.license_note.is_empty() {
+            println!("  {}", model.license_note);
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn fetch_models(wanted: &[String]) -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    for model in manifest.select(wanted)? {
+        eprintln!("fetching {}@{}", model.repo, &model.revision[..12]);
+        let installed = models::fetch(model)?;
+        print_installed(model, &installed);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn check_models(wanted: &[String]) -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    for model in manifest.select(wanted)? {
+        let directory = models::directory(model)?;
+        let installed = models::inspect(model, &directory)?;
+        print_installed(model, &installed);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+fn print_installed(model: &models::ModelSpec, installed: &models::InstalledModel) {
+    println!(
+        "{}  {}  {}",
+        model.id,
+        human_bytes(installed.bytes),
+        installed.directory.display()
+    );
+    println!("  weights sha256  {}", installed.weights_sha256);
+    println!("  bundle  sha256  {}", installed.bundle_sha256);
+}
+
+#[cfg(feature = "ml")]
+fn smoke_models(wanted: &[String], runs: usize) -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    for model in manifest.select(wanted)? {
+        let directory = models::directory(model)?;
+        let installed = models::inspect(model, &directory)?;
+        eprintln!(
+            "probing {} (bundle {})",
+            model.id,
+            &installed.bundle_sha256[..12]
+        );
+        let report = please_eval::ml::smoke(model, &directory, runs)?;
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(not(feature = "ml"))]
+fn smoke_models(_wanted: &[String], _runs: usize) -> Result<ExitCode> {
+    Err(
+        "model smoke requires Candle. Re-run with `cargo run --release --manifest-path \
+         crates/eval/Cargo.toml --features ml -- model smoke`"
+            .into(),
+    )
+}
+
+/// The five slices M2 and M7 need, and which of them carry a payload.
+///
+/// `repo_prose` is a negative and belongs here for the reason `document-map.md` §5.2 gives: the false
+/// positive that matters is not a carrier without a payload — that is a perfect negative and it
+/// flatters the metric — it is security prose *about* payloads, which has a payload and no seam. This
+/// repository is made of that.
+fn holdout_slices() -> Result<Vec<(&'static str, bool, Vec<please_eval::rows::Row>)>> {
+    use please_eval::slice::LocalReader::*;
+    Ok(vec![
+        ("gen_positive", true, cases::read(GeneratedPositive)?),
+        (
+            "gen_matched_negative",
+            false,
+            cases::read(GeneratedMatchedNegative)?,
+        ),
+        ("fix_positive", true, cases::read(FixturesPositive)?),
+        ("fix_benign", false, cases::read(FixturesBenign)?),
+        ("repo_prose", false, cases::read(RepositoryProse)?),
+    ])
+}
+
+fn measure_holdout(
+    model: Option<&str>,
+    granularity: please_eval::segment::Granularity,
+    out: Option<&Path>,
+    docs_out: Option<&Path>,
+) -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    let spec = embedder_for(&manifest, model)?;
+    let directory = models::directory(spec)?;
+    let installed = models::inspect(spec, &directory)?;
+    let slices = holdout_slices()?;
+    eprintln!(
+        "measuring M2/M7 with {} (bundle {}) over {} documents",
+        spec.id,
+        &installed.bundle_sha256[..12],
+        slices.iter().map(|(_, _, rows)| rows.len()).sum::<usize>()
+    );
+
+    let docs = run_holdout(spec, &directory, &slices, granularity)?;
+
+    if let Some(path) = docs_out {
+        let mut jsonl = String::new();
+        for doc in &docs {
+            jsonl.push_str(&serde_json::to_string(doc)?);
+            jsonl.push('\n');
+        }
+        std::fs::write(path, jsonl).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        eprintln!("per-document scores: {}", path.display());
+    }
+
+    let rendered =
+        please_eval::outlier::render_holdout(&spec.id, &spec.revision, granularity, &docs);
+    match out {
+        Some(path) => {
+            std::fs::write(path, &rendered)
+                .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            eprintln!("report: {}", path.display());
+        }
+        None => print!("{rendered}"),
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(feature = "ml")]
+fn run_holdout(
+    spec: &models::ModelSpec,
+    directory: &Path,
+    slices: &[(&str, bool, Vec<please_eval::rows::Row>)],
+    granularity: please_eval::segment::Granularity,
+) -> Result<Vec<please_eval::outlier::DocScore>> {
+    please_eval::ml::holdout_experiment(spec, directory, slices, granularity, true)
+}
+
+#[cfg(not(feature = "ml"))]
+fn run_holdout(
+    _spec: &models::ModelSpec,
+    _directory: &Path,
+    _slices: &[(&str, bool, Vec<please_eval::rows::Row>)],
+    _granularity: please_eval::segment::Granularity,
+) -> Result<Vec<please_eval::outlier::DocScore>> {
+    Err(
+        "model holdout requires Candle. Re-run with `cargo run --release --manifest-path \
+         crates/eval/Cargo.toml --features ml -- model holdout`"
+            .into(),
+    )
+}
+
+/// The embedder to measure SC-603 with: the one named, or the manifest's only embedder.
+///
+/// Defaulting rather than requiring the id, because the manifest has exactly one embedder and a
+/// command whose invocation differs between the memo and the terminal is a command that drifts. If a
+/// second embedder is ever pinned, this stops guessing and says so.
+fn embedder_for<'a>(
+    manifest: &'a ModelManifest,
+    wanted: Option<&str>,
+) -> Result<&'a models::ModelSpec> {
+    if let Some(id) = wanted {
+        return manifest.get(id);
+    }
+    let embedders: Vec<_> = manifest
+        .models
+        .iter()
+        .filter(|model| model.kind == models::ModelKind::Embedder)
+        .collect();
+    match embedders.as_slice() {
+        [only] => Ok(only),
+        [] => Err("the model manifest pins no embedder".into()),
+        many => Err(format!(
+            "the manifest pins {} embedders; name one with --model. Known: {}",
+            many.len(),
+            many.iter()
+                .map(|model| model.id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+        .into()),
+    }
+}
+
+fn measure_outlier(
+    model: Option<&str>,
+    dry_run: bool,
+    granularity: please_eval::segment::Granularity,
+    min_siblings: usize,
+    out: Option<&Path>,
+    rows_out: Option<&Path>,
+) -> Result<ExitCode> {
+    let manifest = ModelManifest::load()?;
+    let spec = embedder_for(&manifest, model)?;
+    let rows = cases::read(please_eval::slice::LocalReader::GeneratedPositive)?;
+
+    if dry_run {
+        return dry_run_outlier(&rows, min_siblings, granularity);
+    }
+
+    let directory = models::directory(spec)?;
+    let installed = models::inspect(spec, &directory)?;
+    eprintln!(
+        "measuring SC-603 with {} (bundle {}) over {} rows",
+        spec.id,
+        &installed.bundle_sha256[..12],
+        rows.len()
+    );
+    let (outcomes, excluded) = run_outlier(spec, &directory, &rows, min_siblings, granularity)?;
+
+    if let Some(path) = rows_out {
+        let mut jsonl = String::new();
+        for outcome in &outcomes {
+            jsonl.push_str(&serde_json::to_string(outcome)?);
+            jsonl.push('\n');
+        }
+        std::fs::write(path, jsonl).map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+        eprintln!("per-row outcomes: {}", path.display());
+    }
+
+    let report = please_eval::outlier::aggregate(
+        &spec.id,
+        &spec.revision,
+        granularity,
+        rows.len(),
+        &outcomes,
+        excluded,
+    );
+    let rendered = please_eval::outlier::render(&report);
+    match out {
+        Some(path) => {
+            std::fs::write(path, &rendered)
+                .map_err(|e| format!("cannot write {}: {e}", path.display()))?;
+            eprintln!("report: {}", path.display());
+        }
+        None => print!("{rendered}"),
+    }
+
+    // The exit code is the kill criterion, so it can be a job rather than a reading exercise — and
+    // `abandon` uses the gate's code rather than the error's for the reason EXIT_GATE_FAILED already
+    // gives: "the measurement ran and the answer is no" must not look like "the measurement did not
+    // run". `continue` is not a failure. SC-603 puts 50-60% at keep-experimenting, and a command that
+    // went red there would be red every day until somebody routed around it.
+    Ok(match report.verdict {
+        please_eval::outlier::Verdict::Ship | please_eval::outlier::Verdict::Continue => {
+            ExitCode::SUCCESS
+        }
+        please_eval::outlier::Verdict::Abandon => ExitCode::from(EXIT_GATE_FAILED),
+    })
+}
+
+/// What the segmentation can see, with no model involved.
+///
+/// This is worth a command of its own because it separates the two ways SC-603 can come out low. A
+/// weak signal and a segmentation that never produced a candidate look identical in the top-1 rate
+/// and completely different here.
+fn dry_run_outlier(
+    rows: &[please_eval::rows::Row],
+    min_siblings: usize,
+    granularity: please_eval::segment::Granularity,
+) -> Result<ExitCode> {
+    use please_eval::outlier::{prepare, Excluded};
+    use std::collections::BTreeMap;
+
+    let mut excluded: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut by_placement: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut by_kind: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut by_position: BTreeMap<String, (usize, usize)> = BTreeMap::new();
+    let mut groups = 0usize;
+    let mut scored = 0usize;
+
+    for row in rows {
+        let position = row.position.clone().unwrap_or_else(|| "-".to_string());
+        let entry = by_position.entry(position).or_default();
+        entry.1 += 1;
+        match prepare(row, min_siblings, granularity) {
+            Ok(candidate) => {
+                scored += 1;
+                entry.0 += 1;
+                groups += candidate.siblings.len();
+                *by_placement
+                    .entry(match candidate.placement {
+                        please_eval::segment::Placement::Isolated => "isolated",
+                        please_eval::segment::Placement::Diluted => "diluted",
+                        please_eval::segment::Placement::Split => "split",
+                    })
+                    .or_default() += 1;
+                *by_kind
+                    .entry(candidate.segments[candidate.injected].kind.as_str())
+                    .or_default() += 1;
+            }
+            Err(reason) => {
+                *excluded.entry(Excluded::as_str(reason)).or_default() += 1;
+            }
+        }
+    }
+
+    println!("rows read           {}", rows.len());
+    println!("scoreable           {scored}");
+    println!(
+        "mean sibling group  {:.1}",
+        if scored == 0 {
+            0.0
+        } else {
+            groups as f64 / scored as f64
+        }
+    );
+    for (title, map) in [
+        ("excluded", &excluded),
+        ("placement", &by_placement),
+        ("segment kind", &by_kind),
+    ] {
+        println!("\n{title}:");
+        for (key, count) in map.iter() {
+            println!("  {key:<28} {count}");
+        }
+    }
+    println!("\nscoreable by position:");
+    for (key, (ok, total)) in &by_position {
+        println!("  {key:<28} {ok}/{total}");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(feature = "ml")]
+fn run_outlier(
+    spec: &models::ModelSpec,
+    directory: &Path,
+    rows: &[please_eval::rows::Row],
+    min_siblings: usize,
+    granularity: please_eval::segment::Granularity,
+) -> Result<(
+    Vec<please_eval::outlier::Outcome>,
+    std::collections::BTreeMap<&'static str, usize>,
+)> {
+    please_eval::ml::outlier_experiment(spec, directory, rows, min_siblings, granularity, true)
+}
+
+#[cfg(not(feature = "ml"))]
+fn run_outlier(
+    _spec: &models::ModelSpec,
+    _directory: &Path,
+    _rows: &[please_eval::rows::Row],
+    _min_siblings: usize,
+    _granularity: please_eval::segment::Granularity,
+) -> Result<(
+    Vec<please_eval::outlier::Outcome>,
+    std::collections::BTreeMap<&'static str, usize>,
+)> {
+    Err(
+        "model outlier requires Candle. Re-run with `cargo run --release --manifest-path \
+         crates/eval/Cargo.toml --features ml -- model outlier`, or pass --dry-run to see what the \
+         segmentation can reach without a model"
+            .into(),
+    )
+}
+
+fn human_bytes(bytes: u64) -> String {
+    const MIB: u64 = 1024 * 1024;
+    if bytes >= MIB {
+        format!("{:.1} MiB", bytes as f64 / MIB as f64)
+    } else {
+        format!("{bytes} B")
     }
 }
 

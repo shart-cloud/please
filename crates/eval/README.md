@@ -28,15 +28,86 @@ cargo run --release --manifest-path crates/eval/Cargo.toml -- report --out /tmp/
 Use `--release` for the public corpus. A debug build scans 60,000 rows at roughly a tenth of the speed;
 the results are identical either way, which is the point of SC-011.
 
+## Phase-0 model feasibility
+
+The draft local-ML specification does not yet justify a shipping `please-ml` crate. Its real-model
+experiments therefore live here, behind the eval crate's opt-in `ml` feature. The ordinary eval build and
+the workspace dependency graph do not resolve Candle or `tokenizers`.
+
+```sh
+# The committed candidates and local cache state. No network, no Candle build.
+cargo run --manifest-path crates/eval/Cargo.toml -- model list
+
+# The only networked step. Uses the logged-in `hf` account or HF_TOKEN, downloads exact revisions,
+# then validates every runtime asset against its committed byte length and SHA-256.
+cargo run --manifest-path crates/eval/Cargo.toml -- model fetch
+
+# Cache-only integrity and whole-bundle attribution (config + tokenizer + weights + pooling recipe).
+cargo run --manifest-path crates/eval/Cargo.toml -- model check
+
+# Real CPU inference. Reports load time, the median of ten warm runs, classifier probabilities, and
+# MiniLM cosine similarities as JSON. It never downloads a missing model.
+cargo run --release --manifest-path crates/eval/Cargo.toml --features ml -- model smoke
+```
+
+Individual ids can follow `fetch`, `check`, or `smoke`; run `model list` to see them. Model assets live
+under `~/.cache/please-eval/models/` (or `PLEASE_EVAL_CACHE`) and are never committed. The three pinned
+runtime bundles require 1.68 GiB, measured by `model check`: 549.6 MiB for ProtectAI, 1079.2 MiB for
+Prompt Guard, and 87.1 MiB for MiniLM.
+
+```sh
+# SC-603: rank each generated row's injected payload against its sibling segments. Offline once the
+# embedder is cached; writes the stratified report the spec quotes.
+cargo run --release --manifest-path crates/eval/Cargo.toml --features ml -- \
+  model outlier --out docs/research/embedding-outlier-results.md
+
+# What the segmentation can reach, with no model and no `ml` feature at all.
+cargo run --manifest-path crates/eval/Cargo.toml -- model outlier --dry-run
+
+# The same measurement with prose cut into sentences rather than paragraphs.
+cargo run --release --manifest-path crates/eval/Cargo.toml --features ml -- model outlier --sentences
+
+# M2 and M7: is it a detector at all, and does it survive on text the generator never made?
+cargo run --release --manifest-path crates/eval/Cargo.toml --features ml -- \
+  model holdout --out docs/research/embedding-separation-results.md
+```
+
+`--sentences` is kept even though it loses — 51.9% against paragraph's 55.6% over the same rows. It is
+the evidence that finer segmentation is not the fix the placement table appears to suggest, and a
+comparison nobody can re-run is a comparison that has to be taken on trust.
+
+`model outlier` exits 2 only on `abandon` — below 50% top-1, `document-map.md` §6's kill criterion.
+`continue` (50–60%) exits 0 on purpose, for the same reason `gate` runs against a baseline rather than
+against SC-003: a command that is red every day is a command people route around. It currently measures
+**55.6% top-1, 80.3% top-3**, which is `continue`.
+
+The segmentation it ranks against lives in `src/segment.rs` and is a **local subset** of
+`document-map.md` §1.1, not a `DocumentMap` in `please-core` — that type is not implemented, and T006
+needed sibling groups before the decision to build it could be taken. When the real one lands, delete
+the module and re-run; the committed report names the version that produced it.
+
+`model holdout` freezes the zero-false-positive threshold on the fourteen matched negatives and applies
+it unchanged to the hand-written fixtures and to `docs/`+`specs/` — the held-out check
+`document-map.md` §5.1 asks for. It measures **3.1%** against that memo's 25% floor: the score ranks
+segments within a document but does not tell you whether the document has a payload in it. Both reports
+are committed because §4 Phase 3 says the negative result is as publishable as the positive one.
+
+`model smoke` is a feasibility instrument, not an accuracy gate. It proves that the exact architecture
+loads and gives visible separation on a tiny sanity set. Thresholds are frozen only after the positive and
+negative corpus strata have been measured; the command deliberately does not turn an assumed `0.7` into a
+passing test.
+
 ## What is committed and what is not
 
 | | where | why |
 |---|---|---|
 | slice definitions, carriers, payloads, positions | `corpus/` | reviewable inputs |
+| model repository, revision, and per-asset digests | `corpus/models.toml` | the pin: which bytes a run was supposed to use |
 | the generated corpus | `corpus/generated.jsonl` | generated text is ours to redistribute |
 | row identity, labels, source, content hashes | `manifests/` | enough to verify a run |
 | **prompt text from the public corpus** | `~/.cache/please-eval` | **never committed** — 41 upstream sources retain their own licences |
 | scan results | `~/.cache/please-eval/results/<run>` | derived; reproducible from a manifest and a commit |
+| model weights | `~/.cache/please-eval/models/<id>/<revision>` | gated/licensed upstream assets; never committed |
 
 ## The two thresholds
 
@@ -62,8 +133,8 @@ generated corpus regenerates byte-identically, and the gate runs over the negati
 committed — the hand-written benign fixtures, the generated matched carriers, and every `.md` under
 `docs/` and `specs/`.
 
-That is a real gate and it catches a real class of regression: the security-prose slice fires on 13 of 41
-of this repository's own documents, so a rule change that makes it 14 turns the job red.
+That is a real gate and it catches a real class of regression: the security-prose slice fires on 14 of 55
+of this repository's own documents, so a rule change that makes it 15 turns the job red.
 
 It is **not** the public-corpus gate. OR-Bench, the stratified benign slices and the multilingual slice
 need an approved gate on a gated dataset, which a CI runner does not have. Those are run by hand, and the
@@ -85,6 +156,10 @@ src/cases.rs       readers for the committed corpora
 src/scan.rs        engine construction and the scan loop
 src/metrics.rs     stratified aggregation, report rendering, the gate
 src/generate.rs    carrier x payload x position, with span-level ground truth
+src/models.rs      revision-pinned model acquisition, integrity, and bundle attribution
+src/segment.rs     a local subset of `document-map.md` §1.1 — kinds, sibling groups, placement
+src/outlier.rs     SC-603 and M2/M7: sibling-relative scoring, ranking, separation, model-free
+src/ml.rs          real Candle CPU probes, only with `--features ml`
 ```
 
 ## Reading a number from this harness

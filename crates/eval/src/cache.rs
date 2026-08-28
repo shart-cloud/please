@@ -57,3 +57,12 @@ pub fn results_path(run: &str, slice_id: &str) -> Result<PathBuf> {
 pub fn results_dir(run: &str) -> Result<PathBuf> {
     ensure(root()?.join("results").join(run))
 }
+
+/// The local directory for one exact model revision.
+///
+/// Unlike [`slice_path`] this does not create anything. A scan or feasibility probe is cache-only:
+/// observing that a model is absent must not mutate the cache, much less reach the network. The
+/// explicit `please-eval model fetch` command owns directory creation and acquisition.
+pub fn model_dir(model_id: &str, revision: &str) -> Result<PathBuf> {
+    Ok(root()?.join("models").join(model_id).join(revision))
+}

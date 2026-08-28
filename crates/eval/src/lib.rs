@@ -22,6 +22,10 @@
 //! | [`scan`] | engine construction and the scan loop |
 //! | [`metrics`] | stratified aggregation, report rendering, and the gate |
 //! | [`generate`] | the carrier x payload x position generator, with span-level ground truth |
+//! | [`segment`] | a local subset of `document-map.md` §1.1, for the phase-0 outlier experiment |
+//! | [`outlier`] | SC-603: sibling-relative scoring, ranking and aggregation, model-free |
+//! | [`models`] | pinned model acquisition and whole-bundle attribution for phase-0 ML research |
+//! | `ml` | real Candle inference probes, present only with the opt-in `ml` feature |
 //!
 //! # Two rules that apply to every module
 //!
@@ -55,8 +59,13 @@ pub mod fetch;
 pub mod generate;
 pub mod manifest;
 pub mod metrics;
+#[cfg(feature = "ml")]
+pub mod ml;
+pub mod models;
+pub mod outlier;
 pub mod rows;
 pub mod scan;
+pub mod segment;
 pub mod slice;
 
 /// Absolute path to the repository root, resolved from this package's location.

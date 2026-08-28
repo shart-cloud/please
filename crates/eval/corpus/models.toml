@@ -1,0 +1,145 @@
+# Pinned model candidates for the phase-0 feasibility work behind `specs/006-local-ml-tier/`.
+#
+# This file is the reviewable artifact and the weights are not. `crates/eval/README.md` records why:
+# the assets are gated or licensed upstream and never enter git, so what is committed is the thing
+# that says exactly which bytes a run was supposed to have used — repository, commit revision, and the
+# byte length and SHA-256 of every runtime asset. Constitution Principle III's argument for rules
+# ("a reviewable artifact whose comments carry its justification") applied to a thing that cannot
+# itself be reviewed.
+#
+# A revision is a 40-character commit id, never a branch name. `main` moves, and a measurement whose
+# input moves is a measurement nobody can reproduce — which is the same reason `manifests/` pins row
+# content hashes rather than row numbers.
+#
+# `src/models.rs` validates all of this on load: exactly one weights, config and tokenizer asset per
+# model, no absolute or traversing asset paths, a lowercase 40-hex revision, a lowercase 64-hex
+# digest, a non-empty licence note, and a malicious label on classifiers and never on embedders.
+#
+# ## Provenance of the digests below
+#
+# Recovered from the Hugging Face download metadata each fetch leaves in the model cache
+# (`.cache/huggingface/trees/<revision>.json`), which records the upstream `size` for every file and
+# the upstream `lfs_sha256` for every LFS-tracked one. Each locally present asset was checked against
+# that metadata: LFS files by SHA-256, non-LFS files by recomputing the git blob id. `model check`
+# re-verifies from this file and is the routine gate.
+#
+# `protectai-deberta-v3-small`'s weights are pinned from upstream metadata rather than from local
+# bytes: the download did not complete, and only the `.incomplete` part-file is in the cache. The pin
+# is still the correct one — a manifest states what a run MUST use, not what happens to be on a
+# particular disk — but `model check` will fail for that model until `model fetch` finishes it, and
+# that failure is the file doing its job.
+
+version = 1
+
+# ---------------------------------------------------------------------------------------------
+# Classifier candidates. Both are DeBERTa-v2 sequence classifiers, which is what lets one Candle
+# code path serve both — R2's "what each tier buys" turns on the two being architecturally the same
+# shape at different sizes.
+# ---------------------------------------------------------------------------------------------
+
+[[model]]
+id = "protectai-deberta-v3-small"
+kind = "classifier"
+architecture = "deberta_v2_sequence_classification"
+repo = "ProtectAI/deberta-v3-small-prompt-injection-v2"
+revision = "d7c8842daf06de3179cc3aca76b7b3a057acc5e7"
+max_tokens = 512
+# config.json carries id2label {0: SAFE, 1: INJECTION}. The label is restated here anyway, because
+# the index the probability is read from must be reviewable in the committed artifact rather than
+# only inside a downloaded file — reading the wrong column inverts every number a run produces.
+malicious_label = 1
+license_note = "Apache-2.0. Ungated, but a fine-tune whose training data is not fully published — see docs/limits.md on model opacity."
+
+[[model.file]]
+path = "config.json"
+role = "config"
+bytes = 994
+sha256 = "bb3cd9feefad055900b26881120e6c1517cee43cab7333fdeb7518e67b16baea"
+
+[[model.file]]
+path = "tokenizer.json"
+role = "tokenizer"
+bytes = 8656722
+sha256 = "b10b7a38aab2e62572ac50a805095f1fb9d7096d9a9384f5ca2d9b4457c84b33"
+
+[[model.file]]
+path = "model.safetensors"
+role = "weights"
+bytes = 567598552
+sha256 = "5f81f709c58b8e8a51d99e8382a152583e17847db3082922bcaf7a7ee80e91d0"
+
+[[model]]
+id = "prompt-guard-2-86m"
+kind = "classifier"
+architecture = "deberta_v2_sequence_classification"
+repo = "meta-llama/Llama-Prompt-Guard-2-86M"
+revision = "a8ded8e697ce7c355e395a0df51f94adb4a2fd27"
+max_tokens = 512
+# This config.json carries no id2label at all, so nothing but this line says which output column is
+# the malicious one. `src/ml.rs` synthesises the label map from it.
+malicious_label = 1
+license_note = "Llama 4 Community License. GATED: access must be requested and approved on the Hugging Face repository before `model fetch` can succeed. Weights are never redistributed here."
+
+[[model.file]]
+path = "config.json"
+role = "config"
+bytes = 871
+sha256 = "cd54ac39a1f2c3c5146bd5295b34038f8b4d9069e2f844450da014a523bb7653"
+
+[[model.file]]
+path = "tokenizer.json"
+role = "tokenizer"
+bytes = 16351353
+sha256 = "3e7e96867c2acdd575f0862c74822e05d1d15b93d9d9a4a2144b1ce83ae3339f"
+
+[[model.file]]
+path = "model.safetensors"
+role = "weights"
+bytes = 1115268200
+sha256 = "e72017dbbe89c1232dcbc4a74ce0c389db5b468c42afd05850347b2a8c5f6b09"
+
+# ---------------------------------------------------------------------------------------------
+# The embedder. This is the model SC-603 is measured with — the relational question, not the binary
+# one: `document-map.md` §1.3's "a table row is not anomalous for having a high digit density, it is
+# anomalous for having a LOW one when every other row is numeric".
+# ---------------------------------------------------------------------------------------------
+
+[[model]]
+id = "all-minilm-l6-v2"
+kind = "embedder"
+architecture = "bert_mean_pooling"
+repo = "sentence-transformers/all-MiniLM-L6-v2"
+revision = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+# 256, not the 512 the BERT config would allow. `sentence_bert_config.json` sets max_seq_length to
+# 256, and this model was trained and evaluated at that window; running it longer is running it
+# outside its recipe.
+max_tokens = 256
+license_note = "Apache-2.0. Ungated."
+
+[[model.file]]
+path = "config.json"
+role = "config"
+bytes = 612
+sha256 = "953f9c0d463486b10a6871cc2fd59f223b2c70184f49815e7efbcab5d8908b41"
+
+[[model.file]]
+path = "tokenizer.json"
+role = "tokenizer"
+bytes = 466247
+sha256 = "be50c3628f2bf5bb5e3a7f17b1f74611b2561a3a27eeab05e5aa30f411572037"
+
+[[model.file]]
+path = "model.safetensors"
+role = "weights"
+bytes = 90868376
+sha256 = "53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db"
+
+# The pooling recipe is a runtime asset, not documentation. Mean-pooling where the recipe says CLS,
+# or skipping the L2 normalisation, changes every cosine this experiment reports — so it is pinned
+# and it enters the bundle digest alongside the weights. That is the whole argument in the module
+# header of `src/models.rs`: a weight digest alone does not identify the program actually run.
+[[model.file]]
+path = "1_Pooling/config.json"
+role = "pooling"
+bytes = 190
+sha256 = "4be450dde3b0273bb9787637cfbd28fe04a7ba6ab9d36ac48e92b11e350ffc23"
