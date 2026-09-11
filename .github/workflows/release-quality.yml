@@ -1,0 +1,29 @@
+name: Release quality
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  fixture-quality:
+    name: fixture release criteria (SC-002 and SC-003)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # These targets intentionally fail until detection and corpus-size requirements are met.
+      - name: Check absolute quality targets
+        shell: bash
+        run: |
+          cargo test -p please-core --test fixtures --locked -- --ignored --nocapture 2>&1 | tee fixture-quality.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fixture-quality
+          path: fixture-quality.log
+          if-no-files-found: error

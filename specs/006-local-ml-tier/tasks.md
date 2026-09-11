@@ -482,6 +482,12 @@ Document the `--ml` flags, the `plz ml` subcommand, and how the ML tier interact
 
 ### T042 — CI gates
 
+**Partial — 2026-09-11.** Regular CI now tests/lints the workspace default, offline CLI, and Candle
+configurations and runs the CLI/ML dependency isolation guards. The dedicated `ML inference`
+workflow verifies pinned ProtectAI/MiniLM assets and explicitly runs all eight real-weight tests;
+missing assets fail. See [CI gates](../../docs/ci-gates.md). ML-in-Wasm validation and corpus-level
+ML regression floors below remain unfinished; the CLI still has no ML feature.
+
 - `ci/check-cli-dependencies.sh` extended to cover `please-ml` crates
 - `ci/check-ml-wasm32.sh` new: proves `please-ml` with `ml-candle` builds for wasm32
 - `please-eval gate` extended with ML-tier regression floors

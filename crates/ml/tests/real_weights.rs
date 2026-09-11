@@ -6,12 +6,10 @@
 //! puts them under `~/.cache/please-eval/models/<id>/<revision>/`, and this reads from there rather than
 //! fetching its own copy — a test suite that downloads a gigabyte is a test suite people disable.
 //!
-//! **Absent weights skip rather than fail.** A contributor without the cache, and CI without a Hugging
-//! Face credential for the gated Llama licence, must both be able to run `cargo test` and get a green
-//! result — the alternative is a suite that is red by default, which is a suite nobody reads. What keeps
-//! that from being mistaken for inference coverage requires a dedicated job with a verified warm cache.
-//! That job is planned in T042 and is not implemented yet. These tests require the `candle` feature;
-//! default workspace tests do not run inference even when weights happen to be cached.
+//! These tests are explicitly ignored in normal runs. Run `ci/check-ml-inference.sh` to verify
+//! the pinned cache and execute all eight with `--ignored`. Missing assets fail when requested;
+//! they never return early as a passing test. The dedicated workflow fetches the two public models
+//! separately before the offline check. Default workspace tests do not compile Candle inference.
 //!
 //! # The thresholds here are NOT the ones the tasks asked for
 //!
@@ -40,13 +38,22 @@ use please_ml::{MlLoadResult, MlModel};
 use std::path::PathBuf;
 
 /// Where `please-eval model fetch` puts a model, honouring the same override it does.
-fn cached(id: &str, revision: &str) -> Option<PathBuf> {
+fn cached(id: &str, revision: &str) -> PathBuf {
     let root = match std::env::var_os("PLEASE_EVAL_CACHE") {
         Some(path) => PathBuf::from(path),
-        None => dirs_cache()?.join("please-eval"),
+        None => dirs_cache()
+            .expect("set PLEASE_EVAL_CACHE, XDG_CACHE_HOME, or HOME")
+            .join("please-eval"),
     };
     let path = root.join("models").join(id).join(revision);
-    path.join("model.safetensors").exists().then_some(path)
+    for asset in ["model.safetensors", "config.json", "tokenizer.json"] {
+        assert!(
+            path.join(asset).is_file(),
+            "required model asset missing: {}; run please-eval model fetch {id}",
+            path.join(asset).display()
+        );
+    }
+    path
 }
 
 /// `~/.cache` without taking a dependency on `dirs` for one path.
@@ -57,20 +64,20 @@ fn dirs_cache() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache"))
 }
 
-fn load(config: MlConfig) -> Option<Box<MlModel>> {
+fn load(config: MlConfig) -> Box<MlModel> {
     match MlModel::load(config) {
-        MlLoadResult::Loaded(model) => Some(model),
+        MlLoadResult::Loaded(model) => model,
         MlLoadResult::Unavailable(detail) => {
             panic!("weights are present but did not load: {detail}")
         }
     }
 }
 
-fn protectai() -> Option<Box<MlModel>> {
+fn protectai() -> Box<MlModel> {
     let path = cached(
         "protectai-deberta-v3-small",
         "d7c8842daf06de3179cc3aca76b7b3a057acc5e7",
-    )?;
+    );
     load(MlConfig {
         model_path: path,
         model_id: "protectai-deberta-v3-small".to_string(),
@@ -85,11 +92,11 @@ fn protectai() -> Option<Box<MlModel>> {
     })
 }
 
-fn minilm() -> Option<Box<MlModel>> {
+fn minilm() -> Box<MlModel> {
     let path = cached(
         "all-minilm-l6-v2",
         "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
-    )?;
+    );
     load(MlConfig {
         model_path: path,
         model_id: "all-minilm-l6-v2".to_string(),
@@ -132,11 +139,9 @@ fn cosine(left: &[f32], right: &[f32]) -> f32 {
 // ── T012: the classifier ────────────────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn the_classifier_separates_an_injection_from_an_imperative() {
-    let Some(model) = protectai() else {
-        eprintln!("skipped: run `please-eval model fetch protectai-deberta-v3-small`");
-        return;
-    };
+    let model = protectai();
 
     let injection = score(&model, INJECTION);
     let benign = score(&model, BENIGN);
@@ -156,10 +161,9 @@ fn the_classifier_separates_an_injection_from_an_imperative() {
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn the_classifier_attributes_itself_to_the_bytes_it_loaded() {
-    let Some(model) = protectai() else {
-        return;
-    };
+    let model = protectai();
     // 64 hex characters, computed from the file rather than copied from a manifest. This is what a
     // verdict names when it says which weights produced a finding.
     let digest = model.digest();
@@ -168,13 +172,12 @@ fn the_classifier_attributes_itself_to_the_bytes_it_loaded() {
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn a_payload_past_the_context_window_still_scores() {
     // FR-612, and the reason chunking is max-pooled rather than mean-pooled. The payload sits after
     // roughly two thousand tokens of ordinary prose — well past the 512-token window — so a model that
     // truncated would see none of it and a model that averaged would dilute it below any threshold.
-    let Some(model) = protectai() else {
-        return;
-    };
+    let model = protectai();
 
     let filler =
         "The quarterly report covers revenue, headcount, and regional performance. ".repeat(200);
@@ -188,21 +191,18 @@ fn a_payload_past_the_context_window_still_scores() {
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn an_embedder_asked_to_classify_says_so_rather_than_guessing() {
-    let Some(model) = minilm() else {
-        return;
-    };
+    let model = minilm();
     assert!(matches!(model.classify(INJECTION), Outcome::NotApplicable));
 }
 
 // ── T013: the embedder ──────────────────────────────────────────────────────────────────────────
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn the_embedder_ranks_a_paraphrase_above_an_unrelated_sentence() {
-    let Some(model) = minilm() else {
-        eprintln!("skipped: run `please-eval model fetch all-minilm-l6-v2`");
-        return;
-    };
+    let model = minilm();
 
     // T004's three sentences, verbatim, so this test and that measurement are comparable.
     let a = vector(&model, "A dog is playing outside in the garden.");
@@ -228,18 +228,18 @@ fn the_embedder_ranks_a_paraphrase_above_an_unrelated_sentence() {
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn embeddings_arrive_normalised() {
     // The pooling recipe ends in an L2 normalisation, and the outlier scorer's readability depends on it:
     // 1000 means "shares nothing with its siblings" only if every vector is a unit vector.
-    let Some(model) = minilm() else {
-        return;
-    };
+    let model = minilm();
     let v = vector(&model, "A dog is playing outside in the garden.");
     let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
     assert!((norm - 1.0).abs() < 1e-3, "norm was {norm}");
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn the_odd_paragraph_out_ranks_first_on_real_embeddings() {
     // T014's unit test uses hand-built orthogonal vectors, which proves the arithmetic and nothing about
     // the model. This is the same claim against real text: four sibling paragraphs from one document and
@@ -247,9 +247,7 @@ fn the_odd_paragraph_out_ranks_first_on_real_embeddings() {
     //
     // One document is not a measurement. The measurement is T006's 55.6% top-1 over 951 rows, and it is
     // the number that governs — this test only pins that the wiring reproduces it in the easy case.
-    let Some(model) = minilm() else {
-        return;
-    };
+    let model = minilm();
 
     let paragraphs = [
         "Invoice 4471 covers consulting services rendered in March.",
@@ -270,9 +268,8 @@ fn the_odd_paragraph_out_ranks_first_on_real_embeddings() {
 }
 
 #[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
 fn a_classifier_asked_to_embed_says_so_rather_than_guessing() {
-    let Some(model) = protectai() else {
-        return;
-    };
+    let model = protectai();
     assert!(matches!(model.embed(BENIGN), Outcome::NotApplicable));
 }

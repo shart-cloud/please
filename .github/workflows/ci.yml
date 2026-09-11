@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -21,40 +25,46 @@ jobs:
       - run: cargo fmt --all --check
 
   clippy:
-    name: lint
+    name: lint (${{ matrix.configuration }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: workspace
+            args: --workspace
+          - configuration: offline-cli
+            args: -p please-cli --no-default-features
+          - configuration: candle
+            args: -p please-ml --features candle
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-      # Feature 004 made `plz` a two-configuration build. A lint job that only ever sees the default one
-      # never reads a line of the judgement tier's CLI wiring, so `-D warnings` would be enforced on half
-      # the code that ships.
-      - run: cargo clippy --workspace --all-targets --features please-cli/judge -- -D warnings
+      - run: cargo clippy ${{ matrix.args }} --all-targets --locked -- -D warnings
 
   test:
-    name: test
+    name: test (${{ matrix.configuration }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - configuration: workspace
+            args: --workspace
+          - configuration: offline-cli
+            args: -p please-cli --no-default-features
+          - configuration: candle
+            args: -p please-ml --features candle
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # `--no-fail-fast`, and it is not a style preference. Cargo stops after the first test *target*
-      # that fails, so while `please-core --test fixtures` is red — the false-positive rate is under
-      # SC-003's threshold with 17 of the required 200 benign cases — every target sorting after it is
-      # never executed: preparation, ruleset_load, sanitize, scaling, scan, score, seams,
-      # no_self_steering. Eight binaries, silently, including the FR-020 security properties.
-      #
-      # The failing suite still fails the job. The difference is that the run now says what else is
-      # broken instead of stopping at the first thing.
-      - run: cargo test --workspace --no-fail-fast
-      # Same reasoning as clippy above: the tier's own tests — the adversarial property test, the
-      # fail-closed suite, credential resolution — are only compiled when the feature is on. The
-      # offline ones are the majority and they are where the security properties live.
-      - run: cargo test --workspace --features please-cli/judge --no-fail-fast
+      # The workspace default already includes judge. Offline CLI and Candle are distinct builds.
+      # Real-weight tests are explicitly ignored here; ml-inference.yml verifies and runs them.
+      - run: cargo test ${{ matrix.args }} --locked --no-fail-fast
 
   # Principle V's embeddability claim is only worth what proves it. This job IS that proof: the core
   # must build for a target with no filesystem, no network, no threads, and no monotonic clock. It is
@@ -139,14 +149,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: ./ci/check-dependencies.sh
       - run: ./ci/check-core-isolation.sh
-      # `ci/check-cli-dependencies.sh` was here, asserting the default `plz` graph carried no HTTP or TLS
-      # crate. The judgement tier is now on by default, so that assertion is false by intent and the check
-      # is gone with it. The two above still cover `please-core`, which is where the no-network guarantee
-      # actually lives — and the wasm32 job proves it independently.
-      #
-      # A `--no-default-features` build of `plz` still carries no HTTP or TLS crate. Nothing checks that
-      # any more; it is now a property of the Cargo manifest rather than a gate.
-      - run: cargo build -p please-cli --no-default-features
+      - run: bash ci/check-cli-dependencies.sh
+      - run: bash ci/check-ml-isolation.sh
+      - run: cargo build -p please-cli --no-default-features --locked
 
   # SC-404 / FR-413. Its own job because it runs the whole suite with canary credentials in the
   # environment, which is not something to fold into a job people read as "lint".

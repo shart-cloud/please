@@ -38,9 +38,8 @@ path = "src/main.rs"
 #     ci/check-dependencies.sh still pins it at 27 crates and the wasm32 build still proves it.
 #   * every failure of the tier is a coverage gap and therefore `Inconclusive`, never `Clean` (FR-402).
 #
-# Until this commit, ci/check-cli-dependencies.sh asserted the default graph carried no HTTP or TLS crate.
-# That check is deleted rather than inverted — see the commit message. The no-network build is still
-# buildable and no longer machine-proven, which is a real thing to have given up.
+# ci/check-cli-dependencies.sh checks the --no-default-features graph for known HTTP/TLS stacks.
+# CI tests that configuration separately; the default graph intentionally includes the judge client.
 [features]
 default = ["judge"]
 judge = ["dep:please-judge"]

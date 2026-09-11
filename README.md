@@ -144,3 +144,5 @@ throughput, and one design decision that `docs/limits.md` now argues was wrong.
 `docs/limits.md` is the honest list of what this does not do: quoted payloads can suppress detection, a structural tier reads form and not intent, multilingual *detection* is unmeasured (the corpus has zero non-English attacks, so only the false-positive half could be measured — 0.6%), sustained throughput misses its own criterion by about 4%, two named rules miss for reasons the eval run identified, and the fixture suite has known misses that are named in the tests rather than hidden. Read it before trusting a clean verdict.
 
 Experimental protected-export detection is available through caller-owned [export policies](docs/export-policies.md). See the [measured SHART experiment](docs/research/action-evidence-shart-2026-09-10.md) for improvements, false positives, and remaining gaps.
+
+[CI gates](docs/ci-gates.md) distinguish per-case regressions, unmet fixture release criteria, and verified real-model inference.

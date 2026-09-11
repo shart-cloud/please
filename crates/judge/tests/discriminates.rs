@@ -16,16 +16,13 @@
 //! Same shape to a surface pass. Opposite answers. Separating them needs an understanding of what is being
 //! asked, which is what this tier is.
 //!
-//! # This test needs a reachable endpoint, and skips loudly without one
+//! # Explicit live evaluation
 //!
-//! It is the only test in the feature that cannot run offline, so it must not fail in CI, in a sandbox, or
-//! on a laptop with no credential — a test that fails for environmental reasons is a test people learn to
-//! ignore, and this is the one test whose failure matters most.
-//!
-//! It **skips with a printed reason** instead. Run it deliberately:
+//! These tests are ignored during normal runs, including the credential-leak gate. The presence of
+//! a credential alone must not start live inference. With a reachable endpoint, request them explicitly:
 //!
 //! ```sh
-//! cargo test -p please-judge --test discriminates -- --nocapture
+//! cargo test -p please-judge --test discriminates -- --ignored --nocapture
 //! ```
 //!
 //! # If it fails
@@ -44,6 +41,7 @@ use support::{engine, fixture, skip_without_endpoint};
 /// `benign-tool-001` — a transcript displaying a file of payloads. Every observation should demote, and the
 /// verdict should come back clean with the suppressed list carrying the story.
 #[test]
+#[ignore = "live judge evaluation; run explicitly with --ignored --nocapture"]
 fn a_transcript_displaying_payloads_is_demoted_to_clean() {
     let Some(resolution) =
         skip_without_endpoint("a_transcript_displaying_payloads_is_demoted_to_clean")
@@ -104,6 +102,7 @@ fn a_transcript_displaying_payloads_is_demoted_to_clean() {
 /// **The harder half.** Demoting a benign transcript is a precision win; keeping a real payload reported
 /// when it is wrapped in exactly the same surface form is what makes the win worth having.
 #[test]
+#[ignore = "live judge evaluation; run explicitly with --ignored --nocapture"]
 fn a_transcript_carrying_a_payload_stays_reported() {
     let Some(resolution) = skip_without_endpoint("a_transcript_carrying_a_payload_stays_reported")
     else {
@@ -155,6 +154,7 @@ fn a_transcript_carrying_a_payload_stays_reported() {
 /// case alone. A judge that demotes everything passes the first test; a judge that demotes nothing passes
 /// the second. Only a judge that separates them passes this.
 #[test]
+#[ignore = "live judge evaluation; run explicitly with --ignored --nocapture"]
 fn the_pair_receives_opposite_judgements() {
     let Some(resolution) = skip_without_endpoint("the_pair_receives_opposite_judgements") else {
         return;

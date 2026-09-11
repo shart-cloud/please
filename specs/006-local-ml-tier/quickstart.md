@@ -15,14 +15,15 @@ Supported offline checks, with dependencies already cached:
 ```bash
 cargo test -p please-ml --offline --locked
 cargo check -p please-ml --features candle --offline --locked
-cargo test -p please-ml --features candle --test real_weights --offline --locked -- --test-threads=1
+bash ci/check-ml-inference.sh
 ```
 
 The first command exercises deterministic logic without inference. The last requires the pinned
 ProtectAI and MiniLM weights in the evaluation cache (`PLEASE_EVAL_CACHE`, otherwise
-`$XDG_CACHE_HOME/please-eval` or `~/.cache/please-eval`). Missing weights currently skip the relevant
-tests, so a passing run alone does not prove inference ran. Dedicated CI with enforced cache
-prerequisites remains unfinished (T042).
+`$XDG_CACHE_HOME/please-eval` or `~/.cache/please-eval`). The script verifies all pinned asset sizes
+and hashes and explicitly runs the eight ignored real-weight tests. Missing weights fail. Normal
+Candle test runs report those tests as ignored. The dedicated `ML inference` workflow performs
+acquisition separately, then runs this offline gate; see [CI gates](../../docs/ci-gates.md).
 
 ## Planned CLI: build with ML support
 
