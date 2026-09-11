@@ -63,6 +63,7 @@ pub mod metrics;
 pub mod ml;
 pub mod models;
 pub mod outlier;
+pub mod replay;
 pub mod rows;
 pub mod scan;
 pub mod segment;

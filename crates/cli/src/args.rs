@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use please_core::verdict::{DetectionClass, RiskLevel};
-use please_core::ScanPolicy;
+use please_core::{ScanPolicy, ScanSource};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -59,10 +59,37 @@ pub struct JudgeArgs {
     pub check: bool,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum Source {
+    Unspecified,
+    SecurityReference,
+    UntrustedToolResponse,
+    UntrustedUserInput,
+}
+
+impl From<Source> for ScanSource {
+    fn from(source: Source) -> Self {
+        match source {
+            Source::Unspecified => Self::Unspecified,
+            Source::SecurityReference => Self::SecurityReference,
+            Source::UntrustedToolResponse => Self::UntrustedToolResponse,
+            Source::UntrustedUserInput => Self::UntrustedUserInput,
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 pub struct ScanArgs {
     /// Files, directories, or `-` for standard input. Defaults to standard input.
     pub targets: Vec<String>,
+
+    /// Caller-selected source and intended use. Untrusted tool responses and user inputs never suppress quoted findings.
+    #[arg(long, value_enum, default_value_t = Source::Unspecified)]
+    pub source: Source,
+
+    /// Caller-owned TOML permissions for experimental protected-data export detection.
+    #[arg(long)]
+    pub export_policy: Option<PathBuf>,
 
     /// Risk band at or above which the exit status reports "risk found".
     #[arg(long, value_enum, default_value_t = Band::High)]
@@ -233,9 +260,11 @@ impl ScanArgs {
     pub fn policy(&self) -> ScanPolicy {
         let mut policy = ScanPolicy {
             threshold: self.threshold.into(),
-            suppress_in_quotes: !self.no_suppress_in_quotes,
-            ..ScanPolicy::default()
+            ..ScanPolicy::for_source(self.source.into())
         };
+        if self.no_suppress_in_quotes {
+            policy.suppress_in_quotes = false;
+        }
         if !self.classes.is_empty() {
             policy.classes = self
                 .classes

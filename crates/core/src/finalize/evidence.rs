@@ -45,9 +45,12 @@ pub struct Observation {
     pub class: DetectionClass,
     /// Span in the **original** input, even when the match came out of decoded content.
     pub span: Span,
-    /// Content to show the reader, **raw**. Neutralised on the way into a reason, not here — one site,
-    /// so it cannot be forgotten at a second one (FR-021, FR-126).
+    /// Content to show the reader. May be raw or already sanitized and bounded by the producer;
+    /// finalization always sanitizes it before constructing a reason (FR-021, FR-126).
     pub matched: String,
+    /// The producer shortened the excerpt before finalization. Retained separately because an
+    /// already-bounded string cannot reveal that content was omitted (FR-122).
+    pub excerpt_truncated: bool,
     pub severity: u8,
     /// Why the rule exists, carried so a finding explains itself without a lookup.
     pub description: String,
@@ -233,6 +236,7 @@ mod tests {
             severity: 50,
             description: "test rule".to_string(),
             chain: Vec::new(),
+            excerpt_truncated: false,
             suppressed_by: None,
         }
     }

@@ -30,6 +30,14 @@ Please can scan files, directories, and from `stdin` and look for potential prom
 
 `plz scan skill.md --format json`
 
+#### Select the source at the caller boundary
+
+Use `--source security-reference` for caller-selected lessons and reference material, or
+`--source untrusted-tool-response` for lower-trust tool output. The latter keeps quoted findings
+active. The default threshold remains `High`; omitting `--source` preserves existing detection behavior.
+See [source policies and paired examples](docs/source-policies.md) for Rust usage, verdict attribution,
+and the acceptance matrix.
+
 #### Please Exit with some Codes:
 
 To make `plz` easy to use with CI gates or pre-tool hook calls we provide exit codes to correspond to findings, errors, etc. 
@@ -134,3 +142,5 @@ throughput, and one design decision that `docs/limits.md` now argues was wrong.
 ## Please Don't Overstate This, Part Two:
 
 `docs/limits.md` is the honest list of what this does not do: quoted payloads can suppress detection, a structural tier reads form and not intent, multilingual *detection* is unmeasured (the corpus has zero non-English attacks, so only the false-positive half could be measured — 0.6%), sustained throughput misses its own criterion by about 4%, two named rules miss for reasons the eval run identified, and the fixture suite has known misses that are named in the tests rather than hidden. Read it before trusting a clean verdict.
+
+Experimental protected-export detection is available through caller-owned [export policies](docs/export-policies.md). See the [measured SHART experiment](docs/research/action-evidence-shart-2026-09-10.md) for improvements, false positives, and remaining gaps.

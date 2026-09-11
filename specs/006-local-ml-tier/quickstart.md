@@ -1,10 +1,30 @@
-# Quickstart: using the ML tier
+# ML tier: current commands and planned CLI
 
 **Feature**: `006-local-ml-tier`
 
 ---
 
-## Build with ML support
+## Current implementation (2026-09-10)
+
+`please-ml` is a library with an optional `candle` backend. The CLI currently exposes only the
+`judge` feature; `ml-candle`, `ml-onnx`, and the ML scan flags below are **planned interfaces** and
+cannot be used with the current CLI manifest. There is no implemented ONNX backend in `please-ml`.
+
+Supported offline checks, with dependencies already cached:
+
+```bash
+cargo test -p please-ml --offline --locked
+cargo check -p please-ml --features candle --offline --locked
+cargo test -p please-ml --features candle --test real_weights --offline --locked -- --test-threads=1
+```
+
+The first command exercises deterministic logic without inference. The last requires the pinned
+ProtectAI and MiniLM weights in the evaluation cache (`PLEASE_EVAL_CACHE`, otherwise
+`$XDG_CACHE_HOME/please-eval` or `~/.cache/please-eval`). Missing weights currently skip the relevant
+tests, so a passing run alone does not prove inference ran. Dedicated CI with enforced cache
+prerequisites remains unfinished (T042).
+
+## Planned CLI: build with ML support
 
 The default `plz` binary has no ML dependencies. To enable the ML tier, build with one of:
 

@@ -47,9 +47,126 @@
     "target": { "$ref": "#/$defs/target_ref" },
     "ruleset": { "$ref": "#/$defs/ruleset_id" },
     "engine": { "$ref": "#/$defs/engine_id" },
+    "scan_policy": { "$ref": "#/$defs/scan_policy" },
     "judge": { "$ref": "#/$defs/judge_report" }
   },
   "$defs": {
+    "export_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "policy_digest",
+        "rules_digest",
+        "rules_version",
+        "resources",
+        "severity",
+        "window_tokens",
+        "export_verbs",
+        "read_verbs",
+        "response_verbs",
+        "value_references"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rules_version": {
+          "type": "string"
+        },
+        "policy_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rules_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "aliases",
+              "allowed_destinations"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allowed_destinations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "window_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
+        "export_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "read_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "value_references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scan_policy": {
+      "description": "Effective caller-owned structural policy. Present after Engine::scan, including size refusals; retained through later tiers. Absent when no structural scan policy was applied, such as unreadable targets or standalone finalization.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "threshold", "suppress_in_quotes", "classes", "max_input_bytes", "max_decode_depth", "max_matches_per_rule", "max_reasons", "max_excerpt_bytes"],
+      "properties": {
+        "export_policy": { "$ref": "#/$defs/export_policy" },
+        "source": { "enum": ["unspecified", "security_reference", "untrusted_tool_response", "untrusted_user_input"] },
+        "threshold": { "enum": ["none", "low", "medium", "high", "critical"] },
+        "suppress_in_quotes": { "type": "boolean" },
+        "classes": { "type": "array", "items": { "enum": ["override", "concealment", "confusable", "boundary", "solicitation", "agent_directed", "external_action", "privilege"] } },
+        "max_input_bytes": { "type": "integer", "minimum": 0 },
+        "max_decode_depth": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "max_matches_per_rule": { "type": "integer", "minimum": 0 },
+        "max_reasons": { "type": "integer", "minimum": 0 },
+        "max_excerpt_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
     "judge_report": {
       "description": "Present only on a verdict the judgement tier acted on (feature 004, FR-416). Its ABSENCE is meaningful: it says the verdict is purely structural and 001's SC-011 determinism guarantee applies to it unchanged. Its presence with every span `confirmed` is a different statement from absence — one verdict has a second opinion behind it and the other does not. The raw model response is deliberately NOT recorded: it is attacker-influenced text with no consumer, and storing it would create a channel by which content reaches a reader that the sanitisation path never inspected.",
       "type": "object",

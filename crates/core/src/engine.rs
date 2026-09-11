@@ -161,6 +161,11 @@ impl Engine {
     /// places, sorted reasons here as well as in `assemble`, and kept six overlapping collections whose
     /// mutual agreement the score depended on.
     pub fn scan(&self, input: &[u8], policy: &ScanPolicy, target: TargetRef) -> Verdict {
+        let verdict = self.scan_inner(input, policy, target);
+        finalize::record_scan_policy(verdict, policy.effective())
+    }
+
+    fn scan_inner(&self, input: &[u8], policy: &ScanPolicy, target: TargetRef) -> Verdict {
         let plan = ScanPlan::resolve(policy);
         let bounds = plan.bounds();
         let mut evidence = Evidence::new();
@@ -206,7 +211,18 @@ impl Engine {
             bounds.max_excerpt_bytes,
             &mut evidence,
         );
-        let decoded = self.observe_decoded(&plan, &expansion, &mut evidence);
+        let mut decoded = self.observe_decoded(&plan, &expansion, &mut evidence);
+        if policy.export_policy.is_some() {
+            for candidate in &expansion.candidates {
+                for mut hit in
+                    crate::export::observe(candidate.text.as_bytes(), policy, &mut evidence)
+                {
+                    hit.span = candidate.origin;
+                    hit.chain = candidate.chain.clone();
+                    decoded.push(hit);
+                }
+            }
+        }
 
         // ── Frame ───────────────────────────────────────────────────────────────────────────────
         //
@@ -221,9 +237,11 @@ impl Engine {
         // transforms make this concrete: their span is the entire document, so every decoded observation
         // would sit at offset 0, which is a frame, and the filter would be a no-op that looked like a
         // check.
-        let direct = detect::apply_frame(direct, input, &quoting, |rule_id| {
+        let mut direct = detect::apply_frame(direct, input, &quoting, |rule_id| {
             self.matcher.is_frame_anchored(rule_id)
         });
+
+        direct.extend(crate::export::observe(input, policy, &mut evidence));
 
         // ── Suppression ─────────────────────────────────────────────────────────────────────────
         //
@@ -332,7 +350,7 @@ impl Engine {
             .find(haystack, max_matches, evidence)
             .into_iter()
             .map(|found| {
-                let (matched, _) = sanitize_bytes(
+                let (matched, excerpt_truncated) = sanitize_bytes(
                     &haystack[found.span.start..found.span.end],
                     max_excerpt as usize,
                 );
@@ -344,6 +362,7 @@ impl Engine {
                     severity: found.rule.severity,
                     description: found.rule.description.clone(),
                     chain: Vec::new(),
+                    excerpt_truncated,
                     suppressed_by: None,
                 }
             })
@@ -377,7 +396,7 @@ impl Engine {
             if matched_rules.is_empty() {
                 continue;
             }
-            let (excerpt, _) =
+            let (excerpt, excerpt_truncated) =
                 crate::sanitize::sanitize_str(&candidate.text, bounds.max_excerpt_bytes as usize);
             for rule in matched_rules {
                 observations.push(Observation {
@@ -392,6 +411,7 @@ impl Engine {
                     severity: rule.severity,
                     description: format!("{} Recovered by decoding.", rule.description),
                     chain: candidate.chain.clone(),
+                    excerpt_truncated,
                     suppressed_by: None,
                 });
             }

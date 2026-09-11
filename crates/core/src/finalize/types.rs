@@ -1167,6 +1167,8 @@ pub struct Verdict {
     /// `None` on every default scan, exactly as [`judge`](Self::judge) is, and carrying the same meaning:
     /// this verdict is purely structural and 001's determinism guarantee applies to it unchanged.
     ml: Option<MlReport>,
+    /// Effective structural scan policy. Absent on standalone finalization or I/O-only failures.
+    scan_policy: Option<crate::policy::ScanPolicy>,
 }
 
 impl Verdict {
@@ -1219,7 +1221,19 @@ impl Verdict {
             // already works (FR-418).
             judge: None,
             ml: None,
+            scan_policy: None,
         }
+    }
+
+    /// The caller-selected policy used by `Engine::scan`, including effective quote suppression.
+    /// Optional tiers retain this snapshot; it does not describe their own configuration.
+    pub fn scan_policy(&self) -> Option<&crate::policy::ScanPolicy> {
+        self.scan_policy.as_ref()
+    }
+
+    pub(super) fn with_scan_policy(mut self, policy: crate::policy::ScanPolicy) -> Self {
+        self.scan_policy = Some(policy);
+        self
     }
 
     /// Attach the report that produced this verdict's demotions.
@@ -1549,7 +1563,8 @@ mod serialisation {
             // Both scores skip when absent rather than writing null, because absence is a statement:
             // `probability` missing means the classifier never read this segment, which under selective
             // inference is ordinary and is NOT a claim that the segment is benign (FR-652).
-            let len = 2 + usize::from(self.probability.is_some()) + usize::from(self.outlier.is_some());
+            let len =
+                2 + usize::from(self.probability.is_some()) + usize::from(self.outlier.is_some());
             let mut o = s.serialize_struct("MlSegmentResult", len)?;
             o.serialize_field("span", &self.span)?;
             o.serialize_field("mode", &self.mode)?;
@@ -1579,7 +1594,10 @@ mod serialisation {
 
     impl Serialize for Verdict {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            let len = 11 + usize::from(self.judge.is_some()) + usize::from(self.ml.is_some());
+            let len = 11
+                + usize::from(self.judge.is_some())
+                + usize::from(self.ml.is_some())
+                + usize::from(self.scan_policy.is_some());
             let mut o = s.serialize_struct("Verdict", len)?;
             o.serialize_field("outcome", &self.outcome)?;
             o.serialize_field("score", &self.score)?;
@@ -1592,6 +1610,10 @@ mod serialisation {
             o.serialize_field("target", &self.target)?;
             o.serialize_field("ruleset", &self.ruleset)?;
             o.serialize_field("engine", &self.engine)?;
+            match &self.scan_policy {
+                Some(policy) => o.serialize_field("scan_policy", policy)?,
+                None => o.skip_field("scan_policy")?,
+            }
             // Absent, not null, when no judge ran — and the ABSENCE is meaningful. `judge: null` would say
             // "a judge ran and produced nothing", which is a different claim (004 FR-416).
             match &self.judge {

@@ -86,6 +86,21 @@ enum Command {
         #[arg(long, default_value = "builtin")]
         run: String,
     },
+    /// Replay labeled local captures against saved results from an existing scanner. No network.
+    Replay {
+        /// JSONL capture manifest with byte hashes, labels, sources, and caller roles.
+        #[arg(long)]
+        cases: PathBuf,
+        /// Normalized existing-scanner results, matched by id, hash, source, and role.
+        #[arg(long)]
+        baseline: PathBuf,
+        /// Caller-owned protected-resource permissions; absent preserves the original replay.
+        #[arg(long)]
+        export_policy: Option<PathBuf>,
+        /// New output directory. Writes comparisons.jsonl, report.md, and run.json; refuses overwrite.
+        #[arg(long)]
+        out: PathBuf,
+    },
     /// Per-source stratified metrics over a run's results.
     Report {
         #[arg(long, default_value = "builtin")]
@@ -222,6 +237,23 @@ fn run() -> Result<ExitCode> {
             },
             &run,
         ),
+        Command::Replay {
+            cases,
+            baseline,
+            export_policy,
+            out,
+        } => {
+            let policy = export_policy
+                .map(|p| -> Result<please_core::ExportPolicy> {
+                    Ok(please_core::ExportPolicy::from_toml(
+                        &std::fs::read_to_string(p)?,
+                    )?)
+                })
+                .transpose()?;
+            please_eval::replay::run_with_policy(&cases, &baseline, &out, policy.as_ref())?;
+            println!("Replay written to {}", out.display());
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Report {
             run,
             offline,

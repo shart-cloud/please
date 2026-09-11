@@ -28,6 +28,14 @@ cargo run --release --manifest-path crates/eval/Cargo.toml -- report --out /tmp/
 Use `--release` for the public corpus. A debug build scans 60,000 rows at roughly a tenth of the speed;
 the results are identical either way, which is the point of SC-011.
 
+## Replay actual lab captures
+
+The `replay` command compares local labeled captures with hash-matched saved results from an existing
+scanner. It uses the shipped source policy at `High`, retains both sides' reasons and incomplete
+outcomes, and reports disagreements without tuning rules. See [the replay format and workflow](REPLAY.md).
+Actual capture files and baseline results must be supplied; the command does not acquire them or call
+an external scanner.
+
 ## Phase-0 model feasibility
 
 The draft local-ML specification does not yet justify a shipping `please-ml` crate. Its real-model
@@ -180,3 +188,6 @@ gate.
 
 **Never the aggregate.** Per-source detection on `pos_stratified` ranges from 0% to 100%. A mean over that
 is a number without a referent, and `report` deliberately prints none for any multi-source slice.
+
+The first [actual lab replay](../../docs/research/lab-replay-shart-2026-09-10.md) compares
+20 SHART user inputs with its original PromptGuard + WulfRegex input scanner.

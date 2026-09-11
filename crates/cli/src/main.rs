@@ -81,7 +81,19 @@ fn run() -> i32 {
         #[cfg(feature = "judge")]
         Command::Judge(judge_args) => return run_judge(&judge_args),
     };
-    let policy = scan_args.policy();
+    let mut policy = scan_args.policy();
+    if let Some(path) = &scan_args.export_policy {
+        let loaded = std::fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|text| please_core::ExportPolicy::from_toml(&text));
+        match loaded {
+            Ok(value) => policy.export_policy = Some(value),
+            Err(e) => {
+                eprintln!("plz: export policy: {e}");
+                return EXIT_USAGE;
+            }
+        }
+    }
 
     let engine = match build_engine(&scan_args) {
         Ok(engine) => engine,

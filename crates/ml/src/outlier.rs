@@ -129,10 +129,7 @@ mod tests {
     fn an_orthogonal_vector_scores_exactly_a_thousand() {
         // The formula's anchor point, worth pinning because it is what makes the number readable: 1000 is
         // "shares nothing with its siblings", below 1000 is "resembles them", above is "opposes them".
-        let scores = scores(&[
-            vec![1.0, 0.0],
-            vec![0.0, 1.0],
-        ]);
+        let scores = scores(&[vec![1.0, 0.0], vec![0.0, 1.0]]);
         assert_eq!(scores, vec![1000, 1000]);
     }
 

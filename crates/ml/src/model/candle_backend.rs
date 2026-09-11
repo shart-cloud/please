@@ -90,10 +90,7 @@ impl Backend {
                     labels,
                 )
                 .map_err(|e| {
-                    format!(
-                        "cannot construct `{}` as DeBERTa-v2: {e}",
-                        config.model_id
-                    )
+                    format!("cannot construct `{}` as DeBERTa-v2: {e}", config.model_id)
                 })?;
                 Ok(Backend::Classifier {
                     model: Box::new(model),

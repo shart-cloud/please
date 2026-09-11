@@ -427,3 +427,21 @@ fn output_does_not_vary_with_the_working_directory() {
         .unwrap();
     assert_eq!(from_root.stdout, from_tmp.stdout);
 }
+
+#[test]
+fn human_output_explains_source_policy_for_clean_and_risky_results() {
+    let text = include_str!("../../../tests/fixtures/source-policy/security-lesson.md");
+    for (source, expected) in [
+        (
+            "security-reference",
+            "source: security_reference; threshold: high; quote suppression: on",
+        ),
+        (
+            "untrusted-tool-response",
+            "source: untrusted_tool_response; threshold: high; quote suppression: off",
+        ),
+    ] {
+        let run = scan_stdin(text, &["--source", source]);
+        assert!(run.stdout.contains(expected), "{}", run.stdout);
+    }
+}

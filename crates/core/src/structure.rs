@@ -291,6 +291,14 @@ impl QuotingMap {
         }
     }
 
+    /// Composite evidence is suppressed only when one quoting region contains the entire relation.
+    pub(crate) fn covering_quote(&self, start: usize, end: usize) -> Option<QuotingContext> {
+        self.regions
+            .iter()
+            .find(|(s, e, _)| *s <= start && *e >= end)
+            .map(|(_, _, c)| *c)
+    }
+
     /// The quoting context covering `offset`, if any.
     ///
     /// Regions are sorted by start, so a binary search skips everything beginning after `offset` and only

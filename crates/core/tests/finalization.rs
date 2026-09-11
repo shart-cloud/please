@@ -78,6 +78,7 @@ fn an_observation(rule_id: &str, start: usize, severity: u8) -> Observation {
         severity,
         description: "test rule".to_string(),
         chain: Vec::new(),
+        excerpt_truncated: false,
         suppressed_by: None,
     }
 }

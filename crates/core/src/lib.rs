@@ -24,6 +24,8 @@
 pub mod decode;
 pub mod detect;
 pub mod engine;
+pub mod export;
+pub use export::ExportPolicy;
 pub mod finalize;
 pub mod matcher;
 pub mod policy;
@@ -50,7 +52,7 @@ pub use finalize::types as verdict;
 pub use engine::{Engine, EngineBuilder};
 pub use finalize::evidence::{CoverageGap, Evidence, Observation};
 pub use finalize::plan::{Bounds, ScanPlan};
-pub use policy::ScanPolicy;
+pub use policy::{ScanPolicy, ScanSource};
 pub use ruleset::{Anchor, Rule, Ruleset, RulesetError, RulesetLimits};
 /// The judgement tier's vocabulary (feature 004, plan D10).
 ///

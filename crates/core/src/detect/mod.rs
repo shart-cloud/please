@@ -87,6 +87,7 @@ pub mod structural {
                     found.kind.as_str()
                 ),
                 chain: Vec::new(),
+                excerpt_truncated: false,
                 suppressed_by: None,
             });
         }
@@ -102,6 +103,7 @@ pub mod structural {
                     "Token uses characters resembling other characters, disguising an ASCII word."
                         .to_string(),
                 chain: Vec::new(),
+                excerpt_truncated: false,
                 suppressed_by: None,
             });
         }
@@ -190,7 +192,12 @@ pub fn apply_suppression(
             kept.push(hit);
             continue;
         }
-        match quoting.is_quoted(hit.span.start) {
+        let context = if hit.rule_id.starts_with("action.export.") {
+            quoting.covering_quote(hit.span.start, hit.span.end)
+        } else {
+            quoting.is_quoted(hit.span.start)
+        };
+        match context {
             Some(context) if !fires_in_quotes(&hit.rule_id) => suppressed.push((hit, context)),
             _ => kept.push(hit),
         }
@@ -255,6 +262,7 @@ pub fn conceal_markup(found: &[Observation], quoting: &QuotingMap) -> Vec<Observ
             chain: Vec::new(),
             // Never suppressed: `is_quoted` cannot return a concealing region, so nothing upstream could
             // have set this. Stated rather than left implicit.
+            excerpt_truncated: false,
             suppressed_by: None,
         });
     }
@@ -308,6 +316,7 @@ mod tests {
             severity: 80,
             description: "test".to_string(),
             chain: Vec::new(),
+            excerpt_truncated: false,
             suppressed_by: None,
         }
     }

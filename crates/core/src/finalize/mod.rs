@@ -261,107 +261,96 @@ pub fn rejudge(verdict: Verdict, report: JudgeReport, bands: &Bands) -> Verdict 
         flags
     };
 
-    let (reasons, suppressed, score, risk, reasons_truncated, suppressions_truncated, attribution) =
-        disassemble(verdict, bands, &demoted);
-
-    assemble(
-        reasons,
-        reasons_truncated,
-        suppressed,
-        suppressions_truncated,
-        // Judged successfully, so no gap is added. The gaps the structural verdict already carried are
-        // preserved — a judgement resolves nothing about coverage.
-        Vec::new(),
-        score,
-        risk,
-        attribution,
-    )
-    .with_judge(report)
-}
-
-/// Rebuild a verdict with the demoted reasons moved, without ever calling `Verdict::new`.
-///
-/// Returns the pieces `assemble` wants. Separate from [`rejudge`] because the destructuring is noisy and
-/// the decision it implements — which list each reason belongs in — is one line that should be readable.
-#[allow(clippy::type_complexity)]
-fn disassemble(
-    verdict: Verdict,
-    bands: &Bands,
-    demoted: &[bool],
-) -> (
-    Vec<Reason>,
-    Vec<Reason>,
-    u8,
-    RiskLevel,
-    bool,
-    bool,
-    Attribution,
-) {
-    let attribution = Attribution {
-        target: verdict.target().clone(),
-        ruleset: verdict.ruleset().clone(),
-        bands: *bands,
-    };
-    let reasons_truncated = verdict.reasons_truncated();
-    let suppressions_truncated = verdict.suppressions_truncated();
-    let mut suppressed: Vec<Reason> = verdict.suppressed().to_vec();
-
-    let mut kept: Vec<Reason> = Vec::new();
-    for (index, reason) in verdict.reasons().iter().enumerate() {
-        let mut reason = reason.clone();
+    let mut state = Rebuild::from_verdict(&verdict, *bands);
+    let mut kept = Vec::new();
+    for (index, mut reason) in state.reasons.into_iter().enumerate() {
         if demoted[index] {
             reason.demote_by_judge();
-            suppressed.push(reason);
+            state.suppressed.push(reason);
         } else {
             kept.push(reason);
         }
     }
-
-    // Re-aggregate over what is still reported. Exact here in a way it would not be on a truncated verdict:
-    // every reason the score was originally computed from is present, so removing the demoted ones removes
-    // exactly their contribution (plan D9).
-    let severities: Vec<(u8, DetectionClass)> = kept
-        .iter()
-        .map(|reason| (reason.severity(), reason.class()))
-        .collect();
-    let score = aggregate(&severities);
-    let risk = bands.band(score);
-
-    // Suppressed reasons arrive from two places now — quoting suppression during the scan, and demotion
-    // just above — and must still be in one order (FR-125). Note that this is the ONLY place the two lists
-    // interact, and it moves reasons between them without creating or dropping any: the union is preserved
-    // by construction rather than by check, which is what SC-406 is a test of.
-    order(&mut suppressed);
-
-    (
-        kept,
-        suppressed,
-        score,
-        risk,
-        reasons_truncated,
-        suppressions_truncated,
-        attribution,
-    )
+    state.reasons = kept;
+    state.rescore();
+    order(&mut state.suppressed);
+    state.judge = Some(report);
+    state.finish()
 }
 
-/// Record a coverage gap against an already-finalized verdict.
-///
-/// The seam an optional tier needs in order to fail closed. `please-judge` cannot build a `Verdict` and
-/// cannot turn a [`CoverageGap`] into an [`Incompleteness`], so without this there would be no way for it
-/// to say "I did not run" — and a tier that cannot say that would have to either succeed or be silent,
-/// which is the fail-open the whole outcome model exists to prevent.
-///
-/// # Why this is safe to make public when `Verdict::new` is not
-///
-/// **Adding a gap is monotone in one direction.** It can turn `Clean` into `Inconclusive` and can change
-/// nothing else: it cannot add a finding, cannot remove one, cannot alter a score, and cannot make any
-/// verdict *more* reassuring than it was. The worst a caller can do with it is report less confidence than
-/// the evidence warrants, which is the direction this project errs in anyway.
-///
-/// Contrast `Verdict::new`, which decides what a verdict *says*, and which is why it is `pub(super)`.
-///
-/// The judgement tier is the first caller, but nothing here is judge-specific — any downstream tier that
-/// can fail needs exactly this.
+/// State carried through every optional-tier rebuild. Coverage and successful tier reports survive
+/// unless the operation explicitly replaces them. Findings have already crossed the sanitization
+/// boundary, so rebuilding does not sanitize their excerpts again.
+struct Rebuild {
+    reasons: Vec<Reason>,
+    reasons_truncated: bool,
+    suppressed: Vec<Reason>,
+    suppressions_truncated: bool,
+    incomplete: Vec<Incompleteness>,
+    score: u8,
+    risk: RiskLevel,
+    attribution: Attribution,
+    judge: Option<JudgeReport>,
+    ml: Option<MlReport>,
+    scan_policy: Option<crate::policy::ScanPolicy>,
+}
+
+impl Rebuild {
+    fn from_verdict(verdict: &Verdict, bands: Bands) -> Self {
+        Self {
+            reasons: verdict.reasons().to_vec(),
+            reasons_truncated: verdict.reasons_truncated(),
+            suppressed: verdict.suppressed().to_vec(),
+            suppressions_truncated: verdict.suppressions_truncated(),
+            incomplete: verdict.incomplete().to_vec(),
+            score: verdict.score(),
+            risk: verdict.risk(),
+            attribution: Attribution {
+                target: verdict.target().clone(),
+                ruleset: verdict.ruleset().clone(),
+                bands,
+            },
+            judge: verdict.judge().cloned(),
+            ml: verdict.ml().cloned(),
+            scan_policy: verdict.scan_policy().cloned(),
+        }
+    }
+
+    // Only valid when all contributions are retained. Both callers refuse truncated reason lists.
+    fn rescore(&mut self) {
+        let severities: Vec<_> = self
+            .reasons
+            .iter()
+            .map(|reason| (reason.severity(), reason.class()))
+            .collect();
+        self.score = aggregate(&severities);
+        self.risk = self.attribution.bands.band(self.score);
+    }
+
+    fn finish(self) -> Verdict {
+        let mut verdict = assemble(
+            self.reasons,
+            self.reasons_truncated,
+            self.suppressed,
+            self.suppressions_truncated,
+            self.incomplete,
+            self.score,
+            self.risk,
+            self.attribution,
+        );
+        if let Some(report) = self.judge {
+            verdict = verdict.with_judge(report);
+        }
+        if let Some(report) = self.ml {
+            verdict = verdict.with_ml(report);
+        }
+        if let Some(policy) = self.scan_policy {
+            verdict = verdict.with_scan_policy(policy);
+        }
+        verdict
+    }
+}
+
 /// Merge ML observations into a structural verdict and re-finalize (006 T017, contracts/ml-tier.md).
 ///
 /// **Structural findings are preserved; ML findings are added.** The score may rise and MUST NOT fall.
@@ -416,26 +405,14 @@ pub fn with_ml(
         );
     }
 
-    let attribution = Attribution {
-        target: structural.target().clone(),
-        ruleset: structural.ruleset().clone(),
-        bands: *bands,
-    };
-    let judge = structural.judge().cloned();
-    let suppressions_truncated = structural.suppressions_truncated();
-    let suppressed: Vec<Reason> = structural.suppressed().to_vec();
-    let mut gaps: Vec<Incompleteness> = structural.incomplete().to_vec();
-
-    // Structural reasons first, unmodified. Not re-sanitised: they crossed that boundary in `finalize`
-    // and sanitising an excerpt twice is how a `...` truncation marker ends up inside another one.
-    let mut reasons: Vec<Reason> = structural.reasons().to_vec();
+    let mut state = Rebuild::from_verdict(&structural, *bands);
 
     // ML observations cross the same boundary structural ones do.
     for observation in observations {
         let (reason, excerpt_truncated) =
             into_reason(observation, bounds.max_excerpt_bytes as usize);
         if excerpt_truncated {
-            gaps.push(
+            state.incomplete.push(
                 CoverageGap::bound(
                     IncompleteCause::ExcerptLength,
                     bounds.max_excerpt_bytes as u64,
@@ -444,60 +421,35 @@ pub fn with_ml(
                 .into_incompleteness(),
             );
         }
-        reasons.push(reason);
+        state.reasons.push(reason);
     }
 
     // ── Score over the combined evidence, before truncation ─────────────────────────────────────
     //
     // Same ordering discipline as `finalize`: aggregate first, so a reason dropped by `max_reasons`
     // below cannot understate the score it contributed to (FR-001b).
-    let severities: Vec<(u8, DetectionClass)> = reasons
-        .iter()
-        .map(|reason| (reason.severity(), reason.class()))
-        .collect();
-    let score = score::aggregate(&severities);
-    let risk = bands.band(score);
+    state.rescore();
 
-    order(&mut reasons);
-    let mut reasons_truncated = false;
-    if reasons.len() > bounds.max_reasons as usize {
-        gaps.push(
+    order(&mut state.reasons);
+    if state.reasons.len() > bounds.max_reasons as usize {
+        state.incomplete.push(
             CoverageGap::bound(
                 IncompleteCause::MaxReasons,
                 bounds.max_reasons as u64,
-                format!("{} reasons found", reasons.len()),
+                format!("{} reasons found", state.reasons.len()),
             )
             .into_incompleteness(),
         );
-        reasons.truncate(bounds.max_reasons as usize);
-        reasons_truncated = true;
+        state.reasons.truncate(bounds.max_reasons as usize);
+        state.reasons_truncated = true;
     }
 
-    let verdict = assemble(
-        reasons,
-        reasons_truncated,
-        suppressed,
-        suppressions_truncated,
-        gaps,
-        score,
-        risk,
-        attribution,
-    )
-    .with_ml(report);
-
-    // `assemble` builds a fresh verdict, so a judgement already applied would be dropped on the floor —
-    // silently discarding the record of a tier that ran. Re-attached rather than reordered, because the
-    // judge's demotions are already reflected in the reasons we carried through.
-    match judge {
-        Some(report) => verdict.with_judge(report),
-        None => verdict,
-    }
+    state.ml = Some(report);
+    state.finish()
 }
 
-/// Return the structural verdict with a `TierUnavailable` gap and **no ML report attached**.
-///
-/// The missing report is the point: `ml()` staying `None` says the tier did not act on this verdict, which
-/// is true, and is what a caller must be able to distinguish from a tier that acted and found nothing.
+/// Record a failed ML attempt without attaching a new report. Any report from an earlier successful
+/// attempt is retained along with its findings.
 fn refuse_ml(verdict: Verdict, detail: &str) -> Verdict {
     add_gap(
         verdict,
@@ -505,30 +457,32 @@ fn refuse_ml(verdict: Verdict, detail: &str) -> Verdict {
     )
 }
 
+/// Record a coverage gap against an already-finalized verdict.
+///
+/// The seam an optional tier needs in order to fail closed. `please-judge` cannot build a `Verdict` and
+/// cannot turn a [`CoverageGap`] into an [`Incompleteness`], so without this there would be no way for it
+/// to say "I did not run" — and a tier that cannot say that would have to either succeed or be silent,
+/// which is the fail-open the whole outcome model exists to prevent.
+///
+/// # Why this is safe to make public when `Verdict::new` is not
+///
+/// **Adding a gap is monotone in one direction.** It can turn `Clean` into `Inconclusive` and can change
+/// nothing else: it cannot add a finding, cannot remove one, cannot alter a score, and cannot make any
+/// verdict *more* reassuring than it was. The worst a caller can do with it is report less confidence than
+/// the evidence warrants, which is the direction this project errs in anyway.
+///
+/// Contrast `Verdict::new`, which decides what a verdict *says*, and which is why it is `pub(super)`.
+///
+/// The judgement tier is the first caller, but nothing here is judge-specific — any downstream tier that
+/// can fail needs exactly this.
 pub fn add_gap(verdict: Verdict, gap: CoverageGap) -> Verdict {
-    let attribution = Attribution {
-        target: verdict.target().clone(),
-        ruleset: verdict.ruleset().clone(),
-        // Never consulted. Score and risk are carried through unchanged: nothing was demoted, so there is
-        // nothing to re-band, and `assemble` zeroes both for a non-`RiskFound` outcome anyway.
-        bands: Bands::default(),
-    };
-    let mut incomplete: Vec<Incompleteness> = verdict.incomplete().to_vec();
-    incomplete.push(gap.into_incompleteness());
-
-    assemble(
-        verdict.reasons().to_vec(),
-        verdict.reasons_truncated(),
-        verdict.suppressed().to_vec(),
-        verdict.suppressions_truncated(),
-        incomplete,
-        verdict.score(),
-        verdict.risk(),
-        attribution,
-    )
+    // No rescore: adding a gap cannot change the existing score or risk band.
+    let mut state = Rebuild::from_verdict(&verdict, Bands::default());
+    state.incomplete.push(gap.into_incompleteness());
+    state.finish()
 }
 
-/// Return the structural verdict with a `TierUnavailable` gap and **no judgement applied**.
+/// Record a failed judge attempt without applying it. Earlier successful tier reports are retained.
 ///
 /// Every refusal path inside `rejudge` lands here, so there is one answer to "what happens when the judge
 /// cannot be trusted with this verdict" rather than one per caller. The outcome degrades to `Inconclusive`
@@ -677,7 +631,7 @@ fn into_reason(observation: Observation, max_excerpt: usize) -> (Reason, bool) {
             // exactly one other place, `rejudge`, and nowhere a detector can reach.
             observation.suppressed_by.map(SuppressedBy::Quoting),
         ),
-        truncated,
+        truncated || observation.excerpt_truncated,
     )
 }
 
@@ -746,4 +700,9 @@ fn assemble(
         ruleset,
         EngineId::current(),
     )
+}
+
+/// Engine-only attribution after every scan path, including the size gate.
+pub(crate) fn record_scan_policy(verdict: Verdict, policy: crate::policy::ScanPolicy) -> Verdict {
+    verdict.with_scan_policy(policy)
 }

@@ -9,8 +9,9 @@
 //! **Absent weights skip rather than fail.** A contributor without the cache, and CI without a Hugging
 //! Face credential for the gated Llama licence, must both be able to run `cargo test` and get a green
 //! result — the alternative is a suite that is red by default, which is a suite nobody reads. What keeps
-//! that from hiding a regression is `ci/check-ml-isolation.sh` plus the gate in T042: the models job runs
-//! with the cache warm, and a skip there is a failure there.
+//! that from being mistaken for inference coverage requires a dedicated job with a verified warm cache.
+//! That job is planned in T042 and is not implemented yet. These tests require the `candle` feature;
+//! default workspace tests do not run inference even when weights happen to be cached.
 //!
 //! # The thresholds here are NOT the ones the tasks asked for
 //!
@@ -30,6 +31,8 @@
 //!
 //! What is asserted instead, and is the property that actually matters: **separation**. A classifier is
 //! useful if injections score far above benign text, and both models clear that decisively.
+
+#![cfg(feature = "candle")]
 
 use please_ml::config::{Architecture, MlConfig, ModelKind};
 use please_ml::model::Outcome;
@@ -57,7 +60,9 @@ fn dirs_cache() -> Option<PathBuf> {
 fn load(config: MlConfig) -> Option<Box<MlModel>> {
     match MlModel::load(config) {
         MlLoadResult::Loaded(model) => Some(model),
-        MlLoadResult::Unavailable(detail) => panic!("weights are present but did not load: {detail}"),
+        MlLoadResult::Unavailable(detail) => {
+            panic!("weights are present but did not load: {detail}")
+        }
     }
 }
 
@@ -81,7 +86,10 @@ fn protectai() -> Option<Box<MlModel>> {
 }
 
 fn minilm() -> Option<Box<MlModel>> {
-    let path = cached("all-minilm-l6-v2", "1110a243fdf4706b3f48f1d95db1a4f5529b4d41")?;
+    let path = cached(
+        "all-minilm-l6-v2",
+        "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    )?;
     load(MlConfig {
         model_path: path,
         model_id: "all-minilm-l6-v2".to_string(),
@@ -160,8 +168,7 @@ fn the_classifier_attributes_itself_to_the_bytes_it_loaded() {
 }
 
 #[test]
-fn a_payload_past_the_context_window_still_scores(
-) {
+fn a_payload_past_the_context_window_still_scores() {
     // FR-612, and the reason chunking is max-pooled rather than mean-pooled. The payload sits after
     // roughly two thousand tokens of ordinary prose — well past the 512-token window — so a model that
     // truncated would see none of it and a model that averaged would dilute it below any threshold.
@@ -169,8 +176,8 @@ fn a_payload_past_the_context_window_still_scores(
         return;
     };
 
-    let filler = "The quarterly report covers revenue, headcount, and regional performance. "
-        .repeat(200);
+    let filler =
+        "The quarterly report covers revenue, headcount, and regional performance. ".repeat(200);
     let long = format!("{filler}\n\n{INJECTION}");
 
     let scored = score(&model, &long);

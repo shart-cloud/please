@@ -51,12 +51,49 @@ pub const ALL_CLASSES: [DetectionClass; 8] = [
     DetectionClass::Privilege,
 ];
 
+/// How the caller intends to use the scanned content. Never inferred from text or filenames.
+///
+/// A security reference is material the caller selected for explanation or analysis. An untrusted
+/// tool response can contain arbitrary third-party instructions, even when it looks like a lesson.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ScanSource {
+    /// Preserve the historical policy when the caller supplies no source context.
+    #[default]
+    Unspecified,
+    /// Caller-selected reference material; quoted examples may be suppressed.
+    SecurityReference,
+    /// Lower-trust tool output; quoting never suppresses findings.
+    UntrustedToolResponse,
+    /// Untrusted user task input to an agent; quoting never suppresses findings.
+    UntrustedUserInput,
+}
+
+impl ScanSource {
+    /// Stable name used in verdict attribution.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unspecified => "unspecified",
+            Self::SecurityReference => "security_reference",
+            Self::UntrustedToolResponse => "untrusted_tool_response",
+            Self::UntrustedUserInput => "untrusted_user_input",
+        }
+    }
+}
+
 /// Configuration governing one scan.
 ///
 /// Defaults are **provisional** pending calibration against per-source corpus metrics, and
 /// `docs/limits.md` says so rather than implying a calibration that has not happened.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ScanPolicy {
+    /// Caller-supplied origin and intended use. Text claiming a different source has no effect.
+    pub source: ScanSource,
+    /// Optional caller-owned permissions for experimental protected-data export detection.
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
+    pub export_policy: Option<crate::ExportPolicy>,
     /// Inputs larger than this are not analysed; the verdict is inconclusive (FR-017).
     pub max_input_bytes: u64,
     /// Nested decoding stops here, and the unexamined remainder is reported (FR-018).
@@ -69,12 +106,15 @@ pub struct ScanPolicy {
     pub max_excerpt_bytes: u32,
     /// The band at or above which a caller's tooling treats a verdict as actionable (FR-029).
     ///
-    /// The engine records this and reports against it; it does not act on it (FR-006).
+    /// Recorded with the verdict; the caller applies it to risk findings (FR-006).
     pub threshold: RiskLevel,
     /// Active detection classes (FR-015). Order-insensitive; a `Vec` rather than a set so iteration
     /// order is deterministic (SC-011).
     pub classes: Vec<DetectionClass>,
     /// Whether matches inside quoting contexts are suppressed (FR-014, research D8).
+    ///
+    /// This is a caller preference. For untrusted tool responses and user inputs, source policy takes precedence and
+    /// suppression is always off. Use [`Self::suppresses_quotes`] to read the effective setting.
     ///
     /// On by default. Without it the scanner flags documents that *discuss* prompt injection — threat
     /// models, advisories, this repository's own specification — which makes it unusable by the people
@@ -86,6 +126,8 @@ pub struct ScanPolicy {
 impl Default for ScanPolicy {
     fn default() -> Self {
         Self {
+            source: ScanSource::Unspecified,
+            export_policy: None,
             max_input_bytes: DEFAULT_MAX_INPUT_BYTES,
             max_decode_depth: DEFAULT_MAX_DECODE_DEPTH,
             max_matches_per_rule: DEFAULT_MAX_MATCHES_PER_RULE,
@@ -99,6 +141,35 @@ impl Default for ScanPolicy {
 }
 
 impl ScanPolicy {
+    /// Start from the shipped threshold and bounds with an explicit caller-selected source.
+    pub fn for_source(source: ScanSource) -> Self {
+        Self {
+            source,
+            suppress_in_quotes: !matches!(
+                source,
+                ScanSource::UntrustedToolResponse | ScanSource::UntrustedUserInput
+            ),
+            ..Self::default()
+        }
+    }
+
+    /// Effective quoting policy. Lower-trust input cannot earn suppression through formatting.
+    pub fn suppresses_quotes(&self) -> bool {
+        self.suppress_in_quotes
+            && !matches!(
+                self.source,
+                ScanSource::UntrustedToolResponse | ScanSource::UntrustedUserInput
+            )
+    }
+
+    /// Snapshot the values actually used by the engine for attribution.
+    pub(crate) fn effective(&self) -> Self {
+        Self {
+            suppress_in_quotes: self.suppresses_quotes(),
+            ..self.clone()
+        }
+    }
+
     /// True when `class` is active under this policy.
     pub fn is_active(&self, class: DetectionClass) -> bool {
         self.classes.contains(&class)

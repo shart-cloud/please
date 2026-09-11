@@ -94,7 +94,10 @@ impl MlConfig {
             ));
         }
         if self.max_tokens == 0 {
-            return Err(format!("model `{}` has a zero context window", self.model_id));
+            return Err(format!(
+                "model `{}` has a zero context window",
+                self.model_id
+            ));
         }
         match (self.kind, self.architecture) {
             (ModelKind::Classifier, Architecture::DebertaV2SequenceClassification) => Ok(()),

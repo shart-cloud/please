@@ -1,0 +1,5 @@
+id = "experiment-private-data-v1"
+[[resource]]
+id = "private_credential"
+aliases = ["API_TOKEN", "WIN_TOKEN", "DB_PASSWORD", "JWT_SECRET", "secret token", "token field", "canary/token", "raw secret", "vault credential"]
+allowed_destinations = []

@@ -193,7 +193,9 @@ fn digest_of(path: &Path) -> Result<String, String> {
 #[cfg_attr(not(feature = "candle"), allow(dead_code))]
 pub(crate) fn to_permille(probability: f32) -> Result<u16, String> {
     if !probability.is_finite() || !(0.0..=1.0).contains(&probability) {
-        return Err(format!("classifier returned invalid probability {probability}"));
+        return Err(format!(
+            "classifier returned invalid probability {probability}"
+        ));
     }
     Ok((probability * 1000.0).round() as u16)
 }

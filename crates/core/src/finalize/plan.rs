@@ -63,7 +63,7 @@ impl<'a> ScanPlan<'a> {
                 max_reasons: policy.max_reasons,
                 max_excerpt_bytes: policy.max_excerpt_bytes,
             },
-            suppress_in_quotes: policy.suppress_in_quotes,
+            suppress_in_quotes: policy.suppresses_quotes(),
         }
     }
 

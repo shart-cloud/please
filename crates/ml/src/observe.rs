@@ -101,6 +101,7 @@ pub fn observe(segment: &Segment<'_>, config: &MlConfig) -> Option<Observation> 
             config.threshold
         ),
         chain: Vec::new(),
+        excerpt_truncated: false,
         suppressed_by: None,
     })
 }

@@ -1,0 +1,8 @@
+version = "2026-09-10.1"
+# English lexical evidence. Relationships and bounds are implemented in Rust.
+severity = 80
+window_tokens = 64
+export_verbs = ["send", "post", "upload", "transmit", "forward", "fetch", "report", "return", "print", "include", "emit", "append", "attach"]
+read_verbs = ["read", "get", "retrieve", "load", "extract", "enumerate", "collect"]
+value_references = ["it", "its", "value", "values", "stamp", "snapshot", "data", "body"]
+response_verbs = ["return", "print"]

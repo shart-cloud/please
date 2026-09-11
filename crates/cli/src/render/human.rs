@@ -25,6 +25,7 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
     match v.outcome() {
         Outcome::Clean => {
             out.push_str(&format!("{name} — clean\n"));
+            source_attribution(out, v);
             // Not an unconditional return. A clean verdict is exactly where the suppressed list matters
             // most: security prose whose every payload was correctly hidden reports clean, and "what did the
             // heuristic do here?" is precisely the question its author is asking (SC-110). Returning early
@@ -50,6 +51,8 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
             ));
         }
     }
+
+    source_attribution(out, v);
 
     for reason in v.reasons() {
         out.push_str(&format!(
@@ -116,6 +119,30 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         v.ruleset().digest
     ));
     judge_attribution(out, v);
+}
+
+fn source_attribution(out: &mut String, v: &Verdict) {
+    if let Some(policy) = v.scan_policy() {
+        if let Some(exports) = &policy.export_policy {
+            out.push_str(&format!(
+                "  export policy: {} ({})\n",
+                exports.id(),
+                exports.digest()
+            ));
+        }
+        if policy.source != please_core::ScanSource::Unspecified {
+            out.push_str(&format!(
+                "  source: {}; threshold: {}; quote suppression: {}\n",
+                policy.source.as_str(),
+                policy.threshold.as_str(),
+                if policy.suppress_in_quotes {
+                    "on"
+                } else {
+                    "off"
+                },
+            ));
+        }
+    }
 }
 
 /// The judgement tier's identity, beside the rule set's (FR-416, T041).
