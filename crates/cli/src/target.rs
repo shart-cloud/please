@@ -16,7 +16,7 @@
 //! were one function returning `Vec<Target>`, which meant a directory walk held every file's contents in
 //! memory before the first scan ran — peak memory tracked the corpus, and `contracts/cli.md` promises
 //! *"no input causes a crash, a hang, or unbounded memory"*. Split, the caller loads, scans, renders and
-//! drops one target at a time, so what is resident is the largest single file rather than the sum.
+//! drops one target at a time. Each read stops after the configured cap plus one byte.
 //!
 //! The path list is still built eagerly, and deliberately: a `PathBuf` is a couple of hundred bytes against
 //! a file's kilobytes-to-megabytes, and materialising it is what lets the walk be sorted once — which is
@@ -43,6 +43,8 @@ pub enum Source {
 
 /// Something to scan, or a reason it could not be examined.
 pub enum Target {
+    /// Reading stopped as soon as the input exceeded the budget; its total length is unknown.
+    Oversized { reference: TargetRef },
     /// Content read successfully.
     Content {
         bytes: Vec<u8>,
@@ -71,22 +73,6 @@ pub enum Target {
         reference: TargetRef,
         detail: String,
     },
-}
-
-/// Read a rule-set file for `--rules` (FR-023).
-///
-/// Here rather than in `main.rs` because this module owns the filesystem: the core takes text, never a path
-/// (`Ruleset::from_toml`), so somebody has to open the file and it may as well be the one place that already
-/// does.
-///
-/// **Deliberately not [`read_file`]**, and the difference is the whole point. That function maps a read
-/// failure to `Target::Unreadable`, which becomes an inconclusive verdict and lets the walk continue — right
-/// for one locked file among hundreds, wrong here. A `--rules` path that cannot be read is an invocation
-/// fault: the scan the operator asked for cannot be performed at all, and reporting it as inconclusive
-/// coverage would describe the wrong thing. It is exit 64 (`contracts/cli.md`).
-pub fn read_rules(path: &Path) -> Result<String, String> {
-    std::fs::read_to_string(path)
-        .map_err(|e| format!("cannot read rule set {}: {e}", path.display()))
 }
 
 /// Enumerate what will be scanned, in a deterministic order, **without reading any of it**.
@@ -132,10 +118,10 @@ pub fn plan(targets: &[String]) -> Result<Vec<Source>, String> {
 ///
 /// The counterpart to [`plan`]: called once per source, immediately before that target is scanned, so the
 /// bytes can be dropped as soon as its verdict is rendered.
-pub fn load(source: &Source) -> Result<Target, String> {
+pub fn load(source: &Source, max_input_bytes: u64) -> Result<Target, String> {
     match source {
-        Source::Stdin => read_stdin(),
-        Source::File { path, as_given } => Ok(read_file(path, as_given)),
+        Source::Stdin => read_stdin(max_input_bytes),
+        Source::File { path, as_given } => Ok(read_file(path, as_given, max_input_bytes)),
         // Reported rather than skipped, for the same reason an unreadable file is (FR-032a): a directory
         // summarised as clean on the strength of a subtree nobody looked at is the fail-open one level up.
         Source::NotTraversed { path, as_given } => {
@@ -148,38 +134,52 @@ pub fn load(source: &Source) -> Result<Target, String> {
     }
 }
 
-fn read_stdin() -> Result<Target, String> {
-    let mut bytes = Vec::new();
-    std::io::stdin()
-        .read_to_end(&mut bytes)
+fn read_stdin(max_input_bytes: u64) -> Result<Target, String> {
+    let bytes = read_bounded(std::io::stdin().lock(), max_input_bytes)
         .map_err(|e| format!("cannot read standard input: {e}"))?;
     let reference = TargetRef::stdin(bytes.len());
     // Applied to stdin as well as to files. `curl … | plz scan` is an advertised way to use this tool and
     // is exactly as capable of delivering a PDF as a walk is. The cost is that text in a non-UTF-8 legacy
     // encoding is declined rather than scanned — recorded in `docs/limits.md`, and it fails to
     // inconclusive rather than to clean, which is the direction Principle I requires it to fail in.
-    match is_text(&bytes) {
-        Ok(()) => Ok(Target::Content { bytes, reference }),
-        Err(detail) => Ok(Target::NotText { reference, detail }),
-    }
+    Ok(loaded(bytes, reference, max_input_bytes))
 }
 
 /// Read one file, preserving the path exactly as the caller wrote it.
-fn read_file(path: &Path, as_given: &str) -> Target {
+fn read_file(path: &Path, as_given: &str, max_input_bytes: u64) -> Target {
     let display = display_name(path, as_given);
 
-    match std::fs::read(path) {
+    match std::fs::File::open(path).and_then(|file| read_bounded(file, max_input_bytes)) {
         Ok(bytes) => {
             let reference = TargetRef::path(display, bytes.len());
-            match is_text(&bytes) {
-                Ok(()) => Target::Content { bytes, reference },
-                Err(detail) => Target::NotText { reference, detail },
-            }
+            loaded(bytes, reference, max_input_bytes)
         }
         Err(e) => Target::Unreadable {
             reference: TargetRef::path(display, 0),
             detail: e.to_string(),
         },
+    }
+}
+
+fn read_bounded(reader: impl Read, limit: u64) -> std::io::Result<Vec<u8>> {
+    // `take` supplies EOF after the sentinel byte, even if the underlying stream stays open.
+    // Do not reserve the caller's limit: a very large cap should not allocate before bytes arrive.
+    let mut bytes = Vec::new();
+    reader
+        .take(limit.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+fn loaded(bytes: Vec<u8>, mut reference: TargetRef, limit: u64) -> Target {
+    // Check size before text validity: the prefix may end in the middle of a UTF-8 character.
+    if bytes.len() as u64 > limit {
+        reference.bytes_is_lower_bound = true;
+        return Target::Oversized { reference };
+    }
+    match is_text(&bytes) {
+        Ok(()) => Target::Content { bytes, reference },
+        Err(detail) => Target::NotText { reference, detail },
     }
 }
 

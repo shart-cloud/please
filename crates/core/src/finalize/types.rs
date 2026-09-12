@@ -309,6 +309,8 @@ pub enum SuppressedBy {
     /// The observation is **still in the verdict**. It has moved between two lists, and this variant is the
     /// record of what moved it.
     Judge,
+    /// ML finding reviewed against caller-owned instruction boundaries.
+    MlReview,
 }
 
 impl SuppressedBy {
@@ -317,6 +319,7 @@ impl SuppressedBy {
         match self {
             Self::Quoting(context) => context.as_str(),
             Self::Judge => "judge",
+            Self::MlReview => "ml_review",
         }
     }
 
@@ -327,7 +330,7 @@ impl SuppressedBy {
     pub fn quoting(&self) -> Option<QuotingContext> {
         match self {
             Self::Quoting(context) => Some(*context),
-            Self::Judge => None,
+            Self::Judge | Self::MlReview => None,
         }
     }
 }
@@ -492,25 +495,18 @@ pub struct Features {
     pub stated_purpose_explains_content: StatedPurposeExplainsContent,
 }
 
-/// What the tier decided about one observation. **Two variants, and that is the security property.**
+/// A reviewer's recommendation about one observation.
 ///
-/// There is no `Cleared`, no `Escalated`, and no `Added`. Not "we validate against them" — they are **not
-/// representable**, so SC-406's property test is checking a type rather than a code path (FR-403).
-///
-/// The reasoning is about what an attacker wins rather than whether they succeed. The judge reads
-/// attacker-controlled text, so injection against it must be assumed to work sometimes. If it could clear a
-/// finding, capturing it would be a total bypass of the tool. Because demotion is the strongest thing it can
-/// express:
-///
-/// - the structural finding is never erased — it is in the verdict, with the judge named as what demoted it;
-/// - `--no-judge` reproduces the structural verdict exactly, so any dispute is one command to settle;
-/// - the caller's policy decides whether a judge-suppressed finding blocks (Principle I).
+/// Confirmation and demotion do not establish a security boundary by themselves. Advisory review
+/// preserves active evidence and scoring. With `ReviewAuthority::MayRelease`, demotion can remove
+/// findings from scoring and produce `Clean`; the reviewer then has enforcement authority.
+/// The bound scope retains the original evidence separately from the decisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpanJudgement {
     /// Nothing happens to the observation. It stays in [`Verdict::reasons`], byte-identical to the
     /// structural one — see [`JudgeReport`] for why no annotation is written onto the [`Reason`].
     Confirmed,
-    /// The observation moves to [`Verdict::suppressed`], annotated [`SuppressedBy::Judge`].
+    /// Recommend suppression. Applied only when the caller grants release authority.
     Demoted,
 }
 
@@ -555,12 +551,15 @@ pub struct JudgeReport {
     features: Features,
     judgements: Vec<SpanVerdict>,
     model_severity: Option<u8>,
+    scope: Option<super::review::ReviewScope>,
+    authority: super::review::ReviewAuthority,
 }
 
 impl JudgeReport {
     /// Build a report. Public because `please-judge` is a different crate and must be able to produce one —
     /// but note what that does **not** grant: producing a report is not producing a verdict. Only
-    /// [`crate::finalize::rejudge`] can apply one, and it can only narrow (FR-403).
+    /// [`crate::finalize::rejudge`] can attach it after binding to a captured review scope.
+    /// Constructing an unbound report grants no authority and it cannot be applied.
     pub fn new(
         model: impl Into<String>,
         prompt_version: impl Into<String>,
@@ -574,6 +573,8 @@ impl JudgeReport {
             features,
             judgements,
             model_severity,
+            scope: None,
+            authority: super::review::ReviewAuthority::Advisory,
         }
     }
 
@@ -595,6 +596,24 @@ impl JudgeReport {
 
     pub fn judgements(&self) -> &[SpanVerdict] {
         &self.judgements
+    }
+
+    pub fn scope(&self) -> Option<&super::review::ReviewScope> {
+        self.scope.as_ref()
+    }
+
+    pub fn authority(&self) -> super::review::ReviewAuthority {
+        self.authority
+    }
+
+    pub(super) fn with_scope(mut self, scope: super::review::ReviewScope) -> Self {
+        self.scope = Some(scope);
+        self
+    }
+
+    pub(super) fn with_authority(mut self, authority: super::review::ReviewAuthority) -> Self {
+        self.authority = authority;
+        self
     }
 
     // ── `model_severity` has no accessor, deliberately (FR-410) ─────────────────────────────────
@@ -696,6 +715,12 @@ impl MlSegmentResult {
 
     /// The malicious-class probability in per-mille, or `None` if the classifier did not read this
     /// segment. `None` is not a claim of benignity — see the field.
+    /// Raw classifier output in per-mille. It is not calibrated confidence in a real violation.
+    pub fn raw_score(&self) -> Option<u16> {
+        self.probability
+    }
+
+    /// Compatibility accessor for the former probability naming. Prefer `raw_score`.
     pub fn probability(&self) -> Option<u16> {
         self.probability
     }
@@ -718,7 +743,11 @@ pub struct MlReport {
     revision: String,
     digest: String,
     threshold: u16,
+    assessed_impact: Option<crate::policy::MlImpact>,
     segments: Vec<MlSegmentResult>,
+    inference: Option<crate::inference::InferenceIdentity>,
+    windows: std::sync::Arc<[crate::inference::MlWindowResult]>,
+    input_digest: Option<String>,
 }
 
 impl MlReport {
@@ -737,8 +766,49 @@ impl MlReport {
             revision: revision.into(),
             digest: digest.into(),
             threshold,
+            assessed_impact: None,
             segments,
+            inference: None,
+            windows: std::sync::Arc::from([]),
+            input_digest: None,
         }
+    }
+
+    pub fn with_inference(
+        mut self,
+        identity: crate::inference::InferenceIdentity,
+        windows: Vec<crate::inference::MlWindowResult>,
+    ) -> Self {
+        self.inference = Some(identity);
+        self.windows = windows.into();
+        self
+    }
+    pub fn inference(&self) -> Option<&crate::inference::InferenceIdentity> {
+        self.inference.as_ref()
+    }
+    pub fn windows(&self) -> &[crate::inference::MlWindowResult] {
+        &self.windows
+    }
+
+    pub fn with_impact(mut self, impact: crate::policy::MlImpact) -> Self {
+        self.assessed_impact = Some(impact);
+        self
+    }
+    pub fn assessed_impact(&self) -> Option<crate::policy::MlImpact> {
+        self.assessed_impact
+    }
+    pub fn calibration(&self) -> &'static str {
+        "uncalibrated"
+    }
+
+    /// Bind classifier attribution to the exact original input. Legacy unbound reports cannot clear.
+    pub fn with_input(mut self, input: &[u8]) -> Self {
+        self.input_digest = Some(super::ml_review::input_digest(input));
+        self
+    }
+
+    pub fn input_digest(&self) -> Option<&str> {
+        self.input_digest.as_deref()
     }
 
     /// The resolved model id. A verdict produced by one classifier is not evidence about another.
@@ -831,27 +901,29 @@ pub struct Reason {
     class: DetectionClass,
     span: Span,
     matched: String,
+    /// Presentation metadata: shortening the displayed excerpt does not mean input was skipped.
+    excerpt_truncated: bool,
     severity: u8,
     chain: Vec<Transform>,
     description: String,
     /// Widened from `Option<QuotingContext>` by feature 004 (T009). Quoting is no longer the only thing
     /// that can suppress an observation — see [`SuppressedBy`].
     suppressed_by: Option<SuppressedBy>,
+    ml_origin: Option<MlReport>,
+    contributes_class_breadth: bool,
 }
 
 impl Reason {
     /// Build a reason. Visible to finalization only.
     ///
-    /// Takes an already-neutralised excerpt, because the neutralisation happens in the caller
-    /// (`finalize::into_reason`) where the truncation it may cause can be recorded as a coverage gap. A
-    /// function that both sanitised and reported would have to either swallow that fact or return it,
-    /// and returning it is what the caller does.
+    /// Takes an already-neutralised excerpt and its display-truncation flag from `finalize::into_reason`.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn new(
         rule_id: String,
         class: DetectionClass,
         span: Span,
         matched: String,
+        excerpt_truncated: bool,
         severity: u8,
         chain: Vec<Transform>,
         description: String,
@@ -862,11 +934,36 @@ impl Reason {
             class,
             span,
             matched,
+            excerpt_truncated,
             severity,
             chain,
             description,
             suppressed_by,
+            ml_origin: None,
+            contributes_class_breadth: true,
         }
+    }
+
+    pub(super) fn mark_ml(&mut self) {
+        self.contributes_class_breadth = false;
+    }
+
+    /// Only structural observations supply measured behavioral classes for the breadth bonus.
+    pub fn contributes_class_breadth(&self) -> bool {
+        self.contributes_class_breadth
+    }
+
+    pub(super) fn bind_ml(&mut self, report: &MlReport) {
+        self.ml_origin = Some(report.clone());
+    }
+
+    /// Provenance established only at the ML finalization boundary, never from a rule name alone.
+    pub fn ml_origin(&self) -> Option<&MlReport> {
+        self.ml_origin.as_ref()
+    }
+
+    pub(super) fn demote_by_ml_review(&mut self) {
+        self.suppressed_by = Some(SuppressedBy::MlReview);
     }
 
     /// Namespaced rule identifier, e.g. `override.ignore_previous`. Also the suppression handle.
@@ -889,6 +986,25 @@ impl Reason {
     /// reverse.
     pub fn matched(&self) -> &str {
         &self.matched
+    }
+
+    /// Shorten an already neutralized excerpt without changing the retained evidence.
+    pub(super) fn project(&self, max_bytes: usize) -> Self {
+        let mut projected = self.clone();
+        if projected.matched.len() > max_bytes {
+            let mut end = max_bytes;
+            while !projected.matched.is_char_boundary(end) {
+                end -= 1;
+            }
+            projected.matched.truncate(end);
+            projected.excerpt_truncated = true;
+        }
+        projected
+    }
+
+    /// Whether the excerpt was shortened; this does not imply incomplete analysis.
+    pub fn excerpt_truncated(&self) -> bool {
+        self.excerpt_truncated
     }
 
     pub fn severity(&self) -> u8 {
@@ -944,7 +1060,12 @@ pub enum IncompleteCause {
     InputSize,
     DecodeDepth,
     MaxMatchesPerRule,
+    /// Historical report-limit gap, preserved when supplied by callers.
     MaxReasons,
+    MaxObservations,
+    /// Legacy cause retained for API and historical wire compatibility. Current finalization records
+    /// display truncation on `Reason::excerpt_truncated` instead. Explicit caller-supplied gaps are
+    /// still preserved; this variant is not a license to discard historical incomplete status.
     ExcerptLength,
 
     // ── Failures: something the environment did ─────────────────────────────────────────────────
@@ -985,6 +1106,7 @@ impl IncompleteCause {
             Self::InputSize
                 | Self::DecodeDepth
                 | Self::MaxMatchesPerRule
+                | Self::MaxObservations
                 | Self::MaxReasons
                 | Self::ExcerptLength
         )
@@ -996,6 +1118,7 @@ impl IncompleteCause {
             Self::DecodeDepth => "decode_depth",
             Self::MaxMatchesPerRule => "max_matches_per_rule",
             Self::MaxReasons => "max_reasons",
+            Self::MaxObservations => "max_observations",
             Self::ExcerptLength => "excerpt_length",
             Self::TargetUnreadable => "target_unreadable",
             Self::TargetNotTraversed => "target_not_traversed",
@@ -1072,6 +1195,8 @@ pub struct TargetRef {
     pub kind: TargetKind,
     pub name: Option<String>,
     pub bytes: usize,
+    /// True when acquisition stopped before EOF; `bytes` is only an observed lower bound.
+    pub bytes_is_lower_bound: bool,
 }
 
 impl TargetRef {
@@ -1080,6 +1205,7 @@ impl TargetRef {
             kind: TargetKind::Path,
             name: Some(name.into()),
             bytes,
+            bytes_is_lower_bound: false,
         }
     }
 
@@ -1088,6 +1214,7 @@ impl TargetRef {
             kind: TargetKind::Stdin,
             name: None,
             bytes,
+            bytes_is_lower_bound: false,
         }
     }
 
@@ -1096,6 +1223,7 @@ impl TargetRef {
             kind: TargetKind::Buffer,
             name: Some(name.into()),
             bytes,
+            bytes_is_lower_bound: false,
         }
     }
 }
@@ -1130,7 +1258,7 @@ impl EngineId {
 
 /// The complete result of one scan.
 ///
-/// Fields are private and [`Verdict::new`] is `pub(super)`, so [`crate::finalize`] is the only module
+/// Fields are private and construction is restricted to finalization, so [`crate::finalize`] is the only module
 /// that can produce one — which makes it the single place the [`Outcome::Clean`] invariant is decided
 /// (FR-120, and see the module documentation).
 ///
@@ -1140,99 +1268,99 @@ impl EngineId {
 /// a caller who could hand in whatever evidence they liked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
+    analysis: super::analysis::Analysis,
     outcome: Outcome,
     score: u8,
     risk: RiskLevel,
     reasons: Vec<Reason>,
     reasons_truncated: bool,
-    /// Observations quoting suppression hid, each carrying the context that hid it (FR-128).
-    ///
-    /// Deliberately a separate list from `reasons` rather than a flag on them. These are **not findings**:
-    /// they do not score, they do not affect the outcome, and a verdict whose only content is suppressions is
-    /// `Clean`. One list with a boolean would leave that distinction to every reader to remember, and the
-    /// reader who forgets reintroduces every security-prose false positive.
     suppressed: Vec<Reason>,
     suppressions_truncated: bool,
-    incomplete: Vec<Incompleteness>,
-    target: TargetRef,
-    ruleset: RulesetId,
-    engine: EngineId,
-    /// Present only on a verdict the judgement tier acted on (feature 004, FR-416).
-    ///
-    /// `None` on every default scan, and its absence is the machine-readable form of "this verdict is
-    /// purely structural, and 001's determinism guarantee applies to it unchanged" (FR-417).
-    judge: Option<JudgeReport>,
-    /// Present only on a verdict the ML tier acted on (feature 006, FR-654).
-    ///
-    /// `None` on every default scan, exactly as [`judge`](Self::judge) is, and carrying the same meaning:
-    /// this verdict is purely structural and 001's determinism guarantee applies to it unchanged.
-    ml: Option<MlReport>,
-    /// Effective structural scan policy. Absent on standalone finalization or I/O-only failures.
-    scan_policy: Option<crate::policy::ScanPolicy>,
 }
 
 impl Verdict {
-    /// Store an already-decided verdict. Visible to finalization only.
-    ///
-    /// Deliberately dumb: it derives nothing and validates nothing. Deciding the outcome, ordering the
-    /// reasons, and truncating them all happen in [`crate::finalize`], which is where the whole sequence
-    /// is visible at once and where the ordering has to precede the truncation.
-    ///
-    /// 001's `assemble` did the deriving *and* the sorting here, in the type. That reads as defensive —
-    /// the invariant lives with the data — but it split the sequence across two files: `engine.rs` had to
-    /// sort before truncating, then `assemble` sorted again because it could not know whether the caller
-    /// had. Two sorts and one authority is worse than one sort and one authority.
-    #[allow(clippy::too_many_arguments)]
-    pub(super) fn new(
-        outcome: Outcome,
-        score: u8,
-        risk: RiskLevel,
-        reasons: Vec<Reason>,
-        reasons_truncated: bool,
-        suppressed: Vec<Reason>,
-        suppressions_truncated: bool,
-        incomplete: Vec<Incompleteness>,
-        target: TargetRef,
-        ruleset: RulesetId,
-        engine: EngineId,
-    ) -> Self {
-        debug_assert!(
-            outcome != Outcome::Clean || (reasons.is_empty() && incomplete.is_empty()),
-            "FR-004: a clean verdict requires no reasons and no coverage gaps",
-        );
-        debug_assert!(
-            suppressed.iter().all(|r| r.suppressed_by().is_some()),
-            "a suppressed reason must name the context that suppressed it",
-        );
+    /// Store a projection. Only finalization can derive a decision or construct reasons.
+    pub(super) fn new(analysis: super::analysis::Analysis) -> Self {
+        let score = super::score::aggregate_evidence(&analysis.reasons);
+        let risk = analysis.bands.band(score);
+        let outcome = if !analysis.reasons.is_empty() {
+            Outcome::RiskFound
+        } else if !analysis.incomplete.is_empty() {
+            Outcome::Inconclusive
+        } else {
+            Outcome::Clean
+        };
+        let limit = analysis.bounds.max_reasons as usize;
+        let excerpt = analysis.bounds.max_excerpt_bytes as usize;
+        let reasons = analysis
+            .reasons
+            .iter()
+            .take(limit)
+            .map(|r| r.project(excerpt))
+            .collect();
+        let suppressed = analysis
+            .suppressed
+            .iter()
+            .take(limit)
+            .map(|r| r.project(excerpt))
+            .collect();
         Self {
             outcome,
             score,
             risk,
             reasons,
-            reasons_truncated,
             suppressed,
-            suppressions_truncated,
-            incomplete,
-            target,
-            ruleset,
-            engine,
-            // Never set here. A verdict is structural when it is built, and becomes judged only by passing
-            // through `rejudge` — which is what keeps the judged path strictly additive to a path that
-            // already works (FR-418).
-            judge: None,
-            ml: None,
-            scan_policy: None,
+            reasons_truncated: analysis.reasons.len() > limit,
+            suppressions_truncated: analysis.suppressed.len() > limit,
+            analysis,
         }
+    }
+
+    /// Retained evidence for composition; independent of the displayed reason and excerpt limits.
+    pub fn analysis(&self) -> &super::analysis::Analysis {
+        &self.analysis
+    }
+
+    /// Move the retained record without reconstructing evidence from the report.
+    pub fn into_analysis(self) -> super::analysis::Analysis {
+        self.analysis
+    }
+
+    pub fn input_digest(&self) -> Option<&str> {
+        self.analysis.input_digest.as_deref()
+    }
+
+    /// The exact calibration used by finalization; optional tiers must retain it.
+    pub fn bands(&self) -> &crate::ruleset::Bands {
+        &self.analysis.bands
+    }
+
+    pub(super) fn with_bands(mut self, bands: crate::ruleset::Bands) -> Self {
+        self.analysis.bands = bands;
+        self
+    }
+
+    pub fn matches_input(&self, input: &[u8]) -> bool {
+        self.input_digest() == Some(super::ml_review::input_digest(input).as_str())
+    }
+
+    pub(super) fn with_input_digest(mut self, digest: String) -> Self {
+        self.analysis.input_digest = Some(digest);
+        self
+    }
+
+    pub fn ml_review(&self) -> Option<&super::ml_review::MlReviewReport> {
+        self.analysis.ml_review.as_ref()
     }
 
     /// The caller-selected policy used by `Engine::scan`, including effective quote suppression.
     /// Optional tiers retain this snapshot; it does not describe their own configuration.
     pub fn scan_policy(&self) -> Option<&crate::policy::ScanPolicy> {
-        self.scan_policy.as_ref()
+        self.analysis.scan_policy.as_ref()
     }
 
     pub(super) fn with_scan_policy(mut self, policy: crate::policy::ScanPolicy) -> Self {
-        self.scan_policy = Some(policy);
+        self.analysis.scan_policy = Some(policy);
         self
     }
 
@@ -1243,15 +1371,7 @@ impl Verdict {
     /// can ever be judged, and each of which would then carry a `None` that reads as a decision rather than
     /// as an absence. A builder step on the one path that uses it says what is actually true.
     pub(super) fn with_judge(mut self, report: JudgeReport) -> Self {
-        self.judge = Some(report);
-        self
-    }
-
-    /// Attach an ML report. Visible to finalization only, for the reason [`with_judge`](Self::with_judge)
-    /// is: attaching the report is how a verdict claims the tier ran, and a caller able to make that claim
-    /// without running it could manufacture attribution for weights that never loaded.
-    pub(super) fn with_ml(mut self, report: MlReport) -> Self {
-        self.ml = Some(report);
+        self.analysis.judge = Some(report);
         self
     }
 
@@ -1260,7 +1380,7 @@ impl Verdict {
     /// `None` means no ML tier ran — **not** that it ran and found nothing. A tier that loaded and cleared
     /// every segment still returns a report, with the segments it read and no findings from them.
     pub fn ml(&self) -> Option<&MlReport> {
-        self.ml.as_ref()
+        self.analysis.ml.as_ref()
     }
 
     pub fn outcome(&self) -> Outcome {
@@ -1301,19 +1421,19 @@ impl Verdict {
     }
 
     pub fn incomplete(&self) -> &[Incompleteness] {
-        &self.incomplete
+        &self.analysis.incomplete
     }
 
     pub fn target(&self) -> &TargetRef {
-        &self.target
+        &self.analysis.target
     }
 
     pub fn ruleset(&self) -> &RulesetId {
-        &self.ruleset
+        &self.analysis.ruleset
     }
 
     pub fn engine(&self) -> &EngineId {
-        &self.engine
+        &self.analysis.engine
     }
 
     /// The judgement tier's report, present only when the tier acted on this verdict (FR-416).
@@ -1322,7 +1442,7 @@ impl Verdict {
     /// everything returns `Some` with every span `Confirmed`, and the difference matters: one verdict has a
     /// second opinion behind it and the other does not.
     pub fn judge(&self) -> Option<&JudgeReport> {
-        self.judge.as_ref()
+        self.analysis.judge.as_ref()
     }
 
     /// True when this verdict's risk meets or exceeds `threshold`.
@@ -1335,7 +1455,7 @@ impl Verdict {
 
     /// True when the caller should treat this scan's coverage as partial.
     pub fn is_incomplete(&self) -> bool {
-        !self.incomplete.is_empty()
+        !self.analysis.incomplete.is_empty()
     }
 
     /// One line describing this verdict, for a log or a denial message.
@@ -1347,17 +1467,23 @@ impl Verdict {
         match self.outcome {
             Outcome::Clean => "clean".to_string(),
             Outcome::Inconclusive => {
-                let causes: Vec<&str> = self.incomplete.iter().map(|i| i.cause.as_str()).collect();
+                let causes: Vec<&str> = self
+                    .analysis
+                    .incomplete
+                    .iter()
+                    .map(|i| i.cause.as_str())
+                    .collect();
                 format!("inconclusive ({})", causes.join(", "))
             }
             Outcome::RiskFound => {
                 let worst = self
+                    .analysis
                     .reasons
                     .iter()
                     .max_by_key(|r| r.severity)
                     .map(|r| r.rule_id.as_str())
                     .unwrap_or("unknown");
-                let extra = self.reasons.len().saturating_sub(1);
+                let extra = self.analysis.reasons.len().saturating_sub(1);
                 let more = if extra > 0 {
                     format!(" (+{extra} more)")
                 } else {
@@ -1444,15 +1570,26 @@ mod serialisation {
 
     impl Serialize for Reason {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            // `suppressed_by` is skipped when absent; the schema has it optional. Every other field is
-            // always present, including `description` — the schema permits omitting it, and a finding
+            // Optional presentation metadata is emitted only when true; older reports lack it.
+            // `suppressed_by` is skipped when absent. `description` is always present — the schema permits omitting it, and a finding
             // without its explanation is one nobody can act on, so it is always written.
-            let len = 7 + usize::from(self.suppressed_by.is_some());
+            let len = 7
+                + usize::from(!self.contributes_class_breadth)
+                + usize::from(self.suppressed_by.is_some())
+                + usize::from(self.excerpt_truncated);
             let mut o = s.serialize_struct("Reason", len)?;
+            if !self.contributes_class_breadth {
+                o.serialize_field("class_breadth", &false)?;
+            }
             o.serialize_field("rule_id", &self.rule_id)?;
             o.serialize_field("class", &self.class)?;
             o.serialize_field("span", &self.span)?;
             o.serialize_field("matched", &self.matched)?;
+            if self.excerpt_truncated {
+                o.serialize_field("excerpt_truncated", &true)?;
+            } else {
+                o.skip_field("excerpt_truncated")?;
+            }
             o.serialize_field("severity", &self.severity)?;
             o.serialize_field("chain", &self.chain)?;
             o.serialize_field("description", &self.description)?;
@@ -1486,7 +1623,7 @@ mod serialisation {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             // `name` is the path AS GIVEN, never absolutised, which is what keeps output identical across
             // working directories (SC-011).
-            let len = 2 + usize::from(self.name.is_some());
+            let len = 2 + usize::from(self.name.is_some()) + usize::from(self.bytes_is_lower_bound);
             let mut o = s.serialize_struct("TargetRef", len)?;
             o.serialize_field("kind", &self.kind)?;
             match &self.name {
@@ -1494,6 +1631,9 @@ mod serialisation {
                 None => o.skip_field("name")?,
             }
             o.serialize_field("bytes", &self.bytes)?;
+            if self.bytes_is_lower_bound {
+                o.serialize_field("bytes_is_lower_bound", &true)?;
+            }
             o.end()
         }
     }
@@ -1549,11 +1689,17 @@ mod serialisation {
             // readable, which is the one thing the field must not be until there is a corpus to calibrate
             // against. The schema rejects it too — `additionalProperties: false` — so this is enforced
             // twice, by the type having no accessor and by the contract test.
-            let mut o = s.serialize_struct("JudgeReport", 4)?;
+            let mut o =
+                s.serialize_struct("JudgeReport", 5 + 2 * usize::from(self.scope.is_some()))?;
             o.serialize_field("model", &self.model)?;
             o.serialize_field("prompt_version", &self.prompt_version)?;
             o.serialize_field("features", &self.features)?;
             o.serialize_field("judgements", &self.judgements)?;
+            o.serialize_field("authority", self.authority.as_str())?;
+            if let Some(scope) = &self.scope {
+                o.serialize_field("request_id", &scope.identity())?;
+                o.serialize_field("evidence_ids", &scope.evidence_ids())?;
+            }
             o.end()
         }
     }
@@ -1569,8 +1715,8 @@ mod serialisation {
             o.serialize_field("span", &self.span)?;
             o.serialize_field("mode", &self.mode)?;
             match &self.probability {
-                Some(v) => o.serialize_field("probability", v)?,
-                None => o.skip_field("probability")?,
+                Some(v) => o.serialize_field("raw_score", v)?,
+                None => o.skip_field("raw_score")?,
             }
             match &self.outlier {
                 Some(v) => o.serialize_field("outlier", v)?,
@@ -1582,12 +1728,28 @@ mod serialisation {
 
     impl Serialize for MlReport {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-            let mut o = s.serialize_struct("MlReport", 5)?;
+            let mut o = s.serialize_struct(
+                "MlReport",
+                6 + 2 * usize::from(self.inference.is_some())
+                    + usize::from(self.input_digest.is_some())
+                    + usize::from(self.assessed_impact.is_some()),
+            )?;
+            if let Some(digest) = &self.input_digest {
+                o.serialize_field("input_digest", digest)?;
+            }
+            o.serialize_field("calibration", self.calibration())?;
+            if let Some(impact) = &self.assessed_impact {
+                o.serialize_field("assessed_impact", impact)?;
+            }
             o.serialize_field("model", &self.model)?;
             o.serialize_field("revision", &self.revision)?;
             o.serialize_field("digest", &self.digest)?;
             o.serialize_field("threshold", &self.threshold)?;
             o.serialize_field("segments", &self.segments)?;
+            if let Some(identity) = &self.inference {
+                o.serialize_field("inference", identity)?;
+                o.serialize_field("windows", self.windows.as_ref())?;
+            }
             o.end()
         }
     }
@@ -1595,10 +1757,14 @@ mod serialisation {
     impl Serialize for Verdict {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             let len = 11
-                + usize::from(self.judge.is_some())
-                + usize::from(self.ml.is_some())
-                + usize::from(self.scan_policy.is_some());
+                + usize::from(self.analysis.ml_review.is_some())
+                + usize::from(self.analysis.judge.is_some())
+                + usize::from(self.analysis.ml.is_some())
+                + usize::from(self.analysis.scan_policy.is_some());
             let mut o = s.serialize_struct("Verdict", len)?;
+            if let Some(report) = &self.analysis.ml_review {
+                o.serialize_field("ml_review", report)?;
+            }
             o.serialize_field("outcome", &self.outcome)?;
             o.serialize_field("score", &self.score)?;
             o.serialize_field("risk", &self.risk)?;
@@ -1606,23 +1772,23 @@ mod serialisation {
             o.serialize_field("reasons_truncated", &self.reasons_truncated)?;
             o.serialize_field("suppressed", &self.suppressed)?;
             o.serialize_field("suppressions_truncated", &self.suppressions_truncated)?;
-            o.serialize_field("incomplete", &self.incomplete)?;
-            o.serialize_field("target", &self.target)?;
-            o.serialize_field("ruleset", &self.ruleset)?;
-            o.serialize_field("engine", &self.engine)?;
-            match &self.scan_policy {
+            o.serialize_field("incomplete", &self.analysis.incomplete)?;
+            o.serialize_field("target", &self.analysis.target)?;
+            o.serialize_field("ruleset", &self.analysis.ruleset)?;
+            o.serialize_field("engine", &self.analysis.engine)?;
+            match &self.analysis.scan_policy {
                 Some(policy) => o.serialize_field("scan_policy", policy)?,
                 None => o.skip_field("scan_policy")?,
             }
             // Absent, not null, when no judge ran — and the ABSENCE is meaningful. `judge: null` would say
             // "a judge ran and produced nothing", which is a different claim (004 FR-416).
-            match &self.judge {
+            match &self.analysis.judge {
                 Some(report) => o.serialize_field("judge", report)?,
                 None => o.skip_field("judge")?,
             }
             // Absent, not null, for the same reason `judge` is: `ml: null` would say the tier ran and
             // produced nothing, which is a different claim from not having run (006 FR-654).
-            match &self.ml {
+            match &self.analysis.ml {
                 Some(report) => o.serialize_field("ml", report)?,
                 None => o.skip_field("ml")?,
             }

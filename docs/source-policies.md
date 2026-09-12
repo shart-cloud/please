@@ -1,80 +1,48 @@
-# Caller-controlled source policies
+# Caller-owned profiles, provenance, and context
 
-The lab chooses a source from its own routing and intended use. The scanned text cannot select it.
-A code fence in a security lesson and a code fence in an untrusted tool response have different
-operational meanings, even when they contain exactly the same instruction.
+Scan purpose and input origin are separate. The scanned document cannot select either.
 
-## Policy contract
-
-| Source | Quote suppression | Intended use |
+| Profile | Quote suppression | Use |
 | --- | --- | --- |
-| `unspecified` | On by default; caller can disable | Compatibility with existing callers |
-| `security_reference` | On by default; caller can disable | Material the caller selected as a lesson, advisory, or reference for analysis |
-| `untrusted_tool_response` | Always off | Lower-trust tool output, including MCP tool responses |
-| `untrusted_user_input` | Always off | Untrusted user task requests subject to application instructions |
+| `enforcement` (default) | Always off | Checking content before an agent consumes it |
+| `reference_analysis` | On unless the caller disables it | Explicitly analyzing quoted examples as reference material |
 
-All four start at the shipped `High` threshold and enable all eight classes. They use the same
-bounds: 1 MiB input, decode depth 3, 16 matches per rule, 64 reasons, and 256-byte excerpts.
-The caller can change the threshold, class selection, and limits. The untrusted-source policies override
-`suppress_in_quotes = true` so a direct struct update cannot accidentally restore quote suppression.
-`--no-suppress-in-quotes` also works with security references.
+`InputProvenance` independently records `unspecified`, `caller_provided`, `user_input`, or
+`tool_response`. Reference analysis is a caller choice, including when the reference arrived through
+a tool; it does not promote that tool's authority. Review remains advisory unless release is
+explicitly authorized.
 
-`security_reference` is not a declaration that all content is safe: an unquoted instruction still
-fires, and concealment and other detections that already fire in quotes retain their behavior.
-Do not promote a tool response to security reference because it calls itself a lesson, includes
-frontmatter, has a `.md` filename, or asks the scanner to change policy. If a reference is deliberately
-retrieved through a tool, the application must establish that intended use independently of the response.
-
-## Try the paired examples
-
-From the repository root, after building the CLI:
-
-```bash
-cargo build -p please-cli --offline --locked
-./target/debug/plz scan --format json --source security-reference tests/fixtures/source-policy/security-lesson.md
-# exit 0: quoted findings retained in suppressed
-./target/debug/plz scan --format json --source untrusted-tool-response tests/fixtures/source-policy/tool-response.md
-# exit 1: the same instruction is active and reaches High
+```sh
+plz scan --profile enforcement --provenance tool-response response.txt
+plz scan --profile reference-analysis --provenance caller-provided lesson.md
 ```
-
-You can also scan the *same file* twice with different `--source` values. Source context is independent
-of its bytes. `--source` applies to every target in an invocation; use separate invocations for mixed
-sources. Omitting it preserves historical detection behavior.
-
-In Rust, reuse the engine and choose the policy at the integration boundary:
 
 ```rust
-use please_core::{Engine, ScanPolicy, ScanSource, TargetRef};
-
-let engine = Engine::builtin()?;
-let tool_policy = ScanPolicy::for_source(ScanSource::UntrustedToolResponse);
-let bytes = b"tool result supplied by the lab";
-let verdict = engine.scan(bytes, &tool_policy, TargetRef::buffer("search-result", bytes.len()));
+use please_core::{InputProvenance, ScanPolicy};
+let policy = ScanPolicy {
+    provenance: InputProvenance::ToolResponse,
+    ..ScanPolicy::default()
+};
+let session = please_scan::ScanSession::new(&engine, policy);
+let verdict = session.scan(bytes, target);
 ```
 
-The scanner reports evidence. The lab still owns blocking: block findings at or above its threshold,
-handle incomplete coverage explicitly, and decide what to do with below-threshold findings. Checking
-only `score` can mistake an inconclusive zero-score result for a clean result. The score is a heuristic,
-not a calibrated probability.
+The default threshold is High. Input, matching, decoding, retained observation, and display budgets
+remain independent. `suppress_in_quotes=true` cannot override enforcement. JSON and human output
+record the effective profile and provenance.
 
-## Attribution and optional tiers
+`ScanSource` / `--source` remain compatibility adapters: a security reference explicitly selects
+reference analysis; user/tool input selects enforcement. Omitting source no longer preserves the
+old quote-suppressing default. New callers should select profile and provenance separately.
 
-`Verdict::scan_policy()` records the effective structural policy, including source, threshold,
-suppression, classes, and limits. JSON emits this as `scan_policy`, even for an input-size refusal.
-ML merges, judgment, and subsequent failures retain it. Standalone finalization and I/O-only
-failures have no scan policy snapshot. Human CLI output names an explicitly selected source,
-threshold, and suppression setting for clean, risky, and inconclusive scans.
+Bind host-owned task and permission context with `ScanPolicy::caller_context` before scanning, or
+use `--judge --review-context PATH` with established provenance. Reports expose only its identity;
+the requested judge receives the context text. Content under analysis cannot grant permissions.
+The detailed [migration and pipeline notes](research/policy-and-pipeline-2026-09-11.md) explain the
+API, output changes, independent ML impact policy, and shared evaluation path.
 
-The judge receives caller source context outside the document envelope. Tool-response candidates
-remain active through structural scanning and can therefore reach the judge. A security reference
-with only suppressed findings still skips judgment. Judgment can demote active findings; its decisions
-under the new context have not been measured with a live provider. This milestone's acceptance
-results cover structural scanning, not the accuracy of combined structural/ML/judge decisions.
-The request version is `2026-09-10.3`.
-
-API compatibility: `ScanPolicy` has a new `source` field; exhaustive struct literals need to supply it
-or use `..ScanPolicy::default()`. Existing `Engine::scan` calls continue to work. JSON has a new optional
-`scan_policy` field in the published schema; consumers using an older strict schema must update it.
+The following acceptance evidence describes the earlier compatibility source configuration, not a
+new measurement of default enforcement or any optional model tier.
 
 ## Paired acceptance evidence — 2026-09-10
 

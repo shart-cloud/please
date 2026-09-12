@@ -162,13 +162,13 @@ impl Engine {
     /// mutual agreement the score depended on.
     pub fn scan(&self, input: &[u8], policy: &ScanPolicy, target: TargetRef) -> Verdict {
         let verdict = self.scan_inner(input, policy, target);
-        finalize::record_scan_policy(verdict, policy.effective())
+        finalize::record_scan_policy(verdict, policy.effective(), input, self.bands())
     }
 
     fn scan_inner(&self, input: &[u8], policy: &ScanPolicy, target: TargetRef) -> Verdict {
         let plan = ScanPlan::resolve(policy);
         let bounds = plan.bounds();
-        let mut evidence = Evidence::new();
+        let mut evidence = Evidence::bounded(bounds.max_observations);
 
         // ── Size gate ───────────────────────────────────────────────────────────────────────────
         //
@@ -205,11 +205,12 @@ impl Engine {
         //
         // Two matching passes, each extracted below so this function reads as the sequence of stages it is
         // rather than as the stages themselves (T061).
-        let direct = self.observe_matches(
+        let mut direct = self.observe_matches(
             input,
             bounds.max_matches_per_rule,
-            bounds.max_excerpt_bytes,
+            finalize::analysis::RETAINED_EXCERPT_BYTES as u32,
             &mut evidence,
+            quoting.frame_map(),
         );
         let mut decoded = self.observe_decoded(&plan, &expansion, &mut evidence);
         if policy.export_policy.is_some() {
@@ -224,23 +225,9 @@ impl Engine {
             }
         }
 
-        // ── Frame ───────────────────────────────────────────────────────────────────────────────
-        //
-        // Before suppression, and on direct matches only. A frame-anchored rule that matched outside a
-        // frame was never a finding, so it goes into no channel at all — see `detect::apply_frame` for
-        // why that distinction is worth the extra pass.
-        //
-        // Decoded observations are EXEMPT, for the same reason they are exempt from suppression one stage
-        // below: a decoded candidate has no meaningful structure of its own. Its offsets index a
-        // transformed buffer, and the structure map describes the original — asking whether byte 400 of a
-        // base64 decode begins a markdown table cell is not a question with an answer. The whole-input
-        // transforms make this concrete: their span is the entire document, so every decoded observation
-        // would sit at offset 0, which is a frame, and the filter would be a no-op that looked like a
-        // check.
-        let mut direct = detect::apply_frame(direct, input, &quoting, |rule_id| {
-            self.matcher.is_frame_anchored(rule_id)
-        });
-
+        // Rule matches already met their anchor requirements in the bytes searched. Decoded
+        // matches use their decoded buffer's frame metadata, before original-span attribution.
+        // Export observations have their own eligibility rules and remain a separate producer.
         direct.extend(crate::export::observe(input, policy, &mut evidence));
 
         // ── Suppression ─────────────────────────────────────────────────────────────────────────
@@ -334,7 +321,7 @@ impl Engine {
         )
     }
 
-    /// Turn every rule match on `haystack` into an observation.
+    /// Turn every frame-eligible rule match on `haystack` into an observation.
     ///
     /// No index anywhere: the matcher yields a [`RuleMatch`](crate::matcher::RuleMatch) carrying the rule
     /// itself, so everything an observation needs is reachable without knowing where the rule sits (T076,
@@ -345,9 +332,10 @@ impl Engine {
         max_matches: u32,
         max_excerpt: u32,
         evidence: &mut Evidence,
+        frames: crate::structure::FrameMap,
     ) -> Vec<Observation> {
         self.matcher
-            .find(haystack, max_matches, evidence)
+            .find_with_frames(haystack, max_matches, evidence, Some(frames))
             .into_iter()
             .map(|found| {
                 let (matched, excerpt_truncated) = sanitize_bytes(
@@ -396,8 +384,10 @@ impl Engine {
             if matched_rules.is_empty() {
                 continue;
             }
-            let (excerpt, excerpt_truncated) =
-                crate::sanitize::sanitize_str(&candidate.text, bounds.max_excerpt_bytes as usize);
+            let (excerpt, excerpt_truncated) = crate::sanitize::sanitize_str(
+                &candidate.text,
+                finalize::analysis::RETAINED_EXCERPT_BYTES,
+            );
             for rule in matched_rules {
                 observations.push(Observation {
                     rule_id: rule.id.clone(),

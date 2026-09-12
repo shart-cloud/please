@@ -376,6 +376,16 @@ A judgement already applied is re-attached rather than dropped, since `assemble`
 
 ## Phase 2 — CLI integration
 
+**September 11 integration milestone:** the optional `ml-candle` CLI now supports
+`--ml --ml-config PATH.json` and `--no-ml`, with one model load per invocation. The public
+`please_ml::scan` function classifies the whole original document, including structurally clean
+inputs, and composes findings through `with_ml` before optional judge review. JSON uses the existing
+ML schema; human output shows model/threshold/probability attribution. Missing weights and inference
+failures retain coverage gaps. An ignored real-weight CLI test is included in the inference gate.
+See [current commands](quickstart.md). This partially implements T020 and T024 and implements T023.
+T021's selective/corroboration recipe below is superseded; embedding and acquisition CLI commands
+in T022 remain unimplemented. Corpus accuracy and a production threshold remain unmeasured.
+
 ### T020 — `--ml` flag and model loading
 
 Add `--ml`, `--ml-classify`, `--ml-embed`, `--ml-full`, `--ml-threshold`, `--model-path`, and `--ml-model`

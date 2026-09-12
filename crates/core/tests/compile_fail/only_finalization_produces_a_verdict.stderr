@@ -1,16 +1,10 @@
 error[E0624]: associated function `new` is private
  --> tests/compile_fail/only_finalization_produces_a_verdict.rs
   |
-  |       let _verdict = Verdict::new(
-  |                               ^^^ private associated function
+  |     let _ = Verdict::new(analysis);
+  |                      ^^^ private associated function
   |
  ::: src/finalize/types.rs
   |
-  | /     pub(super) fn new(
-  | |         outcome: Outcome,
-  | |         score: u8,
-  | |         risk: RiskLevel,
-... |
-  | |         engine: EngineId,
-  | |     ) -> Self {
-  | |_____________- private associated function defined here
+  |     pub(super) fn new(analysis: super::analysis::Analysis) -> Self {
+  |     -------------------------------------------------------------- private associated function defined here

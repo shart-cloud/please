@@ -1,43 +1,16 @@
-//! Verdict finalization — the one place that decides what a verdict says (FR-120).
+//! Finalization owns retained analysis, scoring, and report projection.
 //!
-//! Feature 001 built verdicts in three places in `engine.rs`: the size gate, the main path, and the
-//! unreadable target, each assembling a `VerdictParts` by hand. Three producers means three chances to
-//! forget the aggregate-before-truncate rule, three orderings of reasons that have to agree, and a class
-//! of bug that code review either catches or does not. The parts struct is gone (T020) and so are the
-//! other two producers; [`finalize`] is the only route to a [`Verdict`](types::Verdict).
-//!
-//! Detectors produce [`Evidence`](evidence::Evidence) and nothing else. That makes several disciplines
-//! from 001 structural rather than remembered:
-//!
-//!   * reason ordering has one definition, because there is one producer (FR-125);
-//!   * the observation-to-reason transition, including excerpt neutralisation, happens at one boundary,
-//!     so FR-021 holds for every consumer including the ones that forget (FR-126);
-//!   * a detector cannot construct a `Reason` at all, because the constructors are `pub(super)` and a
-//!     detector is not a submodule of this one (FR-121, and see `tests/compile_fail/`).
-//!
-//! The verdict types live *inside* this module rather than beside it for exactly that last reason: Rust
-//! cannot grant construction rights to a sibling, so a module that must be the sole producer has to be
-//! the module the types are defined in (research P3, and [`types`] documents it at length).
-//!
-//! # The score is derived here, not accepted here (T058, T060)
-//!
-//! [`finalize`] takes no score. It aggregates one from the evidence it was handed, and bands it with the
-//! table the caller supplied.
-//!
-//! Until T058 the score arrived as an argument, which meant the caller had to hold its own collection of
-//! `(severity, class)` pairs alongside the accumulator in order to compute it. `Engine::scan` in 001 held six
-//! overlapping collections and the score's correctness was the agreement between the first and the last,
-//! maintained by a comment. With one accumulator and no way for a caller to read it, aggregating over
-//! everything found is the only thing expressible — the bug class goes away rather than the instance
-//! (FR-124).
-//!
-//! Note which of the two is still an input. The **band table** is data a deployment retunes without a
-//! rebuild, so it is supplied. The **score** is a function of the evidence, so it is not. 001 accepted both
-//! and then silently overwrote them for non-`RiskFound` outcomes, so a call site reading `score: 42` produced
-//! a verdict saying 0 — the adjustment FR-127 objects to. There is now nothing to overwrite.
+//! Detectors write observations and coverage gaps. Finalization retains bounded, neutralized evidence
+//! in `Analysis`; optional tiers update that record and attach their reports. `Verdict` projects the
+//! retained record with display limits. No optional tier reconstructs evidence from displayed reasons.
+//! Scores and outcomes always derive from active retained findings and actual coverage gaps.
 
+pub mod analysis;
 pub mod evidence;
+pub use analysis::Analysis;
+pub mod ml_review;
 pub mod plan;
+pub mod review;
 pub mod score;
 pub mod types;
 
@@ -45,10 +18,9 @@ use crate::ruleset::Bands;
 use crate::sanitize::sanitize_str;
 use evidence::{CoverageGap, Evidence, Observation, Suppression};
 use plan::Bounds;
-use score::aggregate;
 use types::{
-    DetectionClass, EngineId, IncompleteCause, Incompleteness, JudgeReport, MlReport, Outcome,
-    Reason, RiskLevel, RulesetId, SpanJudgement, SuppressedBy, TargetRef, Verdict,
+    IncompleteCause, JudgeReport, MlReport, Reason, RulesetId, SpanJudgement, SuppressedBy,
+    TargetRef, Verdict,
 };
 
 /// Everything a verdict needs that is **not** evidence: who scanned, what with, and the band table.
@@ -73,173 +45,59 @@ pub struct Attribution {
     pub bands: Bands,
 }
 
-/// Turn evidence into a verdict. **The only producer** (FR-120).
-///
-/// The order of operations is the design, and each step is here rather than in a caller because a caller
-/// doing it is a caller who can do it differently:
-///
-/// 1. every observation becomes a reason, neutralising its excerpt — and recording a gap if the excerpt
-///    had to be truncated to fit (FR-122, FR-126);
-/// 2. reasons are put into a total order (FR-125);
-/// 3. the order is truncated to the reason bound, recording that as a gap;
-/// 4. the outcome is derived from what is left plus every gap.
-///
-/// Step 3 after step 2 is not incidental. The order is by byte offset rather than by severity, so
-/// truncating an unordered list would keep whichever reasons the rule iteration order happened to produce
-/// (SC-011) — and truncating *before* aggregating the score would let a dropped high-severity finding
-/// understate the score (FR-001b). Which is why the score is taken in step 0, from the observations, before
-/// anything here has had the chance to drop one.
+/// Retain bounded evidence and derive a report. Display bounds are applied only by the projection.
 pub fn finalize(evidence: Evidence, bounds: Bounds, attribution: Attribution) -> Verdict {
-    let (observations, mut gaps, suppressions) = evidence.into_parts();
-
-    // ── Score, before anything can be dropped ───────────────────────────────────────────────────
-    //
-    // First, deliberately. Aggregating here rather than after truncation is FR-001b, and doing it from the
-    // observations rather than from a value handed in is FR-124: there is one collection, so there is nothing
-    // for a second one to disagree with.
-    let severities: Vec<(u8, DetectionClass)> = observations
-        .iter()
-        .map(|observation| (observation.severity, observation.class))
-        .collect();
-    let score = aggregate(&severities);
-    let risk = attribution.bands.band(score);
-
-    // ── Observations become reasons ─────────────────────────────────────────────────────────────
-    let mut reasons: Vec<Reason> = Vec::with_capacity(observations.len());
+    let (observations, gaps, suppressions) = evidence.into_parts();
+    let mut analysis = Analysis::new(bounds, attribution);
+    analysis
+        .incomplete
+        .extend(gaps.into_iter().map(CoverageGap::into_incompleteness));
     for observation in observations {
-        let (reason, excerpt_truncated) =
-            into_reason(observation, bounds.max_excerpt_bytes as usize);
-        if excerpt_truncated {
-            // Recorded here rather than by the sanitiser, which returns a boolean and has no idea whose
-            // excerpt it shortened or what the bound was called (FR-122).
-            gaps.push(CoverageGap::bound(
-                IncompleteCause::ExcerptLength,
-                bounds.max_excerpt_bytes as u64,
-                format!("excerpt for `{}` truncated", reason.rule_id()),
-            ));
-        }
-        reasons.push(reason);
+        analysis.observe(observation, None);
     }
-
-    // ── Suppressions become annotated reasons ───────────────────────────────────────────────────
-    //
-    // Same conversion as a reported reason, deliberately: `--explain` prints these, so the excerpt has to be
-    // neutralised by the same code that neutralises everything else (FR-021). An excerpt that is safe only
-    // when it is reported is not safe.
-    //
-    // No coverage gap is recorded when a suppressed excerpt is truncated. The reader is not being shown the
-    // whole excerpt of something they are not being shown at all, and a gap here would flip the verdict of
-    // every document that quotes a payload to `Inconclusive`.
-    let mut suppressed: Vec<Reason> = suppressions
-        .into_iter()
-        .map(
-            |Suppression {
-                 mut observation,
-                 context,
-             }| {
-                observation.suppressed_by = Some(context);
-                into_reason(observation, bounds.max_excerpt_bytes as usize).0
-            },
-        )
-        .collect();
-
-    // ── One ordering definition ─────────────────────────────────────────────────────────────────
-    order(&mut reasons);
-    order(&mut suppressed);
-
-    let mut suppressions_truncated = false;
-    if suppressed.len() > bounds.max_reasons as usize {
-        // Bounded for the reason reasons are (FR-007): a document quoting ten thousand payloads must not
-        // produce a ten-thousand-entry report. NOT recorded as incompleteness — see above.
-        suppressions_truncated = true;
-        suppressed.truncate(bounds.max_reasons as usize);
+    for Suppression {
+        observation,
+        context,
+    } in suppressions
+    {
+        analysis.observe(observation, Some(context));
     }
-
-    // ── Truncate ────────────────────────────────────────────────────────────────────────────────
-    let mut reasons_truncated = false;
-    if reasons.len() > bounds.max_reasons as usize {
-        reasons_truncated = true;
-        gaps.push(CoverageGap::bound(
-            IncompleteCause::MaxReasons,
-            bounds.max_reasons as u64,
-            format!("{} reasons found", reasons.len()),
-        ));
-        reasons.truncate(bounds.max_reasons as usize);
-    }
-
-    let incomplete: Vec<Incompleteness> = gaps
-        .into_iter()
-        .map(CoverageGap::into_incompleteness)
-        .collect();
-
-    assemble(
-        reasons,
-        reasons_truncated,
-        suppressed,
-        suppressions_truncated,
-        incomplete,
-        score,
-        risk,
-        attribution,
-    )
+    analysis.finish()
 }
 
-/// Apply a judgement to a finalized verdict (feature 004, FR-403).
+/// Attach a bound advisory review using the original calibration.
 ///
-/// **The judge supplies decisions; it does not assemble verdicts.** `Verdict::new` is `pub(super)` to this
-/// module, so `please-judge` — a different crate entirely — cannot construct one. That is not an obstacle
-/// worked around here, it is the guarantee 002 spent a phase establishing, preserved by giving the judgement
-/// tier a seam instead of a constructor. `tests/seams.rs` still asserts exactly one `Verdict::new(` call
-/// site, and this function routes through [`assemble`] like everything else.
-///
-/// # What it can do
-///
-/// Move an observation from `reasons` into `suppressed`, annotated [`SuppressedBy::Judge`]. That is all. It
-/// cannot erase one, cannot raise a severity, and cannot introduce one — not because those are validated
-/// against but because [`SpanJudgement`] has two variants and neither expresses them. For any report
-/// whatsoever, including a maximally hostile one:
-///
-/// ```text
-/// judged.reasons() ∪ judged.suppressed()  ==  structural.reasons() ∪ structural.suppressed()
-/// max severity in judged                  ≤   max severity in structural
-/// ```
-///
-/// # Why a truncated verdict is refused (plan D9, FR-421)
-///
-/// [`finalize`] aggregates the score **from the observations, before anything can be dropped** (FR-001b) —
-/// it is step 0 up there, deliberately. By the time a `Verdict` exists, the reasons have been ordered and
-/// truncated to `max_reasons`, and the severities of everything past the bound are gone.
-///
-/// So a `rejudge` that recomputed from the surviving reasons would silently *lower* the score on any
-/// truncated verdict — not because a judgement demoted anything, but because the truncated contributions
-/// were never there to begin with. That is a fail-open reachable by arithmetic alone, in a tier whose entire
-/// premise is that degradation goes to `Inconclusive` and never to something cheerful.
-///
-/// The alternative was to have `Verdict` retain its pre-truncation severities. It is exact, it may become
-/// necessary once there is a corpus, and it makes core carry state whose only consumer is an optional tier —
-/// which is the one thing D1 says core does not do. Refusing costs a document that produced more than
-/// `max_reasons` findings, and a document with more than sixty-four findings is not one whose *precision*
-/// problem a second opinion was going to fix.
-///
-/// # Bands are supplied, not remembered
-///
-/// A `Verdict` records its score and its risk band but not the table that mapped one to the other, because
-/// until now nothing needed to re-band. Demotion changes the score, so the table has to come back — from
-/// [`crate::Engine::bands`], the same one the scan used. Passing it explicitly is what stops a re-band
-/// against a different table than the original, which would produce a verdict quietly disagreeing with
-/// itself.
+/// This compatibility entry point checks the independently supplied band table and never grants
+/// release authority. Use `rejudge_with_authority` for an explicit policy choice. Unbound reports,
+/// changed evidence or policy, and duplicate decisions are refused atomically.
+/// Capture a `review::ReviewScope` before obtaining the response and bind the report to that scope.
 pub fn rejudge(verdict: Verdict, report: JudgeReport, bands: &Bands) -> Verdict {
-    if verdict.reasons_truncated() {
+    if verdict.bands() != bands {
+        return refuse_to_judge(verdict, "review calibration does not match the scan");
+    }
+    rejudge_with_authority(verdict, report, review::ReviewAuthority::Advisory)
+}
+
+/// Apply a request-bound report under explicit caller authority, using the scan's own calibration.
+pub fn rejudge_with_authority(
+    verdict: Verdict,
+    report: JudgeReport,
+    authority: review::ReviewAuthority,
+) -> Verdict {
+    if !report
+        .scope()
+        .is_some_and(|scope| scope.valid_for(&verdict))
+    {
         return refuse_to_judge(
             verdict,
-            "verdict truncated before judgement; the score cannot be recomputed exactly",
+            "review is unbound or does not match the input, evidence, or policy",
         );
     }
 
-    // Indices are into the structural `reasons()` as the judge saw them. An index past the end is a report
+    // Indices are into the retained `analysis().reasons()` as the judge saw them. An index past the end is a report
     // about a different verdict, and applying part of it would demote whichever reason happened to sit at a
     // valid index — arbitrary, and arbitrary in the attacker's favour half the time.
-    let count = verdict.reasons().len();
+    let count = verdict.analysis().reasons().len();
     if report
         .judgements()
         .iter()
@@ -253,15 +111,25 @@ pub fn rejudge(verdict: Verdict, report: JudgeReport, bands: &Bands) -> Verdict 
 
     let demoted: Vec<bool> = {
         let mut flags = vec![false; count];
+        let mut seen = vec![false; count];
         for judgement in report.judgements() {
-            // `|=` rather than `=`: two judgements naming the same index cannot un-demote each other.
-            // Contradiction resolves toward the structural verdict, never away from it.
-            flags[judgement.reason_index] |= judgement.judgement == SpanJudgement::Demoted;
+            if seen[judgement.reason_index] {
+                return refuse_to_judge(
+                    verdict,
+                    "review contains duplicate or contradictory decisions",
+                );
+            }
+            seen[judgement.reason_index] = true;
+            flags[judgement.reason_index] = judgement.judgement == SpanJudgement::Demoted;
         }
         flags
     };
 
-    let mut state = Rebuild::from_verdict(&verdict, *bands);
+    let report = report.with_authority(authority);
+    if authority == review::ReviewAuthority::Advisory {
+        return verdict.with_judge(report);
+    }
+    let mut state = verdict.into_analysis();
     let mut kept = Vec::new();
     for (index, mut reason) in state.reasons.into_iter().enumerate() {
         if demoted[index] {
@@ -272,125 +140,13 @@ pub fn rejudge(verdict: Verdict, report: JudgeReport, bands: &Bands) -> Verdict 
         }
     }
     state.reasons = kept;
-    state.rescore();
     order(&mut state.suppressed);
     state.judge = Some(report);
     state.finish()
 }
 
-/// State carried through every optional-tier rebuild. Coverage and successful tier reports survive
-/// unless the operation explicitly replaces them. Findings have already crossed the sanitization
-/// boundary, so rebuilding does not sanitize their excerpts again.
-struct Rebuild {
-    reasons: Vec<Reason>,
-    reasons_truncated: bool,
-    suppressed: Vec<Reason>,
-    suppressions_truncated: bool,
-    incomplete: Vec<Incompleteness>,
-    score: u8,
-    risk: RiskLevel,
-    attribution: Attribution,
-    judge: Option<JudgeReport>,
-    ml: Option<MlReport>,
-    scan_policy: Option<crate::policy::ScanPolicy>,
-}
-
-impl Rebuild {
-    fn from_verdict(verdict: &Verdict, bands: Bands) -> Self {
-        Self {
-            reasons: verdict.reasons().to_vec(),
-            reasons_truncated: verdict.reasons_truncated(),
-            suppressed: verdict.suppressed().to_vec(),
-            suppressions_truncated: verdict.suppressions_truncated(),
-            incomplete: verdict.incomplete().to_vec(),
-            score: verdict.score(),
-            risk: verdict.risk(),
-            attribution: Attribution {
-                target: verdict.target().clone(),
-                ruleset: verdict.ruleset().clone(),
-                bands,
-            },
-            judge: verdict.judge().cloned(),
-            ml: verdict.ml().cloned(),
-            scan_policy: verdict.scan_policy().cloned(),
-        }
-    }
-
-    // Only valid when all contributions are retained. Both callers refuse truncated reason lists.
-    fn rescore(&mut self) {
-        let severities: Vec<_> = self
-            .reasons
-            .iter()
-            .map(|reason| (reason.severity(), reason.class()))
-            .collect();
-        self.score = aggregate(&severities);
-        self.risk = self.attribution.bands.band(self.score);
-    }
-
-    fn finish(self) -> Verdict {
-        let mut verdict = assemble(
-            self.reasons,
-            self.reasons_truncated,
-            self.suppressed,
-            self.suppressions_truncated,
-            self.incomplete,
-            self.score,
-            self.risk,
-            self.attribution,
-        );
-        if let Some(report) = self.judge {
-            verdict = verdict.with_judge(report);
-        }
-        if let Some(report) = self.ml {
-            verdict = verdict.with_ml(report);
-        }
-        if let Some(policy) = self.scan_policy {
-            verdict = verdict.with_scan_policy(policy);
-        }
-        verdict
-    }
-}
-
-/// Merge ML observations into a structural verdict and re-finalize (006 T017, contracts/ml-tier.md).
-///
-/// **Structural findings are preserved; ML findings are added.** The score may rise and MUST NOT fall.
-///
-/// # Why this may add findings when the judge may only remove them
-///
-/// [`rejudge`] can only narrow, because the judge reads attacker-influenced text and a tier that could
-/// *raise* a score from such a reading would hand the attacker the amplifier. The ML tier is constrained
-/// differently: its weights are operator-chosen, fetched at a pinned revision, and verified by digest
-/// before they load. Content reaches the classifier as input, never as instruction — there is no prompt to
-/// override — so the amplification risk that bounds the judge does not apply here (plan D4).
-///
-/// That asymmetry is the entire point of the tier. Sixteen of twenty generated payloads are unreachable by
-/// the rules, and a tier that could only confirm what the rules already found could not reach any of them.
-///
-/// # Monotonicity is arithmetic, not a check
-///
-/// [`score::aggregate`] is `max(severity) + bonus(distinct classes)`, and both terms are monotonic under
-/// adding hits: a maximum cannot fall when an element is added, and neither can a count of distinct
-/// classes. So the invariant `with_ml(v, obs, r).score() >= v.score()` holds by construction over the
-/// combined hit list, without a clamp anywhere. There is no branch that could be wrong; the property test
-/// pins the reasoning rather than guarding a subtraction.
-///
-/// # Why a truncated verdict is refused
-///
-/// Verbatim [`rejudge`]'s argument (plan D9): [`finalize`] aggregates the score before truncation, so once
-/// a `Verdict` exists the severities past `max_reasons` are gone. Recomputing from the survivors would
-/// *lower* the score on a truncated verdict — here it would lower it while claiming to have added evidence,
-/// which is worse than the judge's version of the same bug. Refused, with a `TierUnavailable` gap.
-///
-/// # Bands and bounds are supplied, not remembered
-///
-/// `bands` for the reason [`rejudge`] needs them: the score moves, so it has to be re-banded, and against
-/// the same table the scan used rather than a default. `bounds` because ML observations arrive as raw
-/// observations and their excerpts have to cross the same sanitisation boundary every structural
-/// observation crosses — FR-021 is a property of the boundary, and a second entrance that skipped it would
-/// be a second entrance for unneutralised attacker text.
-///
-/// The contract in `contracts/ml-tier.md` writes this as a three-argument function. It is five, and the two
-/// extra are the two the contract's own invariants require.
+/// Add ML evidence to the retained analysis. Display shortening never prevents composition.
+/// Calibration and analysis limits must match the scan; supplied display limits select the projection.
 pub fn with_ml(
     structural: Verdict,
     observations: Vec<Observation>,
@@ -398,50 +154,17 @@ pub fn with_ml(
     bounds: Bounds,
     bands: &Bands,
 ) -> Verdict {
-    if structural.reasons_truncated() {
-        return refuse_ml(
-            structural,
-            "verdict truncated before the ML tier ran; the score cannot be recomputed exactly",
-        );
+    if structural.bands() != bands {
+        return refuse_ml(structural, "ML calibration does not match the scan");
     }
-
-    let mut state = Rebuild::from_verdict(&structural, *bands);
-
-    // ML observations cross the same boundary structural ones do.
+    if structural.analysis().bounds.max_observations != bounds.max_observations {
+        return refuse_ml(structural, "ML analysis budget does not match the scan");
+    }
+    let mut state = structural.into_analysis();
+    state.bounds.max_reasons = bounds.max_reasons;
+    state.bounds.max_excerpt_bytes = bounds.max_excerpt_bytes;
     for observation in observations {
-        let (reason, excerpt_truncated) =
-            into_reason(observation, bounds.max_excerpt_bytes as usize);
-        if excerpt_truncated {
-            state.incomplete.push(
-                CoverageGap::bound(
-                    IncompleteCause::ExcerptLength,
-                    bounds.max_excerpt_bytes as u64,
-                    format!("excerpt for `{}` truncated", reason.rule_id()),
-                )
-                .into_incompleteness(),
-            );
-        }
-        state.reasons.push(reason);
-    }
-
-    // ── Score over the combined evidence, before truncation ─────────────────────────────────────
-    //
-    // Same ordering discipline as `finalize`: aggregate first, so a reason dropped by `max_reasons`
-    // below cannot understate the score it contributed to (FR-001b).
-    state.rescore();
-
-    order(&mut state.reasons);
-    if state.reasons.len() > bounds.max_reasons as usize {
-        state.incomplete.push(
-            CoverageGap::bound(
-                IncompleteCause::MaxReasons,
-                bounds.max_reasons as u64,
-                format!("{} reasons found", state.reasons.len()),
-            )
-            .into_incompleteness(),
-        );
-        state.reasons.truncate(bounds.max_reasons as usize);
-        state.reasons_truncated = true;
+        state.observe_ml(observation, &report);
     }
 
     state.ml = Some(report);
@@ -476,8 +199,8 @@ fn refuse_ml(verdict: Verdict, detail: &str) -> Verdict {
 /// The judgement tier is the first caller, but nothing here is judge-specific — any downstream tier that
 /// can fail needs exactly this.
 pub fn add_gap(verdict: Verdict, gap: CoverageGap) -> Verdict {
-    // No rescore: adding a gap cannot change the existing score or risk band.
-    let mut state = Rebuild::from_verdict(&verdict, Bands::default());
+    // The retained findings are unchanged, so the derived score and risk stay unchanged.
+    let mut state = verdict.into_analysis();
     state.incomplete.push(gap.into_incompleteness());
     state.finish()
 }
@@ -486,7 +209,7 @@ pub fn add_gap(verdict: Verdict, gap: CoverageGap) -> Verdict {
 ///
 /// Every refusal path inside `rejudge` lands here, so there is one answer to "what happens when the judge
 /// cannot be trusted with this verdict" rather than one per caller. The outcome degrades to `Inconclusive`
-/// unless the verdict already found risk — which is [`assemble`]'s ordering, unchanged: a scan that found a
+/// unless the verdict already found risk — which is the projection's ordering, unchanged: a scan that found a
 /// real payload and then lost its second opinion has still found a real payload.
 fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
     add_gap(
@@ -500,15 +223,30 @@ fn refuse_to_judge(verdict: Verdict, detail: &str) -> Verdict {
 /// An oversized input is not analysed at all, so there is nothing to report except that fact — and
 /// reporting it as clean would be the exact fail-open the whole outcome model exists to prevent.
 pub fn oversized(limit: u64, actual: usize, target: TargetRef, ruleset: RulesetId) -> Verdict {
+    let detail = if target.bytes_is_lower_bound {
+        format!("input is at least {actual} bytes; reading stopped at the input limit")
+    } else {
+        format!("input is {actual} bytes")
+    };
     gap_only(
-        CoverageGap::bound(
-            IncompleteCause::InputSize,
-            limit,
-            format!("input is {actual} bytes"),
-        ),
+        CoverageGap::bound(IncompleteCause::InputSize, limit, detail),
         target,
         ruleset,
     )
+}
+
+/// A reader stopped after observing more bytes than the input budget allows.
+///
+/// Preserve the effective policy without assigning a complete-input digest to a partial read.
+/// `target.bytes` is the observed lower bound, including the byte that exceeded the cap.
+pub fn acquisition_limit_exceeded(
+    mut target: TargetRef,
+    policy: &crate::policy::ScanPolicy,
+    ruleset: RulesetId,
+) -> Verdict {
+    target.bytes_is_lower_bound = true;
+    oversized(policy.max_input_bytes, target.bytes, target, ruleset)
+        .with_scan_policy(policy.effective())
 }
 
 /// A verdict for a target that could not be read (FR-032a).
@@ -567,22 +305,14 @@ pub fn not_traversed(target: TargetRef, detail: impl Into<String>, ruleset: Rule
 /// derived. In 001 each built its own `VerdictParts` and each therefore had to get `score: 0` and
 /// `risk: None` right independently.
 fn gap_only(gap: CoverageGap, target: TargetRef, ruleset: RulesetId) -> Verdict {
-    assemble(
-        Vec::new(),
-        false,
-        Vec::new(),
-        false,
-        vec![gap.into_incompleteness()],
-        // No findings, so nothing for a score to summarise. Passed explicitly rather than defaulted so this
-        // reads as a fact about the verdict rather than as a field nobody filled in.
-        0,
-        RiskLevel::None,
+    let mut evidence = Evidence::new();
+    evidence.record_gap(gap);
+    finalize(
+        evidence,
+        plan::ScanPlan::resolve(&crate::ScanPolicy::default()).bounds(),
         Attribution {
             target,
             ruleset,
-            // Never consulted: banding zero under any ascending table gives `None`. Supplied because the
-            // struct requires it, and `Bands::default()` is the honest choice — a scan that examined nothing
-            // has no deployment-specific calibration to report.
             bands: Bands::default(),
         },
     )
@@ -612,97 +342,37 @@ fn order(reasons: &mut [Reason]) {
 /// for every consumer, including the ones that forget — and there is now exactly one boundary, so there
 /// is nothing to forget at.
 ///
-/// Returns whether the excerpt had to be shortened. The caller records that as a coverage gap; this
-/// function does not, because a function that both transforms and records is two functions.
-fn into_reason(observation: Observation, max_excerpt: usize) -> (Reason, bool) {
+/// Retain display truncation on the reason. The producer must separately report any skipped analysis.
+fn into_reason(observation: Observation, max_excerpt: usize) -> Reason {
     let (matched, truncated) = sanitize_str(&observation.matched, max_excerpt);
-    (
-        Reason::new(
-            observation.rule_id,
-            observation.class,
-            observation.span,
-            matched,
-            observation.severity,
-            observation.chain,
-            observation.description,
-            // An observation can only ever have been quote-suppressed: detection is the only thing that
-            // produces one, and detection has no judgement to apply. The widening in feature 004 happens
-            // here, at the one boundary observations become reasons — `SuppressedBy::Judge` is written in
-            // exactly one other place, `rejudge`, and nowhere a detector can reach.
-            observation.suppressed_by.map(SuppressedBy::Quoting),
-        ),
+    Reason::new(
+        observation.rule_id,
+        observation.class,
+        observation.span,
+        matched,
         truncated || observation.excerpt_truncated,
-    )
-}
-
-/// Derive the outcome and build the verdict.
-///
-/// **The single point where the [`Outcome::Clean`] invariant is decided** (FR-004, FR-032b). The order of
-/// the three branches is the design:
-///
-/// 1. Any reason at all makes this `RiskFound`, **even if coverage was also incomplete**. A scan that
-///    found a real payload and then ran out of budget has still found a real payload; downgrading it to
-///    inconclusive would discard a confirmed detection. The gap stays visible in the verdict so the
-///    caller knows the finding may not be the only one.
-/// 2. Otherwise, anything left unexamined makes this `Inconclusive`. "Found nothing" and "looked at
-///    nothing" are indistinguishable from the outside, so they must not collapse into one outcome.
-/// 3. Only with both empty is the verdict `Clean`.
-#[allow(clippy::too_many_arguments)]
-fn assemble(
-    reasons: Vec<Reason>,
-    reasons_truncated: bool,
-    suppressed: Vec<Reason>,
-    suppressions_truncated: bool,
-    incomplete: Vec<Incompleteness>,
-    score: u8,
-    risk: RiskLevel,
-    attribution: Attribution,
-) -> Verdict {
-    let Attribution {
-        target,
-        ruleset,
-        bands: _,
-    } = attribution;
-
-    let outcome = if !reasons.is_empty() {
-        Outcome::RiskFound
-    } else if !incomplete.is_empty() {
-        Outcome::Inconclusive
-    } else {
-        Outcome::Clean
-    };
-
-    // A verdict with no reasons has nothing for a score to summarise.
-    //
-    // Note that this is no longer a *correction*. The score was aggregated from the observations, and a
-    // verdict with no reasons is a verdict whose observations were empty or were all dropped by the class
-    // filter — either way `aggregate` over nothing is 0 already. Kept as an explicit branch because the
-    // second case is real: an `Inconclusive` verdict can carry observations that the class filter removed,
-    // and reporting a score for findings nobody is being shown would be incoherent.
-    //
-    // 001 wrote this same match over a score the CALLER supplied, which made it a silent adjustment: the
-    // call site said 42 and the verdict said 0 (FR-127).
-    let (score, risk) = match outcome {
-        Outcome::Clean | Outcome::Inconclusive => (0, RiskLevel::None),
-        Outcome::RiskFound => (score, risk),
-    };
-
-    Verdict::new(
-        outcome,
-        score,
-        risk,
-        reasons,
-        reasons_truncated,
-        suppressed,
-        suppressions_truncated,
-        incomplete,
-        target,
-        ruleset,
-        EngineId::current(),
+        observation.severity,
+        observation.chain,
+        observation.description,
+        // An observation can only ever have been quote-suppressed: detection is the only thing that
+        // produces one, and detection has no judgement to apply. The widening in feature 004 happens
+        // here, at the one boundary observations become reasons — `SuppressedBy::Judge` is written in
+        // exactly one other place, `rejudge`, and nowhere a detector can reach.
+        observation.suppressed_by.map(SuppressedBy::Quoting),
     )
 }
 
 /// Engine-only attribution after every scan path, including the size gate.
-pub(crate) fn record_scan_policy(verdict: Verdict, policy: crate::policy::ScanPolicy) -> Verdict {
-    verdict.with_scan_policy(policy)
+pub(crate) fn record_scan_policy(
+    verdict: Verdict,
+    policy: crate::policy::ScanPolicy,
+    input: &[u8],
+    bands: &Bands,
+) -> Verdict {
+    let verdict = if input.len() as u64 <= policy.max_input_bytes {
+        verdict.with_input_digest(ml_review::input_digest(input))
+    } else {
+        verdict
+    };
+    verdict.with_scan_policy(policy).with_bands(*bands)
 }

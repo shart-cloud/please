@@ -62,7 +62,11 @@ input, so `... | plz scan` works as a filter.
 | `--max-input-bytes <N>` | 1048576 | FR-017 |
 | `--max-decode-depth <N>` | 3 | FR-018 |
 | `--max-reasons <N>` | 64 | FR-007 |
-| `--no-suppress-in-quotes` | off | D8 |
+| `--profile` | enforcement | Reference analysis explicitly permits quote suppression |
+| `--provenance` | unspecified | Caller-established input origin |
+| `--review-context` | absent | Host-owned task/permission JSON for requested judge |
+| `--ml-impact` | 75 | Caller-assessed impact for admitted classifier findings |
+| `--no-suppress-in-quotes` | off | Disables suppression within reference analysis |
 | `--explain` | off | Adds rule descriptions and decode chains to human output |
 
 `--format json` writes one verdict object per target to stdout and nothing else; diagnostics go to

@@ -77,6 +77,20 @@ pub fn aggregate(hits: &[(u8, DetectionClass)]) -> u8 {
     worst.saturating_add(bonus).min(100)
 }
 
+/// ML can raise assessed impact, but cannot claim a behavioral class the classifier never measured.
+pub(super) fn aggregate_evidence(reasons: &[super::types::Reason]) -> u8 {
+    let worst = reasons.iter().map(|r| r.severity()).max().unwrap_or(0);
+    let mut present = [false; CLASS_COUNT];
+    for reason in reasons.iter().filter(|r| r.contributes_class_breadth()) {
+        present[class_index(reason.class())] = true;
+    }
+    let distinct = present.iter().filter(|p| **p).count() as u8;
+    let bonus = BONUS_PER_CLASS
+        .saturating_mul(distinct.saturating_sub(1))
+        .min(BONUS_CAP);
+    worst.saturating_add(bonus).min(100)
+}
+
 /// Number of detection classes, and the width of the corroboration array.
 ///
 /// Eight. This constant and [`class_index`] below are why changing the `DetectionClass` set is a compile

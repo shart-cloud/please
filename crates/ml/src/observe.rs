@@ -51,19 +51,8 @@ use please_core::verdict::{DetectionClass, Span};
 /// look up. The model, revision and digest in the `MlReport` are the real attribution.
 pub const ML_RULE_ID: &str = "ml.classifier";
 
-/// The class an ML finding is filed under.
-///
-/// # Why not the class the payload "looks like"
-///
-/// A classifier answers one question — *is this a prompt injection* — and has no opinion about whether the
-/// payload overrides, solicits, or impersonates. Deriving a class from the text with a second heuristic
-/// would report a taxonomy the model never produced, and the taxonomy is load-bearing: it feeds
-/// `score::aggregate`'s corroboration bonus, so a wrong guess inflates the score for breadth of evidence
-/// that does not exist.
-///
-/// [`DetectionClass::AgentDirected`] is the honest filing. Its definition is content that **addresses the
-/// reading agent** rather than the human the document is for, which is the property every prompt injection
-/// shares and the one the classifier was trained to recognise.
+/// Compatibility reporting category. A binary classifier does not establish this behavioral class;
+/// finalization excludes every ML observation from the structural class-breadth bonus.
 pub const ML_CLASS: DetectionClass = DetectionClass::AgentDirected;
 
 /// One segment the classifier read.
@@ -81,8 +70,16 @@ pub struct Segment<'a> {
 /// the kind of discrepancy that survives for years because it is invisible in every test that does not
 /// land exactly on the boundary.
 pub fn observe(segment: &Segment<'_>, config: &MlConfig) -> Option<Observation> {
+    observe_with_impact(segment, config, please_core::MlImpact::default())
+}
+
+pub fn observe_with_impact(
+    segment: &Segment<'_>,
+    config: &MlConfig,
+    impact: please_core::MlImpact,
+) -> Option<Observation> {
     let probability = segment.probability?;
-    if probability < config.threshold {
+    if probability > 1000 || probability < config.threshold {
         return None;
     }
 
@@ -94,9 +91,9 @@ pub fn observe(segment: &Segment<'_>, config: &MlConfig) -> Option<Observation> 
         // structural excerpt — `with_ml` calls the same `into_reason` — so no unneutralised attacker text
         // reaches a reader through this path.
         matched: segment.text.to_string(),
-        severity: severity_for(probability, config.threshold),
+        severity: impact.severity(),
         description: format!(
-            "local classifier scored this segment {probability}/1000 for prompt injection \
+            "local classifier output {probability}/1000 for the configured injection label; uncalibrated \
              (threshold {})",
             config.threshold
         ),
@@ -105,41 +102,6 @@ pub fn observe(segment: &Segment<'_>, config: &MlConfig) -> Option<Observation> 
         suppressed_by: None,
     })
 }
-
-/// Map a probability onto the `0..=100` severity scale the structural tier uses.
-///
-/// # Why this is a ramp and not the probability
-///
-/// Severity and probability are different quantities. Severity says *how bad is this if real*; probability
-/// says *how likely is it real*. Writing `probability / 10` into the severity field would conflate them,
-/// and would let a 999-per-mille reading outscore every structural rule in the rule set — none of which
-/// exceeds 90 — on nothing but the model's confidence.
-///
-/// So the ramp is bounded. A finding exactly at threshold scores [`SEVERITY_FLOOR`]; one at 1000 scores
-/// [`SEVERITY_CEILING`]. The ceiling sits deliberately below the structural maximum: a rule an operator
-/// can read and audit outranks a model nobody can, which is constitution Principle III expressed in
-/// arithmetic rather than in prose.
-///
-/// These constants are **chosen, not calibrated** — the same admission `score.rs` makes about its own.
-/// Calibration needs SC-602 and a corpus.
-fn severity_for(probability: u16, threshold: u16) -> u8 {
-    let span = 1000u32.saturating_sub(threshold as u32);
-    if span == 0 {
-        return SEVERITY_CEILING;
-    }
-    let above = (probability.min(1000) as u32).saturating_sub(threshold as u32);
-    let range = (SEVERITY_CEILING - SEVERITY_FLOOR) as u32;
-    let scaled = (above * range + span / 2) / span;
-    SEVERITY_FLOOR + scaled.min(range) as u8
-}
-
-/// Severity of a finding exactly at threshold.
-pub const SEVERITY_FLOOR: u8 = 40;
-
-/// Severity of a finding the classifier is maximally confident about.
-///
-/// Below the structural tier's maximum, deliberately. See [`severity_for`].
-pub const SEVERITY_CEILING: u8 = 75;
 
 #[cfg(test)]
 mod tests {
@@ -155,6 +117,7 @@ mod tests {
             kind: ModelKind::Classifier,
             architecture: Architecture::DebertaV2SequenceClassification,
             max_tokens: 512,
+            windowing: Default::default(),
             malicious_label: Some(1),
             threshold,
         }
@@ -195,24 +158,19 @@ mod tests {
     }
 
     #[test]
-    fn severity_spans_the_ramp_and_never_leaves_it() {
-        assert_eq!(severity_for(700, 700), SEVERITY_FLOOR);
-        assert_eq!(severity_for(1000, 700), SEVERITY_CEILING);
-        let middle = severity_for(850, 700);
-        assert!(middle > SEVERITY_FLOOR && middle < SEVERITY_CEILING);
-    }
-
-    #[test]
-    fn severity_never_outranks_an_auditable_rule() {
-        for probability in 0..=1000u16 {
-            for threshold in [1u16, 400, 700, 999, 1000] {
-                let severity = severity_for(probability, threshold);
-                assert!(
-                    (SEVERITY_FLOOR..=SEVERITY_CEILING).contains(&severity),
-                    "probability {probability} at threshold {threshold} gave {severity}"
-                );
+    fn admission_threshold_and_raw_score_do_not_change_assessed_impact() {
+        for threshold in [1, 400, 700, 999, 1000] {
+            for probability in [threshold, 1000] {
+                let hit = observe_with_impact(
+                    &segment(Some(probability)),
+                    &config(threshold),
+                    please_core::MlImpact::new(60).unwrap(),
+                )
+                .unwrap();
+                assert_eq!(hit.severity, 60);
             }
         }
+        assert!(observe(&segment(Some(1001)), &config(700)).is_none());
     }
 
     #[test]

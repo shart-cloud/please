@@ -249,7 +249,11 @@ bound anyone configured, and it needed somewhere machine-readable to live.
 | `decode_depth` | FR-018 |
 | `max_matches_per_rule` | D2, FR-007 |
 | `max_reasons` | FR-007 |
-| `excerpt_length` | FR-021 |
+| `excerpt_length` | Legacy reports only; current display shortening uses `Reason.excerpt_truncated` |
+
+**September 11 amendment:** excerpt display truncation is presentation metadata, not incomplete
+analysis. The optional reason field is retained through suppression/demotion. All actual coverage
+gaps still determine incomplete status. See [presentation metadata](../../docs/presentation-metadata.md).
 
 **Failures** — something the environment did, and the caller may be able to fix:
 
@@ -325,7 +329,10 @@ Caller-owned configuration (FR-006). Never derived from scanned content (FR-020)
 | `max_excerpt_bytes` | integer | 256 | FR-021 |
 | `threshold` | RiskLevel | `high` | FR-029 |
 | `classes` | set of DetectionClass | all | FR-015 |
-| `suppress_in_quotes` | boolean | true | D8 |
+| `suppress_in_quotes` | boolean | false | Ignored in enforcement; reference analysis explicitly enables it |
+| `profile` | ScanProfile | enforcement | Caller-selected purpose |
+| `provenance` | InputProvenance | unspecified | Caller-established origin |
+| `ml_impact` | MlImpact | 75 | Assessed impact, independent of classifier output |
 
 Defaults are provisional pending calibration and are documented as such. `max_input_bytes` at 1 MiB
 sits an order of magnitude above the corpus maximum of 82,300 bytes while staying far below anything

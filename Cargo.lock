@@ -1726,6 +1726,8 @@ dependencies = [
  "jsonschema",
  "please-core",
  "please-judge",
+ "please-ml",
+ "please-scan",
  "serde_json",
  "tempfile",
 ]
@@ -1758,6 +1760,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "sha2",
  "ureq",
 ]
 
@@ -1768,12 +1771,25 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
+ "memmap2",
  "please-core",
  "proptest",
  "serde",
  "serde_json",
  "sha2",
  "tokenizers",
+]
+
+[[package]]
+name = "please-scan"
+version = "0.1.0"
+dependencies = [
+ "please-core",
+ "please-judge",
+ "please-ml",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

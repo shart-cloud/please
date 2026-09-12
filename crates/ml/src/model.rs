@@ -16,8 +16,10 @@
 //! the failure; none of them unwrap.
 
 use crate::config::{MlConfig, ModelKind};
-use sha2::{Digest, Sha256};
-use std::path::Path;
+use please_core::inference::{InferenceIdentity, MlWindowResult};
+
+#[cfg(any(feature = "candle", test))]
+mod identity;
 
 /// The outcome of a load attempt. **The only failure path** (contracts/ml-tier.md).
 pub enum MlLoadResult {
@@ -55,7 +57,7 @@ impl MlLoadResult {
 /// `Send + Sync`, so the property holds without a lock.
 pub struct MlModel {
     config: MlConfig,
-    digest: String,
+    identity: InferenceIdentity,
     backend: Backend,
 }
 
@@ -69,16 +71,10 @@ impl MlModel {
             return MlLoadResult::Unavailable(detail);
         }
 
-        let weights_path = config.model_path.join("model.safetensors");
-        let digest = match digest_of(&weights_path) {
-            Ok(digest) => digest,
-            Err(detail) => return MlLoadResult::Unavailable(detail),
-        };
-
         match Backend::load(&config) {
-            Ok(backend) => MlLoadResult::Loaded(Box::new(MlModel {
+            Ok((backend, identity)) => MlLoadResult::Loaded(Box::new(MlModel {
                 config,
-                digest,
+                identity,
                 backend,
             })),
             Err(detail) => MlLoadResult::Unavailable(detail),
@@ -95,7 +91,18 @@ impl MlModel {
     /// *downloaded* and this records what was *loaded*. Between the two sit a mirror, a cache, and a
     /// filesystem, and the verdict should attribute to the bytes that produced it.
     pub fn digest(&self) -> &str {
-        &self.digest
+        &self.identity.fields()["weights_sha256"]
+    }
+
+    pub fn identity(&self) -> &InferenceIdentity {
+        &self.identity
+    }
+
+    pub fn classify_detailed(&self, text: &str) -> Outcome<Classification> {
+        if self.config.kind != ModelKind::Classifier {
+            return Outcome::NotApplicable;
+        }
+        self.backend.classify(&self.config, text)
     }
 
     /// Classify a text segment, returning per-mille probability of the malicious class.
@@ -111,7 +118,11 @@ impl MlModel {
         if self.config.kind != ModelKind::Classifier {
             return Outcome::NotApplicable;
         }
-        self.backend.classify(&self.config, text)
+        match self.classify_detailed(text) {
+            Outcome::Ok(result) => Outcome::Ok(result.raw_score),
+            Outcome::Failed(detail) => Outcome::Failed(detail),
+            Outcome::NotApplicable => Outcome::NotApplicable,
+        }
     }
 
     /// Embed a text segment into a normalised vector.
@@ -157,27 +168,31 @@ impl<T> Outcome<T> {
     }
 }
 
-/// SHA-256 of a file, streamed.
-///
-/// Streamed rather than read whole because Prompt Guard 2's weights are 1.08 GiB and this runs before the
-/// memory map that would otherwise be the peak allocation.
-fn digest_of(path: &Path) -> Result<String, String> {
-    use std::io::Read;
-
-    let mut file = std::fs::File::open(path)
-        .map_err(|e| format!("cannot open weights at {}: {e}", path.display()))?;
-    let mut hasher = Sha256::new();
-    let mut buffer = vec![0u8; 64 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|e| format!("cannot read weights at {}: {e}", path.display()))?;
-        if read == 0 {
-            break;
+/// Complete, bounded classification. Empty/incomplete window lists never represent success.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Classification {
+    pub raw_score: u16,
+    pub highest_window: usize,
+    pub windows: Vec<MlWindowResult>,
+}
+#[cfg_attr(not(feature = "candle"), allow(dead_code))]
+impl Classification {
+    pub(crate) fn from_windows(windows: Vec<MlWindowResult>) -> Result<Self, String> {
+        let mut highest = windows.first().ok_or("classifier produced no windows")?;
+        for window in &windows {
+            if window.raw_score > 1000 {
+                return Err("invalid classifier raw score".into());
+            }
+            if window.raw_score > highest.raw_score {
+                highest = window;
+            }
         }
-        hasher.update(&buffer[..read]);
+        Ok(Self {
+            raw_score: highest.raw_score,
+            highest_window: highest.index,
+            windows,
+        })
     }
-    Ok(format!("{:x}", hasher.finalize()))
 }
 
 /// Convert a probability in `[0.0, 1.0]` to per-mille, refusing anything outside it.
@@ -212,11 +227,11 @@ struct Backend;
 
 #[cfg(not(feature = "candle"))]
 impl Backend {
-    fn load(_config: &MlConfig) -> Result<Self, String> {
+    fn load(_config: &MlConfig) -> Result<(Self, InferenceIdentity), String> {
         Err("this build has no inference backend; rebuild with --features candle".to_string())
     }
 
-    fn classify(&self, _config: &MlConfig, _text: &str) -> Outcome<u16> {
+    fn classify(&self, _config: &MlConfig, _text: &str) -> Outcome<Classification> {
         Outcome::Failed("no inference backend".to_string())
     }
 
@@ -228,6 +243,8 @@ impl Backend {
 #[cfg(feature = "candle")]
 mod candle_backend;
 
+pub mod windows;
+
 #[cfg(feature = "candle")]
 use candle_backend::Backend;
 
@@ -237,7 +254,7 @@ mod tests {
     use crate::config::Architecture;
     use std::path::PathBuf;
 
-    fn classifier_config(path: PathBuf) -> MlConfig {
+    pub(super) fn classifier_config(path: PathBuf) -> MlConfig {
         MlConfig {
             model_path: path,
             model_id: "test-classifier".to_string(),
@@ -245,9 +262,29 @@ mod tests {
             kind: ModelKind::Classifier,
             architecture: Architecture::DebertaV2SequenceClassification,
             max_tokens: 512,
+            windowing: Default::default(),
             malicious_label: Some(1),
             threshold: 700,
         }
+    }
+
+    #[test]
+    fn detailed_pooling_preserves_max_and_earliest_tie() {
+        let windows: Vec<_> = [10, 900, 900]
+            .into_iter()
+            .enumerate()
+            .map(|(index, raw_score)| MlWindowResult {
+                index,
+                token_start: index,
+                token_end: index + 1,
+                span: please_core::Span::new(index, index + 1),
+                model_tokens: 3,
+                raw_score,
+            })
+            .collect();
+        let result = Classification::from_windows(windows).unwrap();
+        assert_eq!((result.raw_score, result.highest_window), (900, 1));
+        assert!(Classification::from_windows(vec![]).is_err());
     }
 
     // ── The range guard on the way out of a softmax ─────────────────────────────────────────────

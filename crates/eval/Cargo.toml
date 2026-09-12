@@ -33,6 +33,8 @@ name = "please-eval"
 path = "src/main.rs"
 
 [dependencies]
+please-scan = { path = "../scan" }
+please-ml = { path = "../ml", optional = true }
 # The engine under measurement, by path. An instrument that measured a *published* version of the
 # thing would report on a different artifact than the one in the tree, which is the whole point of
 # having it here.
@@ -71,6 +73,9 @@ candle-transformers = { version = "0.11", optional = true }
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"], optional = true }
 
 [features]
+boundary = ["dep:please-ml"]
+shipping-ml = ["boundary", "please-scan/ml-candle"]
+shipping-judge = ["please-scan/judge"]
 default = []
 ml = [
     "dep:candle-core",

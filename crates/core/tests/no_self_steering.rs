@@ -26,6 +26,9 @@
 //!
 //! [`Verdict`] derives `PartialEq`, so most of this file asserts whole-verdict equality — the strongest
 //! available statement, covering score, risk, every reason, every suppression, and every coverage gap.
+//! For different documents, `analysis` compares every public verdict property except the new input
+//! digest: that identity must differ even when findings are identical. Same-input tests still compare
+//! the whole verdict, including the digest.
 //!
 //! Where whole-verdict equality is *not* the right assertion, it is because the steering text is itself
 //! detectable — a forged `SYSTEM:` boundary is an override attempt, and flagging it is the tool working.
@@ -54,6 +57,33 @@ fn scan(engine: &Engine, text: &str) -> Verdict {
         text.as_bytes(),
         &ScanPolicy::default(),
         TargetRef::stdin(text.len()),
+    )
+}
+
+/// All verdict semantics and attribution except the exact input identity. The prefix deliberately
+/// changes original bytes, so equality of that new identity would now be an ML-review binding bug.
+fn analysis(v: &Verdict) -> impl PartialEq + std::fmt::Debug + '_ {
+    assert!(v.input_digest().is_some());
+    (
+        (
+            v.outcome(),
+            v.score(),
+            v.risk(),
+            v.reasons(),
+            v.suppressed(),
+            v.incomplete(),
+            v.reasons_truncated(),
+            v.suppressions_truncated(),
+        ),
+        (
+            v.target(),
+            v.ruleset(),
+            v.engine(),
+            v.judge(),
+            v.ml(),
+            v.ml_review(),
+            v.scan_policy(),
+        ),
     )
 }
 
@@ -215,8 +245,10 @@ fn a_rule_definition_in_the_content_cannot_disable_a_rule() {
 
     for (name, prefix) in prefixes::steering() {
         let steered = scan(&engine, &format!("{prefix}{body}"));
+        assert_ne!(steered.input_digest(), inert.input_digest());
         assert_eq!(
-            steered, inert,
+            analysis(&steered),
+            analysis(&inert),
             "{name} in the content changed the verdict (FR-020a). Content that looks like \
              configuration is still just content; if this fails, the document is programming the \
              scanner."
@@ -243,8 +275,10 @@ fn rule_like_text_does_not_incriminate_benign_content() {
 
     for (name, prefix) in prefixes::steering() {
         let steered = scan(&engine, &format!("{prefix}{body}"));
+        assert_ne!(steered.input_digest(), inert.input_digest());
         assert_eq!(
-            steered, inert,
+            analysis(&steered),
+            analysis(&inert),
             "{name} in the content changed the verdict for a benign document (FR-020a)"
         );
     }
@@ -270,6 +304,7 @@ fn a_plain_language_instruction_to_the_scanner_is_not_obeyed() {
 
     let control = scan(&engine, &format!("{}{body}", prefixes::inert()));
     let steered = scan(&engine, &format!("{}{body}", prefixes::addressed()));
+    assert_ne!(steered.input_digest(), control.input_digest());
 
     assert_eq!(
         scan(&engine, &prefixes::addressed()).outcome(),
@@ -278,7 +313,8 @@ fn a_plain_language_instruction_to_the_scanner_is_not_obeyed() {
          this case to the reported-but-not-obeyed test below"
     );
     assert_eq!(
-        steered, control,
+        analysis(&steered),
+        analysis(&control),
         "an instruction addressed to the scanner changed the verdict (FR-020a)"
     );
 }

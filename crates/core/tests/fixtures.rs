@@ -1,6 +1,7 @@
 //! The built-in rule set measured against the labelled fixture corpus (SC-002, SC-003, SC-001, SC-008).
 //!
-//! Normal runs compare every fixture against a reviewed per-case baseline. The two ignored
+//! The historical reference-analysis profile compares every fixture against its reviewed baseline.
+//! Enforcement profile behavior is tested separately in profiles.rs. The two ignored
 //! release-quality checks retain the stricter SC-002/SC-003 targets and run in their own workflow.
 //! Neither a matching regression baseline nor this small corpus establishes deployment accuracy.
 //!
@@ -23,7 +24,7 @@ fn engine() -> Engine {
 fn scan(engine: &Engine, case: &Case) -> please_core::Verdict {
     engine.scan(
         case.text.as_bytes(),
-        &ScanPolicy::default(),
+        &ScanPolicy::reference_analysis(),
         TargetRef::buffer(&case.id, case.text.len()),
     )
 }

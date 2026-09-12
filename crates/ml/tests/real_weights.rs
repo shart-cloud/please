@@ -85,6 +85,7 @@ fn protectai() -> Box<MlModel> {
         kind: ModelKind::Classifier,
         architecture: Architecture::DebertaV2SequenceClassification,
         max_tokens: 512,
+        windowing: Default::default(),
         malicious_label: Some(1),
         // Above T002's measured benign ceiling of 388, with headroom. Not a shipping default — that is
         // SC-602's job — but it is the lowest threshold this model makes available.
@@ -104,6 +105,7 @@ fn minilm() -> Box<MlModel> {
         kind: ModelKind::Embedder,
         architecture: Architecture::BertMeanPooling,
         max_tokens: 256,
+        windowing: Default::default(),
         malicious_label: None,
         threshold: 0,
     })
@@ -272,4 +274,34 @@ fn the_odd_paragraph_out_ranks_first_on_real_embeddings() {
 fn a_classifier_asked_to_embed_says_so_rather_than_guessing() {
     let model = protectai();
     assert!(matches!(model.embed(BENIGN), Outcome::NotApplicable));
+}
+
+#[test]
+#[ignore = "requires pinned model assets; run ci/check-ml-inference.sh"]
+fn detailed_windows_reproduce_the_document_maximum_with_original_spans() {
+    let model = protectai();
+    let text = format!(
+        "{} {}",
+        "日 The document contains ordinary prose. ".repeat(90),
+        INJECTION
+    );
+    let detail = match model.classify_detailed(&text) {
+        Outcome::Ok(d) => d,
+        other => panic!("{other:?}"),
+    };
+    assert!(detail.windows.len() > 1);
+    assert_eq!(
+        detail.raw_score,
+        detail.windows.iter().map(|w| w.raw_score).max().unwrap()
+    );
+    assert_eq!(detail.raw_score, score(&model, &text));
+    for (index, window) in detail.windows.iter().enumerate() {
+        assert_eq!(window.index, index);
+        assert!(text.get(window.span.start..window.span.end).is_some());
+        assert!(window.model_tokens <= model.config().max_tokens);
+        if index > 0 {
+            assert_eq!(detail.windows[index - 1].token_end, window.token_start);
+        }
+    }
+    assert_eq!(model.identity().fields()["weights_sha256"], model.digest());
 }

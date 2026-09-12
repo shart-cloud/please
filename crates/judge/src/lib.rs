@@ -10,10 +10,10 @@
 //! **Not a detector.** It finds no new payloads. It arbitrates findings the structural tier already made,
 //! so recall stays where the rules can be measured.
 //!
-//! **Not a decision.** It may confirm an observation or demote it into the suppression channel. It cannot
-//! clear one, cannot raise a severity, and cannot invent one — see
-//! [`SpanJudgement`](please_core::verdict::SpanJudgement), which has two variants and neither is `Cleared`
-//! (FR-403).
+//! Reviews are advisory by default. The caller can explicitly grant `ReviewAuthority::MayRelease`,
+//! allowing demotions to remove findings from scoring and potentially release the input. A reviewer
+//! with that authority is inside the enforcement trust boundary; retained audit evidence does not
+//! prevent a release. No review adds findings or raises their severity.
 //!
 //! **Not an opinion.** The model answers factual questions about text from closed option sets. *This crate*
 //! computes the score ([`score`], plan D4). A model that is not scoring anything has nothing to inflate.
@@ -21,7 +21,7 @@
 //! # Fail-closed, always
 //!
 //! Unreachable, unauthenticated, timed out, unparseable, asked about a document too large, or asked to
-//! judge a truncated verdict — every one is a
+//! judge evidence beyond its request budget — every one is a
 //! [`TierUnavailable`](please_core::verdict::IncompleteCause::TierUnavailable) coverage gap, and therefore
 //! `Inconclusive`. **Never `Clean`** (FR-402). A network dependency in a security path is a fail-open
 //! waiting to happen; that requirement is what stops it being one.
@@ -31,18 +31,22 @@
 
 pub mod client;
 pub mod credential;
+mod envelope;
+pub mod ml_review;
 pub mod request;
 pub mod response;
 pub mod score;
 
+use crate::ml_review::ContextWire;
 use std::time::Duration;
 
 use please_core::finalize;
 use please_core::ruleset::Bands;
-use please_core::verdict::{IncompleteCause, JudgeReport, SpanVerdict, Verdict};
+use please_core::verdict::{IncompleteCause, Verdict};
 use please_core::CoverageGap;
 
 pub use credential::{Credential, CredentialSource, Resolution};
+pub use please_core::finalize::review::ReviewAuthority;
 pub use please_core::verdict::{
     AddressedTo, Features, Framing, ImperativeSource, SpanJudgement, SpanRole,
     StatedPurposeExplainsContent,
@@ -60,6 +64,7 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct Judge {
     resolution: Resolution,
     timeout: Duration,
+    authority: ReviewAuthority,
 }
 
 impl Judge {
@@ -73,6 +78,7 @@ impl Judge {
         Self {
             resolution,
             timeout: DEFAULT_TIMEOUT,
+            authority: ReviewAuthority::Advisory,
         }
     }
 
@@ -81,34 +87,170 @@ impl Judge {
         self
     }
 
+    /// Caller authorization for ordinary and ML review decisions. MayRelease puts this reviewer
+    /// inside the enforcement trust boundary: all-demoted findings can produce a successful exit.
+    pub fn with_authority(mut self, authority: ReviewAuthority) -> Self {
+        self.authority = authority;
+        self
+    }
+
+    pub fn authority(&self) -> ReviewAuthority {
+        self.authority
+    }
+
+    /// Non-secret effective request recipe, excluding input, context and credentials.
+    pub fn inference_metadata(&self) -> serde_json::Value {
+        let mut metadata = client::inference_metadata(&self.resolution);
+        metadata["authority"] = serde_json::to_value(self.authority).expect("authority serializes");
+        metadata["timeout_ms"] = serde_json::json!(self.timeout.as_millis());
+        metadata
+    }
+
     pub fn resolution(&self) -> &Resolution {
         &self.resolution
     }
 
-    /// **The whole tier, as one transformation** (R4, contracts/judge-tier.md).
+    /// Review the scan's findings under this judge's caller-selected authority.
     ///
-    /// `Verdict → Verdict`, infallible, and able only to narrow. For any response whatsoever, including a
-    /// maximally hostile one:
-    ///
-    /// ```text
-    /// judged.reasons() ∪ judged.suppressed()  ==  structural.reasons() ∪ structural.suppressed()
-    /// max severity in judged                  ≤   max severity in structural
-    /// ```
-    ///
-    /// Those hold because [`SpanJudgement`] cannot express anything else, not because this function checks
-    /// — see `tests/adversarial_responses.rs`.
-    ///
-    /// `bands` is the table the scan used. It comes back because a `Verdict` records its score and its band
-    /// but not the mapping between them, and re-banding against a different table would produce a verdict
-    /// quietly disagreeing with itself.
+    /// Input identity and calibration must match the scan before any network request. The request
+    /// freezes evidence and policy, and the response is applied only to that binding. Default authority
+    /// is advisory; `with_authority(ReviewAuthority::MayRelease)` explicitly permits release.
     pub fn review(&self, verdict: Verdict, input: &[u8], bands: &Bands) -> Verdict {
-        let request = match request::JudgeRequest::assemble(&verdict, input) {
+        let context = verdict.scan_policy().and_then(|p| p.caller_context.clone());
+        match context {
+            Some(context) => self.review_with_ml_context(verdict, input, bands, &context),
+            None => self.review_routed(verdict, input, bands, None),
+        }
+    }
+
+    /// Explicitly opt in with caller-owned context. Structural and ML responses use separate finalizers.
+    /// The default CLI and `review` retain the prepared baseline routing.
+    pub fn review_with_ml_context(
+        &self,
+        verdict: Verdict,
+        input: &[u8],
+        bands: &Bands,
+        context: &ml_review::ReviewContext,
+    ) -> Verdict {
+        if verdict.bands() != bands {
+            return unavailable(verdict, "review calibration does not match the scan".into());
+        }
+        if verdict.analysis().reasons().is_empty() {
+            return verdict;
+        }
+        if verdict
+            .scan_policy()
+            .and_then(|p| p.caller_context.as_ref())
+            != Some(context)
+        {
+            return unavailable(
+                verdict,
+                "review context does not match the caller context bound to this scan".into(),
+            );
+        }
+        if !verdict
+            .analysis()
+            .reasons()
+            .iter()
+            .any(|r| r.ml_origin().is_some())
+        {
+            let source = verdict
+                .scan_policy()
+                .map(|p| p.effective_provenance())
+                .unwrap_or_default();
+            let wire = match context.wire(
+                source,
+                verdict.scan_policy().map(|p| p.profile).unwrap_or_default(),
+            ) {
+                Ok(wire) => wire.to_string(),
+                Err(detail) => return unavailable(verdict, detail.into()),
+            };
+            let verdict = if context.validate(source) == Ok(true) {
+                verdict
+            } else {
+                unavailable(
+                    verdict,
+                    "caller context is incomplete for requested boundary review".into(),
+                )
+            };
+            return self.review_routed(verdict, input, bands, Some(&wire));
+        }
+        let request = match ml_review::MlReviewRequest::assemble(&verdict, input, context) {
+            Ok(request) => request,
+            Err(detail) => return unavailable(verdict, detail.into()),
+        };
+        // Freeze ML mapping before structural demotions reorder the reasons.
+        let verdict = self.review_routed(verdict, input, bands, Some(request.caller_context()));
+        match client::send_ml_review(&self.resolution, &request, self.timeout) {
+            Ok(raw) => request.apply_envelope_with_authority(
+                verdict,
+                &raw,
+                self.resolution.model(),
+                self.authority,
+            ),
+            Err(error) => unavailable(verdict, error.to_string()),
+        }
+    }
+
+    pub fn review_ml(
+        &self,
+        verdict: Verdict,
+        input: &[u8],
+        bands: &Bands,
+        context: &ml_review::ReviewContext,
+    ) -> Verdict {
+        if verdict.bands() != bands {
+            return unavailable(verdict, "review calibration does not match the scan".into());
+        }
+        if !verdict
+            .analysis()
+            .reasons()
+            .iter()
+            .any(|r| r.ml_origin().is_some() || r.rule_id() == "ml.classifier")
+        {
+            return verdict;
+        }
+        let request = match ml_review::MlReviewRequest::assemble(&verdict, input, context) {
+            Ok(request) => request,
+            Err(detail) => return unavailable(verdict, detail.into()),
+        };
+        match client::send_ml_review(&self.resolution, &request, self.timeout) {
+            Ok(raw) => request.apply_envelope_with_authority(
+                verdict,
+                &raw,
+                self.resolution.model(),
+                self.authority,
+            ),
+            Err(error) => unavailable(verdict, error.to_string()),
+        }
+    }
+
+    fn review_routed(
+        &self,
+        verdict: Verdict,
+        input: &[u8],
+        bands: &Bands,
+        caller_context: Option<&str>,
+    ) -> Verdict {
+        let structural_only = caller_context.is_some();
+        if verdict.bands() != bands {
+            return unavailable(verdict, "review calibration does not match the scan".into());
+        }
+        let assembled = if structural_only {
+            request::JudgeRequest::assemble_structural(&verdict, input)
+        } else {
+            request::JudgeRequest::assemble(&verdict, input)
+        };
+        let request = match assembled {
             Ok(request) => request,
             // FR-404. Nothing to arbitrate, so no request — and **no coverage gap either**. This is the one
             // "did not judge" path that is not a failure: a verdict with no observations has nothing for a
             // second opinion to be about, and marking it inconclusive would turn every clean scan under
             // `--judge` into an inconclusive one.
             Err(request::NotAsked::NoObservations) => return verdict,
+            Err(request::NotAsked::InvalidScope(detail)) => {
+                return unavailable(verdict, detail.into())
+            }
             Err(request::NotAsked::DocumentTooLarge { bytes, limit }) => {
                 return unavailable(
                     verdict,
@@ -120,40 +262,38 @@ impl Judge {
             }
         };
 
-        let tool_input = match client::send(&self.resolution, &request, self.timeout) {
+        let sent = if let Some(caller_context) = caller_context {
+            let content = format!(
+                "Caller-owned boundary context (JSON):\n{}\n\n{}",
+                caller_context,
+                request.user_content()
+            );
+            if content.len() > ml_review::MAX_REQUEST_BYTES {
+                return unavailable(
+                    verdict,
+                    "encoded structural review with caller context exceeds the byte limit".into(),
+                );
+            }
+            client::send_with_schema_captured(
+                &self.resolution,
+                client::tool_schema(),
+                &content,
+                self.timeout,
+            )
+        } else {
+            client::send_captured(&self.resolution, &request, self.timeout)
+        };
+        let raw = match sent {
             Ok(value) => value,
             Err(e) => return unavailable(verdict, e.to_string()),
         };
 
-        let parsed = match response::JudgeResponse::parse(&tool_input, &request) {
-            Ok(parsed) => parsed,
-            Err(e) => return unavailable(verdict, e.to_string()),
+        let report = match request.parse_envelope(&raw, self.resolution.model()) {
+            Ok(report) => report,
+            Err(detail) => return unavailable(verdict, detail.into()),
         };
 
-        let judgements: Vec<SpanVerdict> = parsed
-            .roles
-            .iter()
-            .zip(parsed.relations.iter())
-            .enumerate()
-            .map(|(reason_index, (role, relation))| SpanVerdict {
-                reason_index,
-                role: *role,
-                relation: *relation,
-                // FR-407: the judgement is derived here, by this project's code, from the answers. The
-                // model supplied the answers; it did not supply this.
-                judgement: score::judge_span(*role, *relation, parsed.features),
-            })
-            .collect();
-
-        let report = JudgeReport::new(
-            self.resolution.model(),
-            request.prompt_version,
-            parsed.features,
-            judgements,
-            parsed.model_severity,
-        );
-
-        finalize::rejudge(verdict, report, bands)
+        finalize::rejudge_with_authority(verdict, report, self.authority)
     }
 }
 

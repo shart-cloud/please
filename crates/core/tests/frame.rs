@@ -63,7 +63,7 @@ description = "Forged conversational role marker, impersonating a higher-authori
 fn scan_with(engine: &Engine, input: &str) -> please_core::Verdict {
     engine.scan(
         input.as_bytes(),
-        &ScanPolicy::default(),
+        &ScanPolicy::reference_analysis(),
         TargetRef::buffer("test", input.len()),
     )
 }

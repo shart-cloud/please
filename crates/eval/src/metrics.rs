@@ -31,6 +31,7 @@ use std::collections::BTreeMap;
 use please_core::verdict::RiskLevel;
 
 use crate::rows::RowResult;
+use crate::run::{RunIntegrity, RunStatus};
 use crate::slice::{Slice, SliceSet};
 use crate::Result;
 
@@ -247,6 +248,7 @@ pub struct GateSlice {
 /// The gate's overall result.
 #[derive(Debug, Clone)]
 pub struct Gate {
+    pub run_integrity: RunIntegrity,
     pub max_fp_permille: u32,
     pub slices: Vec<GateSlice>,
     /// Gate-eligible slices with no committed baseline. A slice nobody has pinned cannot detect a
@@ -281,6 +283,7 @@ impl Gate {
             });
         }
         Gate {
+            run_integrity: RunIntegrity::unverified("saved run has not been verified"),
             max_fp_permille: set.gate.max_fp_permille,
             slices,
             unpinned,
@@ -293,6 +296,9 @@ impl Gate {
     /// on in one place — the operator asking whether the criterion is met yet — so that "the gate
     /// passes" never quietly comes to mean "the criterion is met".
     pub fn failed(&self, strict: bool, allow_unpinned: bool) -> bool {
+        if !self.run_integrity.is_complete() {
+            return true;
+        }
         if !allow_unpinned && !self.unpinned.is_empty() {
             return true;
         }
@@ -455,6 +461,24 @@ impl Report {
         use std::fmt::Write;
 
         let _ = writeln!(w, "# Evaluation report — `{}`\n", self.run);
+        let status = match self.gate.run_integrity.status() {
+            RunStatus::Complete => "COMPLETE",
+            RunStatus::Incomplete => "INCOMPLETE",
+            RunStatus::Unverified => "UNVERIFIED",
+        };
+        let _ = writeln!(w, "**Run integrity: {status}.**\n");
+        if !self.gate.run_integrity.is_complete() {
+            let _ = writeln!(w, "This is a partial or unverified report. The gate fails; rerun with a new `--run` label.\n");
+            for issue in self.gate.run_integrity.issues() {
+                let _ = writeln!(
+                    w,
+                    "- `{}`: {}",
+                    issue.slice.as_deref().unwrap_or("run"),
+                    issue.detail
+                );
+            }
+            let _ = writeln!(w);
+        }
         let _ = writeln!(
             w,
             "| | |\n|---|---|\n| rule set | `{}` |\n| rule-set digest | `{}` |\n| detection floor | \
@@ -509,9 +533,9 @@ impl Report {
         if !self.gate.unpinned.is_empty() {
             let _ = writeln!(
                 w,
-                "\n**{} gate-eligible slice(s) have no committed baseline**: {}. Until a baseline is \
-                 recorded in `corpus/slices.toml`, a regression on them cannot be detected and the gate \
-                 fails.",
+                "\n**{} gate-eligible slice(s) have no applicable saved baseline**: {}. Mechanism runs \
+                 retain their original baselines; after pinning `corpus/slices.toml`, create a new run. \
+                 Product baselines remain unpinned. The gate fails by default.",
                 self.gate.unpinned.len(),
                 self.gate
                     .unpinned
@@ -721,11 +745,13 @@ impl Report {
         };
         json!({
             "run": self.run,
+            "integrity": self.gate.run_integrity,
             "ruleset": self.ruleset,
             "ruleset_digest": self.ruleset_digest,
             "floor": self.floor,
             "dataset": self.dataset,
             "gate": {
+                "integrity_passed": self.gate.run_integrity.is_complete(),
                 "max_fp_permille": self.gate.max_fp_permille,
                 "unpinned": self.gate.unpinned,
                 "slices": self.gate.slices.iter().map(|s| json!({
@@ -785,6 +811,7 @@ mod tests {
     #[test]
     fn an_unpinned_gate_slice_fails_by_default() {
         let gate = Gate {
+            run_integrity: RunIntegrity::verified_for_test(),
             max_fp_permille: 10,
             slices: vec![],
             unpinned: vec!["neg_orbench".into()],
@@ -796,6 +823,7 @@ mod tests {
     #[test]
     fn the_gate_fails_on_regression_but_not_on_an_unmet_criterion() {
         let gate = Gate {
+            run_integrity: RunIntegrity::verified_for_test(),
             max_fp_permille: 10,
             slices: vec![GateSlice {
                 slice_id: "repo_prose".into(),

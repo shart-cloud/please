@@ -23,7 +23,7 @@ path = "src/main.rs"
 
 # ── Features ────────────────────────────────────────────────────────────────────────────────────
 #
-# `judge` is the only optional capability, and it is now ON by default. It was not, and the reversal is
+# `judge` is ON by default; `ml-candle` remains opt-in at build and runtime. Judge was not, and the reversal is
 # deliberate: a tier nobody can reach without recompiling is a tier nobody evaluates, and the second opinion
 # is the part of this tool that resolves what the structural tier provably cannot (docs/limits.md, "Displayed
 # payloads in tool output cannot be told from live ones").
@@ -42,9 +42,11 @@ path = "src/main.rs"
 # CI tests that configuration separately; the default graph intentionally includes the judge client.
 [features]
 default = ["judge"]
-judge = ["dep:please-judge"]
+judge = ["dep:please-judge", "please-scan/judge"]
+ml-candle = ["dep:please-ml", "please-ml/candle", "please-scan/ml-candle"]
 
 [dependencies]
+please-scan = { workspace = true }
 # `serde` is enabled here rather than in the core's defaults: machine-readable output is a CLI
 # concern, and the core stays serialisation-free for wasm and embedded callers.
 please-core = { workspace = true, features = ["serde"] }
@@ -53,6 +55,7 @@ serde_json = { workspace = true }
 # Still `optional` and still `dep:`-gated above, so no implicit feature of the same name exists and
 # `--no-default-features` drops it entirely. What changed is that `default` now asks for it.
 please-judge = { workspace = true, optional = true }
+please-ml = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Snapshot tests for human-readable output, and a scratch tree for directory-walk tests including the

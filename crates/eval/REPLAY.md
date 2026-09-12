@@ -13,6 +13,9 @@ are not treated as comparable probabilities.
 
 ## Choose a small labeled set
 
+For a new tuning round, use [the owner-labeling and freeze workflow](CAPTURE.md) first. It packages
+fresh holdouts separately from development cases and verifies their bytes and labels without scanning.
+
 Start with roughly 10–20 actual inputs at the boundary where the lab calls its scanner: both expected
 hostile inputs and legitimate controls, including security lessons and ordinary tool responses.
 Preserve the bytes and the envelope the scanner actually sees, including newlines. Do not replace

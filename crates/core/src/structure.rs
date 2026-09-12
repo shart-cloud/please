@@ -320,6 +320,13 @@ impl QuotingMap {
             .map(|(_, _, context)| *context)
     }
 
+    /// Reuse the original input's frame metadata without another JSON-shape probe.
+    pub(crate) fn frame_map(&self) -> FrameMap {
+        FrameMap {
+            quotes_attribute: self.quotes_attribute,
+        }
+    }
+
     /// Does a semantic unit begin at `offset`?
     ///
     /// Consulted once per match, for rules declaring [`crate::Anchor::Frame`]. Constant time.

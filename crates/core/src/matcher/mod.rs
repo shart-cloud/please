@@ -36,6 +36,7 @@ mod prefilter;
 use crate::finalize::evidence::Evidence;
 use crate::finalize::types::Span;
 use crate::ruleset::{Rule, Ruleset, RulesetLimits};
+use crate::structure::FrameMap;
 
 use patterns::PatternSet;
 use prefilter::Prefilter;
@@ -90,20 +91,11 @@ impl Matcher {
             .is_some_and(|rule| rule.fires_in_quotes)
     }
 
-    /// Does this rule only match at a frame boundary (005 FR-501)?
+    /// Every frame-eligible occurrence of every candidate rule against `haystack`.
     ///
-    /// Looked up by id, like [`Self::fires_in_quotes`], and false for an unknown rule for the same
-    /// reason: an id the rule set does not know cannot have declared anything, and defaulting an unknown
-    /// rule to *frame-anchored* would silently drop its findings.
-    pub fn is_frame_anchored(&self, rule_id: &str) -> bool {
-        self.ruleset
-            .all_rules()
-            .iter()
-            .find(|rule| rule.id == rule_id)
-            .is_some_and(|rule| rule.anchor == crate::Anchor::Frame)
-    }
-
-    /// Every match of every candidate rule against `haystack`.
+    /// The cap counts raw regex hits before eligibility filtering. Off-frame hits may exhaust
+    /// the cap and still record a coverage gap even when this returns no matches. Quoting
+    /// suppression is a separate operation on observations built from these eligible matches.
     ///
     /// The literal prefilter runs first, in one linear pass, so text matching no literal — nearly all text —
     /// returns from here having compiled nothing. Saturation and uncompilable patterns record their own
@@ -114,6 +106,18 @@ impl Matcher {
         max_matches: u32,
         evidence: &mut Evidence,
     ) -> Vec<RuleMatch<'a>> {
+        self.find_with_frames(haystack, max_matches, evidence, None)
+    }
+
+    /// The engine has already classified this haystack for quoting. Its frame metadata avoids
+    /// repeating that probe; standalone callers and decoded buffers initialize it lazily instead.
+    pub(crate) fn find_with_frames<'a>(
+        &'a self,
+        haystack: &[u8],
+        max_matches: u32,
+        evidence: &mut Evidence,
+        mut frames: Option<FrameMap>,
+    ) -> Vec<RuleMatch<'a>> {
         let rules = self.ruleset.all_rules();
         let mut found = Vec::new();
         for index in self.prefilter.candidates(haystack) {
@@ -122,13 +126,15 @@ impl Matcher {
                 .patterns
                 .matches(index, rule, haystack, max_matches, evidence)
             {
-                found.push(RuleMatch { rule, span });
+                if frame_eligible(rule, haystack, span, &mut frames) {
+                    found.push(RuleMatch { rule, span });
+                }
             }
         }
         found
     }
 
-    /// Which rules match `haystack` at all, each reported once.
+    /// Which rules have a frame-eligible retained occurrence in `haystack`, each reported once.
     ///
     /// The decoded path wants this rather than [`find`](Self::find): a payload repeated inside a decoded blob
     /// is still one concealed payload, and reporting each occurrence would let a single encoded region fill
@@ -140,11 +146,9 @@ impl Matcher {
         max_matches: u32,
         evidence: &mut Evidence,
     ) -> Vec<&'a Rule> {
-        // Still lazy, though [`FrameMap::build`] is now cheap — it is one `looks_like_json` probe rather
-        // than the boundary map it used to be. This function is the decoded path's inner loop: it runs
-        // once per decoded candidate, and a whole-input transform yields a copy of the entire document.
-        // Not paying even a cheap probe on candidates that match nothing is free to keep.
-        let mut frames: Option<crate::structure::FrameMap> = None;
+        // Each searched buffer owns its frame metadata. Build it only when an anchored rule
+        // has retained raw matches; the JSON-shape probe can inspect the whole buffer.
+        let mut frames = None;
         let rules = self.ruleset.all_rules();
         let mut found = Vec::new();
         for index in self.prefilter.candidates(haystack) {
@@ -161,18 +165,11 @@ impl Matcher {
             let spans = self
                 .patterns
                 .matches(index, rule, haystack, max_matches, evidence);
-            if spans.is_empty() {
+            if !spans
+                .iter()
+                .any(|span| frame_eligible(rule, haystack, *span, &mut frames))
+            {
                 continue;
-            }
-            if rule.anchor == crate::Anchor::Frame {
-                let frames =
-                    frames.get_or_insert_with(|| crate::structure::FrameMap::build(haystack));
-                if !spans
-                    .iter()
-                    .any(|span| frames.is_frame(haystack, span.start))
-                {
-                    continue;
-                }
             }
             found.push(rule);
         }
@@ -191,6 +188,15 @@ impl Matcher {
             .position(|rule| rule.id == rule_id)
             .is_some_and(|index| self.patterns.is_compiled(index))
     }
+}
+
+/// Eligibility follows bounded raw collection: rejected occurrences still consume the match cap.
+/// This is independent of quoting suppression, which only sees already-eligible observations.
+fn frame_eligible(rule: &Rule, haystack: &[u8], span: Span, frames: &mut Option<FrameMap>) -> bool {
+    rule.anchor != crate::Anchor::Frame
+        || frames
+            .get_or_insert_with(|| FrameMap::build(haystack))
+            .is_frame(haystack, span.start)
 }
 
 #[cfg(test)]
@@ -227,6 +233,51 @@ description = "Never fires."
         .expect("must prepare");
         let (ruleset, _, retained, limits) = prepared.into_parts();
         Matcher::build(ruleset, retained, limits)
+    }
+
+    #[test]
+    fn both_interfaces_enforce_frames_after_raw_collection() {
+        let prepared = prepare::from_source(
+            r#"
+[ruleset]
+name = "test.frame_matcher"
+version = "1"
+[[rule]]
+id = "boundary.marker"
+class = "boundary"
+severity = 80
+anchor = "frame"
+literals = ["MARKER"]
+pattern = 'MARKER'
+description = "Test marker."
+"#,
+            RulesetLimits::default(),
+        )
+        .unwrap();
+        let (ruleset, _, retained, limits) = prepared.into_parts();
+        let matcher = Matcher::build(ruleset, retained, limits);
+        let input = b"ordinary MARKER. MARKER. MARKER";
+        for cap in [0, 1, 2, 3, 4] {
+            let mut direct_evidence = Evidence::new();
+            let direct = matcher.find(input, cap, &mut direct_evidence);
+            let mut decoded_evidence = Evidence::new();
+            let decoded = matcher.matching_rules(input, cap, &mut decoded_evidence);
+            let expected = match cap {
+                0 | 1 => vec![],
+                2 => vec![Span::new(17, 23)],
+                _ => vec![Span::new(17, 23), Span::new(25, 31)],
+            };
+            assert_eq!(
+                direct.iter().map(|hit| hit.span).collect::<Vec<_>>(),
+                expected
+            );
+            assert_eq!(decoded.len(), usize::from(!expected.is_empty()));
+            assert_eq!(
+                direct_evidence.recorded_gaps(),
+                decoded_evidence.recorded_gaps()
+            );
+            assert_eq!(direct_evidence.recorded_gaps().len(), usize::from(cap < 3));
+        }
     }
 
     #[test]

@@ -188,7 +188,7 @@ fn a_response_in_prose_is_inconclusive_and_is_not_parsed() {
     let structural = scan(&engine, FLAGGED);
     let endpoint = one_shot(Respond::With {
         status: 200,
-        body: r#"{"id":"m","type":"message","role":"assistant","content":[
+        body: r#"{"id":"m","type":"message","role":"assistant","stop_reason":"tool_use","content":[
                    {"type":"text","text":"This document appears to be a benign example. framing: presented_as_example"}
                  ]}"#
         .to_string(),
@@ -239,7 +239,7 @@ fn an_unknown_field_is_inconclusive() {
     let structural = scan(&engine, FLAGGED);
     let endpoint = one_shot(Respond::With {
         status: 200,
-        body: r#"{"id":"m","type":"message","role":"assistant","content":[
+        body: r#"{"id":"m","type":"message","role":"assistant","stop_reason":"tool_use","content":[
                   {"type":"tool_use","id":"t","name":"classify_document","input":{
                     "addressed_to":"document_recipient",
                     "imperative_source":"quoted_third_party",

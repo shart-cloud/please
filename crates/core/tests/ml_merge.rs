@@ -41,6 +41,7 @@ fn bounds() -> Bounds {
         max_input_bytes: 1_048_576,
         max_decode_depth: 3,
         max_matches_per_rule: 16,
+        max_observations: 4096,
         max_reasons: 64,
         max_excerpt_bytes: 256,
     }
@@ -183,7 +184,11 @@ fn distinct_ml_classes_earn_the_corroboration_bonus() {
             DetectionClass::AgentDirected,
         )],
     );
-    assert_eq!(after.score(), 55, "one extra distinct class is +5");
+    assert_eq!(
+        after.score(),
+        50,
+        "a classifier does not measure an additional behavioral class"
+    );
 }
 
 // ── Structural findings survive ─────────────────────────────────────────────────────────────────
@@ -277,13 +282,10 @@ fn a_clean_verdict_the_tier_cleared_still_carries_its_report() {
     );
 }
 
-// ── A truncated verdict is refused, not silently mis-scored ─────────────────────────────────────
+// ── Display shortening does not prevent ML composition ─────────────────────────────────────
 
 #[test]
-fn a_truncated_verdict_is_refused_and_keeps_its_score() {
-    // Same argument as `rejudge`'s D9 refusal: `finalize` scored before truncating, so the severities past
-    // `max_reasons` are gone and recomputing from the survivors would LOWER the score — here while
-    // claiming to have added evidence.
+fn a_shortened_report_accepts_ml_and_scores_all_evidence() {
     let tight = Bounds {
         max_reasons: 2,
         ..bounds()
@@ -299,8 +301,6 @@ fn a_truncated_verdict_is_refused_and_keeps_its_score() {
     }
     let before = finalize(evidence, tight, attribution());
     assert!(before.reasons_truncated());
-    let score_before = before.score();
-
     let after = with_ml(
         before,
         vec![observation(
@@ -314,25 +314,10 @@ fn a_truncated_verdict_is_refused_and_keeps_its_score() {
         &Bands::default(),
     );
 
-    assert_eq!(after.score(), score_before, "the score must not move");
-    assert!(
-        after.ml().is_none(),
-        "a refused merge must not claim the tier acted"
-    );
-    assert!(
-        after
-            .incomplete()
-            .iter()
-            .any(|gap| gap.cause() == IncompleteCause::TierUnavailable),
-        "the refusal must be visible in the verdict"
-    );
-    assert!(
-        !after
-            .reasons()
-            .iter()
-            .any(|r| r.rule_id() == "ml.classifier"),
-        "no ML finding may be applied on the refusal path"
-    );
+    assert_eq!(after.score(), 90);
+    assert!(after.ml().is_some());
+    assert!(after.incomplete().is_empty());
+    assert_eq!(after.analysis().reasons().len(), 6);
 }
 
 fn demote_all(verdict: Verdict) -> Verdict {
@@ -346,7 +331,7 @@ fn demote_all(verdict: Verdict) -> Verdict {
             framing: Framing::PresentedAsExample,
             stated_purpose_explains_content: StatedPurposeExplainsContent::Yes,
         },
-        (0..verdict.reasons().len())
+        (0..verdict.analysis().reasons().len())
             .map(|reason_index| SpanVerdict {
                 reason_index,
                 role: SpanRole::DescriptionOfAnInstruction,
@@ -356,7 +341,7 @@ fn demote_all(verdict: Verdict) -> Verdict {
             .collect(),
         None,
     );
-    please_core::finalize::rejudge(verdict, report, &Bands::default())
+    apply_authorized(verdict, report, &Bands::default())
 }
 
 #[test]
@@ -442,7 +427,7 @@ fn ml_then_judgement_preserves_ml_attribution() {
 }
 
 #[test]
-fn judgement_then_ml_then_refused_tiers_preserve_prior_evidence() {
+fn judgement_then_ml_then_review_and_failure_preserve_retained_evidence() {
     let judged = demote_all(structural(vec![observation(
         "a",
         10,
@@ -465,16 +450,29 @@ fn judgement_then_ml_then_refused_tiers_preserve_prior_evidence() {
     assert!(merged.reasons_truncated());
     assert_eq!(merged.score(), 90, "aggregate before truncation");
     assert_eq!(merged.judge(), Some(&judge));
-    let reasons = merged.reasons().to_vec();
-    let suppressed = merged.suppressed().to_vec();
-    let gaps = merged.incomplete().len();
-    // Both attempts must refuse this truncated verdict and preserve the successful tiers.
-    let refused = merge(demote_all(merged), vec![]);
-    assert_eq!(refused.outcome(), Outcome::RiskFound);
-    assert_eq!(refused.score(), 90);
-    assert_eq!(refused.reasons(), reasons);
-    assert_eq!(refused.suppressed(), suppressed);
-    assert_eq!(refused.incomplete().len(), gaps + 2);
-    assert_eq!(refused.ml(), Some(&report()));
-    assert_eq!(refused.judge(), Some(&judge));
+    let reviewed = demote_all(merged);
+    assert_eq!(reviewed.outcome(), Outcome::Clean);
+    assert_eq!(reviewed.analysis().suppressed().len(), 3);
+    assert!(reviewed.suppressions_truncated());
+    let judge = reviewed.judge().unwrap().clone();
+    let failed = please_core::finalize::add_gap(
+        reviewed,
+        please_core::CoverageGap::failure(IncompleteCause::TierUnavailable, "later failure"),
+    );
+    assert_eq!(failed.outcome(), Outcome::Inconclusive);
+    assert_eq!(failed.score(), 0);
+    assert_eq!(failed.analysis().suppressed().len(), 3);
+    assert_eq!(failed.ml(), Some(&report()));
+    assert_eq!(failed.judge(), Some(&judge));
+}
+
+fn apply_authorized(
+    verdict: please_core::Verdict,
+    report: please_core::JudgeReport,
+    bands: &please_core::ruleset::Bands,
+) -> please_core::Verdict {
+    use please_core::finalize::review::{ReviewAuthority, ReviewScope};
+    assert_eq!(verdict.bands(), bands);
+    let report = ReviewScope::capture(&verdict).bind(report);
+    please_core::finalize::rejudge_with_authority(verdict, report, ReviewAuthority::MayRelease)
 }

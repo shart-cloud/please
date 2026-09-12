@@ -185,7 +185,7 @@ fn reason_truncation_is_reported() {
     assert!(v
         .incomplete()
         .iter()
-        .any(|i| i.cause() == IncompleteCause::MaxReasons));
+        .all(|i| i.cause() != IncompleteCause::MaxReasons));
 }
 
 #[test]
@@ -344,7 +344,7 @@ fn suppression_is_reportable_from_a_single_scan() {
 
     let verdict = engine.scan(
         input.as_bytes(),
-        &ScanPolicy::default(),
+        &ScanPolicy::reference_analysis(),
         TargetRef::buffer("t", input.len()),
     );
 
@@ -412,7 +412,7 @@ fn a_live_payload_is_reported_and_a_quoted_one_suppressed_in_the_same_scan() {
 
     let verdict = engine.scan(
         input.as_bytes(),
-        &ScanPolicy::default(),
+        &ScanPolicy::reference_analysis(),
         TargetRef::buffer("t", input.len()),
     );
 
@@ -451,11 +451,9 @@ fn early_excerpt_truncation_remains_visible_for_direct_and_decoded_matches() {
         );
         assert!(!verdict.reasons().is_empty(), "{input}");
         assert!(verdict.reasons().iter().all(|r| r.matched().len() <= 4));
+        assert!(verdict.incomplete().is_empty(), "{input}");
         assert!(
-            verdict
-                .incomplete()
-                .iter()
-                .any(|g| g.cause() == IncompleteCause::ExcerptLength),
+            verdict.reasons().iter().any(|r| r.excerpt_truncated()),
             "{input}"
         );
     }

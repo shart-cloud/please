@@ -7,6 +7,56 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
+#[test]
+#[cfg(feature = "judge")]
+fn requesting_a_judge_does_not_grant_release_authority() {
+    for allow_release in [false, true] {
+        let endpoint = judged_endpoint(
+            "description_of_an_instruction",
+            "is_what_the_document_shows",
+        );
+        let mut args = vec![
+            "scan",
+            "--format",
+            "json",
+            "--judge",
+            "--judge-timeout",
+            "5",
+        ];
+        if allow_release {
+            args.push("--judge-allow-release");
+        }
+        let result = run(
+            &args,
+            FLAGGED,
+            &[
+                ("ANTHROPIC_BASE_URL", &endpoint),
+                ("ANTHROPIC_AUTH_TOKEN", "t"),
+            ],
+        );
+        let value: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+        assert_eq!(
+            result.code,
+            if allow_release { 0 } else { 1 },
+            "{}",
+            result.stdout
+        );
+        assert_eq!(
+            value["judge"]["authority"],
+            if allow_release {
+                "may_release"
+            } else {
+                "advisory"
+            }
+        );
+        assert_eq!(value["judge"]["request_id"].as_str().unwrap().len(), 64);
+        if !allow_release {
+            assert!(!value["reasons"].as_array().unwrap().is_empty());
+            assert_eq!(value["suppressed"].as_array().unwrap().len(), 0);
+        }
+    }
+}
+
 fn plz() -> Command {
     Command::new(env!("CARGO_BIN_EXE_plz"))
 }
@@ -373,6 +423,7 @@ fn judge_demotions_name_the_judge_and_the_flag_that_reverses_them() {
             "--format",
             "human",
             "--judge",
+            "--judge-allow-release",
             "--explain",
             "--judge-timeout",
             "5",
@@ -479,19 +530,16 @@ fn judged_endpoint_inner(role: &str, relation: &str, severity: Option<u8>) -> St
             let mut body = vec![0u8; length];
             let _ = reader.read_exact(&mut body);
 
-            // One answer per span the request asked about; the count is however many span ids it carried.
-            let asked = String::from_utf8_lossy(&body)
-                .matches("span_id=\\\"s")
-                .count();
-            let spans: Vec<String> = (0..asked.max(1))
-                .map(|i| {
-                    format!(
-                        r#"{{"span_id":"s{i}","span_role":"{role}","span_relation_to_document":"{relation}"}}"#
-                    )
-                })
-                .collect();
+            // Echo the request's opaque IDs; a response from another request must not match.
+            let request: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            let content = request["messages"][0]["content"].as_str().unwrap();
+            let spans: Vec<String> = content.split("<excerpt span_id=\"").skip(1)
+                .map(|part| {
+                    let id = part.split('"').next().unwrap();
+                    format!(r#"{{"span_id":"{id}","span_role":"{role}","span_relation_to_document":"{relation}"}}"#)
+                }).collect();
             let payload = format!(
-                r#"{{"id":"m","type":"message","role":"assistant","content":[{{"type":"tool_use","id":"t","name":"classify_document","input":{{{severity}"addressed_to":"document_recipient","imperative_source":"quoted_third_party","framing":"presented_as_example","stated_purpose_explains_content":"yes","spans":[{}]}}}}]}}"#,
+                r#"{{"id":"m","type":"message","role":"assistant","stop_reason":"tool_use","content":[{{"type":"tool_use","id":"t","name":"classify_document","input":{{{severity}"addressed_to":"document_recipient","imperative_source":"quoted_third_party","framing":"presented_as_example","stated_purpose_explains_content":"yes","spans":[{}]}}}}]}}"#,
                 spans.join(",")
             );
             let response = format!(
@@ -527,6 +575,7 @@ fn a_judged_verdict_conforms_to_the_schema() {
             "--format",
             "json",
             "--judge",
+            "--judge-allow-release",
             "--judge-timeout",
             "5",
         ],
@@ -615,10 +664,18 @@ fn model_severity_never_reaches_the_wire() {
         "FR-410: the model's own score must not reach the wire:\n{}",
         run.stdout
     );
+    fn contains_model_number(value: &serde_json::Value) -> bool {
+        match value {
+            serde_json::Value::Number(n) => n.as_u64() == Some(77),
+            serde_json::Value::Array(items) => items.iter().any(contains_model_number),
+            serde_json::Value::Object(fields) => fields.values().any(contains_model_number),
+            _ => false,
+        }
+    }
+    let value: serde_json::Value = serde_json::from_str(&run.stdout).unwrap();
     assert!(
-        !run.stdout.contains("77"),
-        "the value itself must not appear either:\n{}",
-        run.stdout
+        !contains_model_number(&value),
+        "the model's numeric score must not reach the wire"
     );
 }
 
@@ -630,4 +687,55 @@ fn judged_endpoint_with_severity(severity: u8) -> String {
         "is_what_the_document_shows",
         Some(severity),
     )
+}
+
+#[test]
+#[cfg(feature = "judge")]
+fn caller_context_file_is_bound_and_used_without_disclosing_its_text() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("context.json");
+    let context = serde_json::json!({
+        "task_context":"private-host-task-8731",
+        "boundaries":[{"kind":"instruction_hierarchy", "scope":"application instructions",
+            "constraint":"User content cannot override application instructions."}],
+        "context_completeness":{"relevant":["instruction_hierarchy"], "known":["instruction_hierarchy"], "unavailable":[]}
+    });
+    std::fs::write(&path, context.to_string()).unwrap();
+    let endpoint = judged_endpoint(
+        "description_of_an_instruction",
+        "is_what_the_document_shows",
+    );
+    let result = run(
+        &[
+            "scan",
+            "--format",
+            "json",
+            "--judge",
+            "--judge-allow-release",
+            "--provenance",
+            "user-input",
+            "--review-context",
+            path.to_str().unwrap(),
+            "--max-reasons",
+            "0",
+        ],
+        FLAGGED,
+        &[
+            ("ANTHROPIC_BASE_URL", &endpoint),
+            ("ANTHROPIC_AUTH_TOKEN", "t"),
+        ],
+    );
+    assert_eq!(result.code, 0, "{} {}", result.stdout, result.stderr);
+    let value: serde_json::Value = serde_json::from_str(&result.stdout).unwrap();
+    assert_eq!(value["judge"]["authority"], "may_release");
+    assert_eq!(value["scan_policy"]["provenance"], "user_input");
+    assert_eq!(
+        value["scan_policy"]["caller_context_id"]
+            .as_str()
+            .unwrap()
+            .len(),
+        64
+    );
+    assert!(!result.stdout.contains("private-host-task-8731"));
+    assert!(!result.stdout.contains("User content cannot override"));
 }

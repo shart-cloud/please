@@ -145,7 +145,7 @@ pub fn tool_response(spans: &[(&str, &str)], features: &str) -> String {
         })
         .collect();
     format!(
-        r#"{{"id":"msg_1","type":"message","role":"assistant","content":[
+        r#"{{"id":"msg_1","type":"message","role":"assistant","stop_reason":"tool_use","content":[
              {{"type":"tool_use","id":"tu_1","name":"classify_document",
                "input":{{{features},"spans":[{}]}}}}
            ]}}"#,
@@ -232,4 +232,69 @@ pub fn skip_without_endpoint(test: &str) -> Option<please_judge::Resolution> {
         return None;
     }
     Some(resolution)
+}
+
+/// Malformed envelopes for either route. Duplicates must be constructed as raw JSON.
+pub fn invalid_envelopes(valid: &str) -> Vec<String> {
+    use serde_json::{json, Value};
+    let base: Value = serde_json::from_str(valid).unwrap();
+    let mut cases = Vec::new();
+    for reason in [
+        Value::Null,
+        json!("max_tokens"),
+        json!("end_turn"),
+        json!("stop_sequence"),
+    ] {
+        let mut v = base.clone();
+        v["stop_reason"] = reason;
+        cases.push(v.to_string());
+    }
+    let mut v = base.clone();
+    v.as_object_mut().unwrap().remove("stop_reason");
+    cases.push(v.to_string());
+    for content in [
+        json!([]),
+        json!([{"type":"text","text":"private-response-canary"}]),
+        json!([base["content"][0], base["content"][0]]),
+        json!([base["content"][0], {"type":"tool_use","name":"other","input":{}}]),
+        Value::Null,
+    ] {
+        let mut v = base.clone();
+        v["content"] = content;
+        cases.push(v.to_string());
+    }
+    let mut v = base.clone();
+    v["content"][0]["name"] = json!("private-response-canary");
+    cases.push(v.to_string());
+    for input in [
+        Value::Null,
+        json!([]),
+        json!("private-response-canary"),
+        json!(true),
+        json!(42),
+    ] {
+        let mut v = base.clone();
+        v["content"][0]["input"] = input;
+        cases.push(v.to_string());
+    }
+    let mut v = base.clone();
+    v["content"][0].as_object_mut().unwrap().remove("input");
+    cases.push(v.to_string());
+    let raw = base.to_string();
+    for (key, first) in [
+        ("stop_reason", "\"tool_use\""),
+        ("content", "[]"),
+        ("type", "\"text\""),
+        ("name", "null"),
+        ("input", "null"),
+    ] {
+        cases.push(raw.replacen(
+            &format!("\"{key}\":"),
+            &format!("\"{key}\":{first},\"{key}\":"),
+            1,
+        ));
+    }
+    cases.push(format!("{raw} {{}}"));
+    cases.push(raw[..raw.len() - 1].into());
+    cases
 }

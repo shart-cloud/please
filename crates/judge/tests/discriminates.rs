@@ -60,7 +60,9 @@ fn a_transcript_displaying_payloads_is_demoted_to_clean() {
          flagging it then this test is measuring nothing"
     );
 
-    let judged = Judge::new(resolution).review(structural.clone(), case.as_bytes(), engine.bands());
+    let judged = Judge::new(resolution)
+        .with_authority(please_judge::ReviewAuthority::MayRelease)
+        .review(structural.clone(), case.as_bytes(), engine.bands());
 
     eprintln!(
         "\nbenign-tool-001 features: {:?}",
@@ -120,7 +122,9 @@ fn a_transcript_carrying_a_payload_stays_reported() {
          separate bug from anything this tier does"
     );
 
-    let judged = Judge::new(resolution).review(structural.clone(), case.as_bytes(), engine.bands());
+    let judged = Judge::new(resolution)
+        .with_authority(please_judge::ReviewAuthority::MayRelease)
+        .review(structural.clone(), case.as_bytes(), engine.bands());
 
     eprintln!(
         "\nindirect-tool-003 features: {:?}",
@@ -161,7 +165,7 @@ fn the_pair_receives_opposite_judgements() {
     };
 
     let engine = engine();
-    let judge = Judge::new(resolution);
+    let judge = Judge::new(resolution).with_authority(please_judge::ReviewAuthority::MayRelease);
 
     let benign = fixture("handcrafted-benign.jsonl", "benign-tool-001");
     let hostile = fixture("handcrafted-indirect.jsonl", "indirect-tool-003");

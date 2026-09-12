@@ -52,6 +52,7 @@ pub struct MlConfig {
     /// Context window. Inputs longer than this are chunked (FR-612), never silently truncated —
     /// truncation would let a payload past the window score as whatever preceded it.
     pub max_tokens: usize,
+    pub windowing: WindowSettings,
     /// Index of the malicious class in the classifier's output. `None` for an embedder.
     ///
     /// Explicit rather than inferred from `id2label`, because T002 measured a real model whose config
@@ -93,6 +94,12 @@ impl MlConfig {
                 self.threshold
             ));
         }
+        if self.windowing.max_windows == 0 || self.windowing.max_total_tokens == 0 {
+            return Err("classifier window/work limits must be positive".into());
+        }
+        if self.windowing.overlap_tokens >= self.max_tokens {
+            return Err("overlap must be smaller than payload capacity".into());
+        }
         if self.max_tokens == 0 {
             return Err(format!(
                 "model `{}` has a zero context window",
@@ -106,6 +113,24 @@ impl MlConfig {
                 "model `{}` pairs an incompatible kind and architecture",
                 self.model_id
             )),
+        }
+    }
+}
+
+/// Work limits are independent of presentation limits. Overlap counts payload tokens.
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct WindowSettings {
+    pub overlap_tokens: usize,
+    pub max_windows: usize,
+    pub max_total_tokens: usize,
+}
+impl Default for WindowSettings {
+    fn default() -> Self {
+        Self {
+            overlap_tokens: 0,
+            max_windows: 4096,
+            max_total_tokens: 2_097_152,
         }
     }
 }

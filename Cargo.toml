@@ -5,6 +5,7 @@ members = [
     "crates/cli",
     "crates/judge",
     "crates/ml",
+    "crates/scan",
 ]
 # crates/eval is deliberately EXCLUDED (plan.md D12).
 #
@@ -24,6 +25,7 @@ repository = "https://github.com/jlgore/please"
 rust-version = "1.85"
 
 [workspace.dependencies]
+please-scan = { path = "crates/scan", version = "0.1.0" }
 please-core = { path = "crates/core", version = "0.1.0" }
 # The judgement tier (feature 004). A workspace member rather than an exclusion like crates/eval, because
 # it is a SHIPPING capability users enable — so it must be built, tested, linted and version-locked with

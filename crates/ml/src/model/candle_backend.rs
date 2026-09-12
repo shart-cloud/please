@@ -9,11 +9,12 @@
 //! a research harness that imports the production crate can no longer answer "is the production crate
 //! right?" — which is the question it exists to answer.
 
-use super::{to_permille, Outcome};
+use super::{to_permille, Classification, Outcome};
 use crate::config::{Architecture, MlConfig, ModelKind};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::{bert, debertav2};
+use please_core::inference::{InferenceIdentity, MlWindowResult};
 use std::collections::HashMap;
 use tokenizers::{Tokenizer, TruncationParams};
 
@@ -32,7 +33,7 @@ pub(super) enum Backend {
 }
 
 impl Backend {
-    pub(super) fn load(config: &MlConfig) -> Result<Self, String> {
+    pub(super) fn load(config: &MlConfig) -> Result<(Self, InferenceIdentity), String> {
         let directory = &config.model_path;
         let config_path = directory.join("config.json");
         let tokenizer_path = directory.join("tokenizer.json");
@@ -40,28 +41,26 @@ impl Backend {
 
         let config_bytes = std::fs::read(&config_path)
             .map_err(|e| format!("cannot read {}: {e}", config_path.display()))?;
-        let mut tokenizer = Tokenizer::from_file(&tokenizer_path)
-            .map_err(|e| format!("cannot load {}: {e}", tokenizer_path.display()))?;
-
-        // Do not inherit padding or truncation serialised by somebody's training script. A single
-        // sequence needs no padding, and truncation is handled explicitly by the chunker below —
-        // inheriting it here would silently drop the tail of every long input, which is precisely the
-        // behaviour FR-612 exists to prevent.
-        tokenizer.with_padding(None);
-        tokenizer
-            .with_truncation(None)
-            .map_err(|e| format!("cannot configure tokenizer for `{}`: {e}", config.model_id))?;
-
+        let tokenizer_bytes =
+            std::fs::read(&tokenizer_path).map_err(|e| format!("cannot read tokenizer: {e}"))?;
+        let mut tokenizer = Tokenizer::from_bytes(&tokenizer_bytes)
+            .map_err(|e| format!("cannot load tokenizer: {e}"))?;
+        super::windows::configure(&mut tokenizer)?;
+        if config.kind == ModelKind::Classifier {
+            super::windows::capacity(&tokenizer, config.max_tokens, config.windowing)?;
+        }
+        let file =
+            std::fs::File::open(&weights_path).map_err(|e| format!("cannot open weights: {e}"))?;
+        // SAFETY: the caller must keep model artifacts unchanged during load. We hash and load
+        // from this SAME mapping; path replacement cannot redirect the second operation. Candle's
+        // slice backend copies tensor data into owned CPU storage during construction. The mapping
+        // is dropped only after construction. Concurrent writes to the mapped file are unsupported.
+        let mapped = unsafe { memmap2::MmapOptions::new().map(&file) }
+            .map_err(|e| format!("cannot map weights: {e}"))?;
+        let identity = super::identity::identity(config, &mapped, &tokenizer_bytes, &config_bytes);
         let device = Device::Cpu;
-        // SAFETY: `VarBuilder` keeps the mapping alive for as long as any tensor can refer to it, and the
-        // model directory is not written during a scan. The alternative allocates a second full copy of
-        // the weights — 1.08 GiB for Prompt Guard 2, measured in T003.
-        //
-        // This call is why the crate does not carry `#![forbid(unsafe_code)]`, and why it is a separate
-        // crate rather than a module in core.
-        let weights =
-            unsafe { VarBuilder::from_mmaped_safetensors(&[&weights_path], DType::F32, &device) }
-                .map_err(|e| format!("cannot map weights for `{}`: {e}", config.model_id))?;
+        let weights = VarBuilder::from_slice_safetensors(&mapped, DType::F32, &device)
+            .map_err(|e| format!("cannot parse weights: {e}"))?;
 
         match (config.kind, config.architecture) {
             (ModelKind::Classifier, Architecture::DebertaV2SequenceClassification) => {
@@ -92,23 +91,29 @@ impl Backend {
                 .map_err(|e| {
                     format!("cannot construct `{}` as DeBERTa-v2: {e}", config.model_id)
                 })?;
-                Ok(Backend::Classifier {
-                    model: Box::new(model),
-                    tokenizer,
-                    malicious_label,
-                    device,
-                })
+                Ok((
+                    Backend::Classifier {
+                        model: Box::new(model),
+                        tokenizer,
+                        malicious_label,
+                        device,
+                    },
+                    identity,
+                ))
             }
             (ModelKind::Embedder, Architecture::BertMeanPooling) => {
                 let parsed: bert::Config = serde_json::from_slice(&config_bytes)
                     .map_err(|e| format!("cannot parse {}: {e}", config_path.display()))?;
                 let model = bert::BertModel::load(weights, &parsed)
                     .map_err(|e| format!("cannot construct `{}` as BERT: {e}", config.model_id))?;
-                Ok(Backend::Embedder {
-                    model: Box::new(model),
-                    tokenizer,
-                    device,
-                })
+                Ok((
+                    Backend::Embedder {
+                        model: Box::new(model),
+                        tokenizer,
+                        device,
+                    },
+                    identity,
+                ))
             }
             _ => Err(format!(
                 "model `{}` pairs an incompatible kind and architecture",
@@ -118,7 +123,7 @@ impl Backend {
     }
 
     /// Classify, chunking at the context window and keeping the maximum (FR-612).
-    pub(super) fn classify(&self, config: &MlConfig, text: &str) -> Outcome<u16> {
+    pub(super) fn classify(&self, config: &MlConfig, text: &str) -> Outcome<Classification> {
         let Backend::Classifier {
             model,
             tokenizer,
@@ -129,34 +134,21 @@ impl Backend {
             return Outcome::NotApplicable;
         };
 
-        let encoded = match tokenizer.encode(text, true) {
-            Ok(encoded) => encoded,
-            Err(e) => return Outcome::Failed(format!("tokenization failed: {e}")),
-        };
+        let windows =
+            match super::windows::plan(tokenizer, text, config.max_tokens, config.windowing) {
+                Ok(windows) => windows,
+                Err(e) => return Outcome::Failed(format!("tokenization failed: {e}")),
+            };
 
-        // Two special tokens bracket every chunk, so the usable payload is the window minus those. Getting
-        // this wrong produces a tensor one or two positions too long and an error from the model rather
-        // than a wrong answer, but the error would be per-document and mystifying.
-        let window = config.max_tokens.saturating_sub(2).max(1);
-        let ids = encoded.get_ids();
-        let type_ids = encoded.get_type_ids();
-        let mask = encoded.get_attention_mask();
-
-        if ids.is_empty() {
-            // Whitespace, or text the tokenizer reduced to nothing. Not a failure and not a finding.
-            return Outcome::Ok(0);
-        }
-
-        let mut highest: u16 = 0;
-        for start in (0..ids.len()).step_by(window) {
-            let end = (start + window).min(ids.len());
+        let mut results = Vec::with_capacity(windows.len());
+        for window in windows {
             let probability = match forward_classifier(
                 model,
                 device,
                 *malicious_label,
-                &ids[start..end],
-                &type_ids[start..end],
-                &mask[start..end],
+                window.encoding.get_ids(),
+                window.encoding.get_type_ids(),
+                window.encoding.get_attention_mask(),
             ) {
                 Ok(probability) => probability,
                 Err(detail) => return Outcome::Failed(detail),
@@ -167,9 +159,19 @@ impl Backend {
             };
             // Max, not mean. A megabyte of legitimate prose around one hostile paragraph must not average
             // that paragraph away — dilution is the attack, not an edge case.
-            highest = highest.max(permille);
+            results.push(MlWindowResult {
+                index: window.layout.index,
+                token_start: window.layout.token_start,
+                token_end: window.layout.token_end,
+                span: window.layout.span(),
+                model_tokens: window.layout.model_tokens,
+                raw_score: permille,
+            });
         }
-        Outcome::Ok(highest)
+        match Classification::from_windows(results) {
+            Ok(result) => Outcome::Ok(result),
+            Err(detail) => Outcome::Failed(detail),
+        }
     }
 
     pub(super) fn embed(&self, config: &MlConfig, text: &str) -> Outcome<Vec<f32>> {

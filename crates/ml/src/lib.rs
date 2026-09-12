@@ -16,8 +16,8 @@
 //!
 //! * **Candle on x86 is slower than the feature was scoped against.** T005 measured 183 ms per inference
 //!   for ProtectAI and 444 ms for Prompt Guard 2, against the 50–150 ms taken from a third-party project
-//!   on Apple Silicon. Selective inference (FR-652) is therefore load-bearing rather than an optimisation:
-//!   a sixty-chunk document is eleven seconds on the cheaper model.
+//!   on Apple Silicon. The initial CLI integration classifies complete documents so structurally clean
+//!   inputs are examined too; a sixty-chunk document can take eleven seconds on the cheaper model.
 //! * **The embedding outlier score is a ranker, not a detector.** T006 measured 55.6% top-1 at finding a
 //!   known payload; T008 measured 3.1% at deciding whether there is one, against a 25% criterion. See
 //!   [`outlier`], which reports the score and gates nothing on it.
@@ -44,10 +44,14 @@ pub mod config;
 pub mod model;
 pub mod observe;
 pub mod outlier;
+mod scan;
+
+pub use scan::scan;
 
 pub use config::{Architecture, MlConfig, ModelKind};
-pub use model::{MlLoadResult, MlModel, Outcome};
-pub use observe::{observe, Segment, ML_CLASS, ML_RULE_ID};
+pub use model::windows::{WindowLayout, WindowPlanner};
+pub use model::{Classification, MlLoadResult, MlModel, Outcome};
+pub use observe::{observe, observe_with_impact, Segment, ML_CLASS, ML_RULE_ID};
 
 /// Core's vocabulary for describing a run, re-exported so a caller needs one import.
 ///

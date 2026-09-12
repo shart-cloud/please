@@ -15,7 +15,8 @@
 //! please-eval model smoke         real Candle inference (`--features ml`)
 //! ```
 //!
-//! `run`, `report` and `gate` all take `--offline`, which restricts them to the committed corpora.
+//! `run --offline` selects committed corpora; `report --offline` limits its metric tables.
+//! `gate` always verifies and checks the entire recorded selection, including with `--offline`.
 //! That is the configuration CI uses, and `README.md` states plainly what it proves and what it does
 //! not: the gate over hand-written negatives, generated matched carriers and this repository's own
 //! prose is real, and the public-corpus half needs an approved dataset gate and a human.
@@ -24,12 +25,12 @@ use clap::{Parser, Subcommand};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use please_eval::metrics::{parse_floor, Gate, Report, SliceMetrics};
+use please_eval::metrics::parse_floor;
 use please_eval::models::ModelManifest;
 use please_eval::rows::Row;
 use please_eval::scan::RuleSelection;
 use please_eval::slice::{Origin, Slice, SliceSet};
-use please_eval::{cases, fetch, generate, manifest, models, scan, Result};
+use please_eval::{cases, fetch, generate, manifest, models, Result};
 
 /// Exit code for a gate failure.
 ///
@@ -52,6 +53,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Freeze and measure tokenizer-verified window-boundary placements, without network access.
+    #[cfg(feature = "boundary")]
+    Boundary {
+        #[command(subcommand)]
+        action: BoundaryCommand,
+    },
+    /// Freeze owner-reviewed local captures or verify an existing freeze. No scanning or network.
+    Capture {
+        #[command(subcommand)]
+        action: CaptureCommand,
+    },
     /// Build `corpus/generated.jsonl` from the committed carriers, payloads and positions.
     Generate {
         /// Verify the committed file matches what the inputs generate, and change nothing.
@@ -82,9 +94,11 @@ enum Command {
         /// Rules to disable, by id.
         #[arg(long = "disable-rule")]
         disable_rule: Vec<String>,
-        /// Label for this run's results directory.
+        /// Fresh label for this run; existing runs cannot be overwritten or extended.
         #[arg(long, default_value = "builtin")]
         run: String,
+        #[command(flatten)]
+        pipeline: please_eval::product::ProductOptions,
     },
     /// Replay labeled local captures against saved results from an existing scanner. No network.
     Replay {
@@ -132,6 +146,67 @@ enum Command {
     Model {
         #[command(subcommand)]
         action: ModelCommand,
+    },
+}
+
+#[cfg(feature = "boundary")]
+#[derive(Subcommand)]
+enum BoundaryCommand {
+    Generate {
+        #[arg(long)]
+        seeds: PathBuf,
+        #[arg(long)]
+        tokenizer: PathBuf,
+        #[arg(long, default_value_t = 512)]
+        max_tokens: usize,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    Check {
+        #[arg(long)]
+        suite: PathBuf,
+        #[arg(long)]
+        sha256: String,
+        #[arg(long)]
+        tokenizer: PathBuf,
+    },
+    #[cfg(feature = "shipping-ml")]
+    Run {
+        #[arg(long)]
+        suite: PathBuf,
+        #[arg(long)]
+        sha256: String,
+        #[arg(long)]
+        ml_config: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long, default_value_t = 1)]
+        repeats: usize,
+        #[arg(long, default_value = "development", value_parser = ["development", "holdout"])]
+        split: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum CaptureCommand {
+    /// Validate labels, provenance, split isolation and known exposure, then copy exact bytes.
+    Freeze {
+        /// Reviewed collection JSON. See crates/eval/CAPTURE.md.
+        #[arg(long)]
+        draft: PathBuf,
+        /// Known exposed JSONL: replay manifests (input_sha256) or authored cases (text).
+        #[arg(long, required = true)]
+        exclude: Vec<PathBuf>,
+        /// New private output directory; refuses overwrite.
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Verify all frozen bytes and metadata against a separately retained freeze digest.
+    Check {
+        #[arg(long)]
+        dir: PathBuf,
+        #[arg(long)]
+        sha256: String,
     },
 }
 
@@ -219,6 +294,65 @@ fn main() -> ExitCode {
 fn run() -> Result<ExitCode> {
     let cli = Cli::parse();
     match cli.command {
+        #[cfg(feature = "boundary")]
+        Command::Boundary { action } => {
+            match action {
+                BoundaryCommand::Generate {
+                    seeds,
+                    tokenizer,
+                    max_tokens,
+                    out,
+                } => {
+                    println!(
+                        "Suite SHA-256: {}",
+                        please_eval::boundary::generate(&seeds, &tokenizer, max_tokens, &out)?
+                    );
+                }
+                BoundaryCommand::Check {
+                    suite,
+                    sha256,
+                    tokenizer,
+                } => {
+                    please_eval::boundary::check(&suite, &sha256, &tokenizer)?;
+                    println!("Boundary suite verified; no inference performed.");
+                }
+                #[cfg(feature = "shipping-ml")]
+                BoundaryCommand::Run {
+                    suite,
+                    sha256,
+                    ml_config,
+                    out,
+                    repeats,
+                    split,
+                } => {
+                    let split = if split == "holdout" {
+                        please_eval::boundary::Split::Holdout
+                    } else {
+                        please_eval::boundary::Split::Development
+                    };
+                    please_eval::boundary::run(&suite, &sha256, &ml_config, &out, repeats, split)?;
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::Capture { action } => {
+            match action {
+                CaptureCommand::Freeze {
+                    draft,
+                    exclude,
+                    out,
+                } => {
+                    let digest = please_eval::capture::freeze(&draft, &exclude, &out)?;
+                    println!("Freeze SHA-256: {digest}");
+                    println!("Retain this digest separately; no captures were scanned.");
+                }
+                CaptureCommand::Check { dir, sha256 } => {
+                    please_eval::capture::check(&dir, &sha256)?;
+                    println!("Frozen collection verified; no captures were scanned.");
+                }
+            }
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Generate { check } => generate_corpus(check),
         Command::Fetch { slices } => fetch_slices(&slices),
         Command::Manifest { slices } => check_manifests(&slices),
@@ -228,6 +362,7 @@ fn run() -> Result<ExitCode> {
             rules,
             disable_rule,
             run,
+            pipeline,
         } => scan_slices(
             &slices,
             offline,
@@ -236,6 +371,7 @@ fn run() -> Result<ExitCode> {
                 disable: disable_rule,
             },
             &run,
+            pipeline,
         ),
         Command::Replay {
             cases,
@@ -805,36 +941,39 @@ fn scan_slices(
     offline: bool,
     selection: RuleSelection,
     run_label: &str,
+    options: please_eval::product::ProductOptions,
 ) -> Result<ExitCode> {
     let set = SliceSet::load()?;
-    let floor = parse_floor(&set.gate.floor)?;
+    let runtime = options.resolve(parse_floor(&set.gate.floor)?)?;
     let engine = selection.engine()?;
     for warning in engine.warnings() {
         eprintln!("please-eval: rule set warning: {warning}");
     }
 
-    let mut any = false;
-    for slice in select(&set, wanted, offline)? {
+    let selected = select(&set, wanted, offline)?;
+    let corpus = SliceSet {
+        slices: selected.iter().map(|s| (*s).clone()).collect(),
+        ..set.clone()
+    };
+    let results_root = please_eval::cache::root()?.join("results");
+    let mut run = please_eval::run::EvaluationRun::create(
+        &results_root,
+        run_label,
+        &runtime,
+        &engine,
+        &selection.describe(),
+        corpus,
+    )?;
+    for slice in selected {
         let rows = load_rows(slice)?;
-        let results = scan::rows(&engine, floor, &rows);
-        scan::write_results(run_label, &slice.id, &results)?;
-        let hits = results.iter().filter(|r| r.detected).count();
+        let summary = run.scan_slice(&slice.id, &rows)?;
         println!(
             "{:<24} {:>6} rows  {:>6} at or above {}",
-            slice.id,
-            results.len(),
-            hits,
-            set.gate.floor
+            slice.id, summary.rows, summary.hits, summary.floor
         );
-        any = true;
     }
-    if !any {
-        return Err("no slices selected".into());
-    }
-    println!(
-        "\nresults under {}",
-        please_eval::cache::results_dir(run_label)?.display()
-    );
+    run.finish()?;
+    println!("\nresults under {}", results_root.join(run_label).display());
     Ok(ExitCode::SUCCESS)
 }
 
@@ -844,7 +983,11 @@ fn write_report(
     format: &str,
     out: Option<&std::path::Path>,
 ) -> Result<ExitCode> {
-    let report = assemble(run_label, offline)?;
+    let report = please_eval::run::report(
+        &please_eval::cache::root()?.join("results"),
+        run_label,
+        offline,
+    )?;
     let rendered = match format {
         "md" | "markdown" => report.to_markdown(),
         "json" => serde_json::to_string_pretty(&report.to_json())?,
@@ -867,7 +1010,11 @@ fn check_gate(
     strict: bool,
     allow_unpinned: bool,
 ) -> Result<ExitCode> {
-    let report = assemble(run_label, offline)?;
+    let report = please_eval::run::report(
+        &please_eval::cache::root()?.join("results"),
+        run_label,
+        offline,
+    )?;
     let gate = &report.gate;
 
     println!(
@@ -897,56 +1044,34 @@ fn check_gate(
     }
     if !gate.unpinned.is_empty() && !allow_unpinned {
         eprintln!(
-            "\n{} gate-eligible slice(s) have no baseline_permille in corpus/slices.toml: {}.\nA slice \
-             with no floor cannot detect a regression. Record today's rate there, or pass \
-             --allow-unpinned for the run that establishes it.",
+            "\n{} gate-eligible slice(s) have no applicable baseline in this saved run: {}.\nA slice \
+             with no floor cannot detect a regression. Mechanism runs retain their original baselines; \
+             after pinning corpus/slices.toml, use a new --run label. Product baselines remain unpinned. \
+             --allow-unpinned permits baseline-establishing measurements only; it cannot bypass run integrity.",
             gate.unpinned.len(),
             gate.unpinned.join(", ")
         );
     }
 
+    if !gate.run_integrity.is_complete() {
+        eprintln!(
+            "\nrun completeness is {:?}; rerun with a new --run label",
+            gate.run_integrity.status()
+        );
+        for issue in gate.run_integrity.issues() {
+            eprintln!(
+                "  {}: {}",
+                issue.slice.as_deref().unwrap_or("run"),
+                issue.detail
+            );
+        }
+    }
     if gate.failed(strict, allow_unpinned) {
         eprintln!("\ngate FAILED");
         return Ok(ExitCode::from(EXIT_GATE_FAILED));
     }
     println!("\ngate passed");
     Ok(ExitCode::SUCCESS)
-}
-
-/// Load a run's results and compute everything over them.
-fn assemble(run_label: &str, offline: bool) -> Result<Report> {
-    let set = SliceSet::load()?;
-    let mut metrics = Vec::new();
-    for slice in select(&set, &[], offline)? {
-        let Ok(results) = scan::read_results(run_label, &slice.id) else {
-            // A slice with no results is a slice this run did not scan — a `--offline` run, or a fetch
-            // that has not happened. Skipped quietly here and visible by its absence from the report,
-            // rather than failing a report over results the operator did not ask for.
-            continue;
-        };
-        metrics.push(SliceMetrics::compute(slice, &results));
-    }
-    if metrics.is_empty() {
-        return Err(format!(
-            "no results under run `{run_label}`. Run `please-eval run --run {run_label}` first"
-        )
-        .into());
-    }
-    let gate = Gate::evaluate(&set, &metrics);
-
-    // The rule set is re-derived rather than recorded in the results, so the digest in a report is the
-    // digest of the rule set that is on disk NOW. That is the honest attribution: a report rendered
-    // against a moved rule set should say so, and `run` is cheap enough to repeat.
-    let engine = RuleSelection::default().engine()?;
-    Ok(Report {
-        run: run_label.to_string(),
-        ruleset: RuleSelection::default().describe(),
-        ruleset_digest: engine.ruleset_id().digest.clone(),
-        floor: set.gate.floor.clone(),
-        dataset: set.dataset.url(),
-        metrics,
-        gate,
-    })
 }
 
 /// The slices a command should act on.

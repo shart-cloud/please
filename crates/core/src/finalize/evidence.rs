@@ -19,8 +19,9 @@
 //! least once: `depth_exceeded` originally meant "the decoder had more work queued", which for
 //! unconditional transforms like ROT-13 is *always* true, so every scan reported inconclusive.
 //!
-//! The fix is that the code which hits a bound records the gap itself, in the shared vocabulary, at the
-//! point it happens. Nobody translates anything.
+//! The code that stops analysis records its gap in the shared vocabulary at that point. Excerpt
+//! shortening is now explicitly presentation metadata, carried on observations and reasons; it is
+//! not a claim that analysis stopped.
 
 use super::types::{
     DetectionClass, IncompleteCause, Incompleteness, QuotingContext, Span, Transform,
@@ -49,7 +50,8 @@ pub struct Observation {
     /// finalization always sanitizes it before constructing a reason (FR-021, FR-126).
     pub matched: String,
     /// The producer shortened the excerpt before finalization. Retained separately because an
-    /// already-bounded string cannot reveal that content was omitted (FR-122).
+    /// already-bounded string cannot reveal that display content was omitted. This says nothing
+    /// about analysis coverage; skipped input must be recorded separately as a coverage gap.
     pub excerpt_truncated: bool,
     pub severity: u8,
     /// Why the rule exists, carried so a finding explains itself without a lookup.
@@ -172,6 +174,7 @@ pub struct Evidence {
     observations: Vec<Observation>,
     gaps: Vec<CoverageGap>,
     suppressions: Vec<Suppression>,
+    limit: Option<usize>,
 }
 
 impl Evidence {
@@ -179,11 +182,42 @@ impl Evidence {
         Self::default()
     }
 
+    /// Bound retained observations during collection, before finalization. Gaps remain independent.
+    pub fn bounded(max_observations: u32) -> Self {
+        Self {
+            limit: Some(max_observations as usize),
+            ..Self::default()
+        }
+    }
+
+    fn reserve_observation(&mut self) -> bool {
+        let Some(limit) = self.limit else {
+            return true;
+        };
+        if self.observations.len() + self.suppressions.len() < limit {
+            return true;
+        }
+        if !self
+            .gaps
+            .iter()
+            .any(|g| g.cause() == IncompleteCause::MaxObservations)
+        {
+            self.gaps.push(CoverageGap::bound(
+                IncompleteCause::MaxObservations,
+                limit as u64,
+                "additional observations exceeded the retained analysis budget",
+            ));
+        }
+        false
+    }
+
     // ── Write side: public, for detectors ───────────────────────────────────────────────────────
 
     /// Record something seen.
     pub fn observe(&mut self, observation: Observation) {
-        self.observations.push(observation);
+        if self.reserve_observation() {
+            self.observations.push(observation);
+        }
     }
 
     /// Record something not examined, at the point it was not examined.
@@ -198,6 +232,9 @@ impl Evidence {
     /// suppression is a decision and must not. One collection with a boolean would put that distinction in
     /// every reader's hands; two collections put it in the type.
     pub fn suppress(&mut self, observation: Observation, context: QuotingContext) {
+        if !self.reserve_observation() {
+            return;
+        }
         self.suppressions.push(Suppression {
             observation,
             context,

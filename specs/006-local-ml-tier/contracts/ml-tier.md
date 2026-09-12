@@ -2,6 +2,11 @@
 
 **Feature**: `006-local-ml-tier`
 
+The [ML boundary-review contract proposal](ml-review.md) specifies a separate future review path for
+document classifier findings. It is not implemented or enabled by the excerpt presentation change.
+Displayed excerpt shortening now uses [reason metadata](../../001-structural-detection-cli/contracts/verdict.schema.json)
+instead of an analysis gap; genuine skipped input and inference failures remain incomplete.
+
 ---
 
 ## Crate boundary
@@ -157,10 +162,12 @@ The threshold and SC-602's regression check, and nothing else. Three consequence
 3. **SC-602 is now a gate, not a checkbox.** It decides whether this tier may ever be on by default. Until
    it has run against the corpus, `--ml` stays opt-in.
 
-Severity is a bounded ramp rather than the probability itself (`crates/ml/src/observe.rs`): a finding at
-threshold scores 40, one at 1000 scores 75, and the ceiling sits below the structural tier's maximum of 90.
-A rule an operator can read outranks a model nobody can — Principle III in arithmetic. The constants are
-chosen, not calibrated, the same admission `score.rs` makes about its own.
+Severity is now caller-assessed impact, independent of raw classifier score and admission threshold.
+`ScanPolicy::ml_impact` defaults to 75 (provisional and uncalibrated). Reports emit `raw_score`,
+`calibration: "uncalibrated"`, and separate `assessed_impact`. The threshold-dependent severity ramp
+is removed. ML observations never contribute to the structural class-breadth bonus; their compatibility
+class label does not claim a behavioral class was measured. See
+[policy and pipeline migration](../../../../docs/research/policy-and-pipeline-2026-09-11.md).
 
 ### If corroboration comes back
 
@@ -206,10 +213,12 @@ Two corrections to the above, both found while implementing it:
   `bounds` because ML observations must cross the same excerpt-sanitisation boundary structural ones do; a
   second entrance that skipped it would be a second entrance for unneutralised attacker text.
 
-**A truncated verdict is refused**, exactly as `rejudge` refuses one (plan D9). `finalize` aggregates the
-score before truncation, so once a `Verdict` exists the severities past `max_reasons` are gone; recomputing
-from the survivors would *lower* the score while claiming to have added evidence. The refusal records a
-`TierUnavailable` gap and attaches no report — `ml()` staying `None` is what says the tier did not act.
+**Display truncation does not prevent composition.** `Verdict` retains an `Analysis` containing all
+budgeted findings and suppressions. ML adds observations to this record and the finalizer derives the
+score before projecting display lists. `max_reasons=0` cannot hide risk from the outcome or skip a tier.
+The independent `max_observations` budget defaults to 4096, counts active and suppressed evidence,
+and emits a `max_observations` gap on exhaustion. ML cannot discard structural findings to make room.
+Calibration and the retained observation budget must match; display limits may change.
 
 ---
 
@@ -239,3 +248,14 @@ integer arithmetic, extended by one step.
 threshold boundary — after per-mille rounding, i.e. 699 vs 700 — the verdicts will differ. The
 quantisation narrows the window in which this is possible but does not close it. This is inherent to any
 threshold-based decision on floating-point data and is recorded in `docs/limits.md`.
+
+
+### Inference identity and window evidence (2026-09-11)
+
+Successful reports now include a canonical v1 inference identity and ordered per-window scores,
+original-input byte envelopes, payload token ranges and model token counts. The whole-document
+summary/finding and complete-document review scope remain authoritative; windows do not create
+additional findings or release candidates. Identity and window changes invalidate pending review.
+Work limits are independent of display limits, and failures never report partial inference as complete.
+See `docs/research/inference-and-windowing-2026-09-11.md` and `crates/eval/BOUNDARY.md` for the
+identity contract, nested `windowing` configuration, compatibility details and measured limits.

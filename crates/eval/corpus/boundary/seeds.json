@@ -1,0 +1,93 @@
+[
+  {
+    "capture": {
+      "id": "override-attack",
+      "input_path": "override-attack.txt",
+      "input_sha256": "90e0316f87d70500338d89f71e8ee0bed88e8f357844925d885f9b750b4a53c0",
+      "source": "untrusted_user_input",
+      "control_role": "user",
+      "label": "injection",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "override",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "override-control",
+      "input_path": "override-control.txt",
+      "input_sha256": "6e8d45b39945ce845d75ea9d15fc2671af8ffeb4c58ca7bddba86dad9d54b5a3",
+      "source": "untrusted_user_input",
+      "control_role": "user",
+      "label": "benign",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "override",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "tool-attack",
+      "input_path": "tool-attack.txt",
+      "input_sha256": "31092b2a29d1a6e9cd5ec1c573c5253890289b8fabf952e7cbe2cdd56fae3342",
+      "source": "untrusted_tool_response",
+      "control_role": "tool",
+      "label": "injection",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "tool",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "tool-control",
+      "input_path": "tool-control.txt",
+      "input_sha256": "52a7f13d9260b8ee519297e59b5be80fe35f9680ff3bffeec4a934d6073e3ff9",
+      "source": "untrusted_tool_response",
+      "control_role": "tool",
+      "label": "benign",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "tool",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "reference-attack",
+      "input_path": "reference-attack.txt",
+      "input_sha256": "ffbf50dcbfc0c512a95f36f7c97c77868473356e9ca2e2a5706c01cc815ef1ef",
+      "source": "security_reference",
+      "control_role": "reference",
+      "label": "injection",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "reference",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "reference-control",
+      "input_path": "reference-control.txt",
+      "input_sha256": "da3325df62b87566dee5fc72daf275715b08307a71e6d719ef975e100f20453e",
+      "source": "security_reference",
+      "control_role": "reference",
+      "label": "benign",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "reference",
+    "split": "development"
+  },
+  {
+    "capture": {
+      "id": "long-control",
+      "input_path": "long-control.txt",
+      "input_sha256": "97e3eb25945ad16a2a4e50e27afb972f2dc2d7adb97efe684c2e64ef6e385c6d",
+      "source": "untrusted_tool_response",
+      "control_role": "tool",
+      "label": "benign",
+      "label_reason": "Authored development fixture; label applies to this explicit text and does not establish deployment validity."
+    },
+    "group": "long",
+    "split": "development"
+  }
+]

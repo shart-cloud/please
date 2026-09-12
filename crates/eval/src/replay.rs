@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use please_core::{Engine, Outcome, ScanPolicy, ScanSource, TargetRef, Verdict};
+use please_core::{Engine, ScanPolicy, ScanSource, TargetRef, Verdict};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -197,15 +197,13 @@ pub fn compare_with_policy(
         .map(|(capture, baseline, source, bytes)| {
             let mut policy = ScanPolicy::for_source(source);
             policy.export_policy = export_policy.cloned();
-            let verdict = engine.scan(&bytes, &policy, TargetRef::buffer(&capture.id, bytes.len()));
-            let decision = if verdict.outcome() == Outcome::RiskFound
-                && verdict.is_at_or_above(policy.threshold)
-            {
-                Decision::Block
-            } else if verdict.is_incomplete() || verdict.outcome() != Outcome::Clean {
-                Decision::Review
-            } else {
-                Decision::Allow
+            let session = please_scan::ScanSession::new(&engine, policy.clone());
+            let verdict = session.scan(&bytes, TargetRef::buffer(&capture.id, bytes.len()));
+            let decision = match session.decision(&verdict) {
+                please_scan::ScanDecision::Clean => Decision::Allow,
+                please_scan::ScanDecision::AtOrAboveThreshold => Decision::Block,
+                please_scan::ScanDecision::BelowThreshold
+                | please_scan::ScanDecision::Inconclusive => Decision::Review,
             };
             Comparison {
                 disagreement: decision != baseline.decision,
@@ -276,7 +274,7 @@ fn file_digest(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
-fn source(value: &str) -> Result<ScanSource> {
+pub(crate) fn source(value: &str) -> Result<ScanSource> {
     match value {
         "security_reference" => Ok(ScanSource::SecurityReference),
         "untrusted_tool_response" => Ok(ScanSource::UntrustedToolResponse),

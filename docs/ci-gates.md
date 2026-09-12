@@ -10,6 +10,9 @@ The regular CI workflow runs tests and Clippy in three configurations: the works
 The Candle configuration compiles real inference code but leaves the eight expensive real-weight
 tests explicitly ignored. It does not download models or claim that inference ran.
 
+The September 11 CLI integration adds two configurations: CLI with `ml-candle`, with and without
+default judge support. Its real-classifier integration test is explicitly ignored in ordinary CI.
+
 When reproducing the matrix locally, run configurations sequentially if they share `target/`:
 both CLI configurations write `target/debug/plz`, which their integration tests execute.
 GitHub's separate matrix jobs do not share that runtime path.
@@ -66,6 +69,8 @@ ProtectAI/MiniLM bundles at the revisions pinned in `crates/eval/corpus/models.t
 existing acquisition code and a pinned Hugging Face CLI. A cache hit still undergoes asset-size
 and SHA-256 checks. It then runs all eight real-weight tests, serially, with Cargo/model offline
 flags. Missing or corrupt assets fail the job; no model test can report success by skipping its body.
+The gate then runs the ignored offline CLI classifier test against the same pinned ProtectAI assets,
+covering score attribution, preserved structural findings, independent ML findings, and failed inference.
 This proves the tested inference behavior, not general classifier accuracy or suitability for release.
 
 With the dependencies and pinned assets already cached, the same gate runs locally:

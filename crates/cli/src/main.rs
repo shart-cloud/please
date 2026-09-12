@@ -77,7 +77,7 @@ fn run() -> i32 {
     // have to be kept in agreement, and the whole point of this line is that there is one.
     #[cfg_attr(not(feature = "judge"), allow(clippy::infallible_destructuring_match))]
     let scan_args = match args.command {
-        Command::Scan(scan_args) => scan_args,
+        Command::Scan(scan_args) => *scan_args,
         #[cfg(feature = "judge")]
         Command::Judge(judge_args) => return run_judge(&judge_args),
     };
@@ -90,6 +90,22 @@ fn run() -> i32 {
             Ok(value) => policy.export_policy = Some(value),
             Err(e) => {
                 eprintln!("plz: export policy: {e}");
+                return EXIT_USAGE;
+            }
+        }
+    }
+
+    #[cfg(feature = "judge")]
+    if let Some(path) = &scan_args.review_context {
+        match std::fs::read(path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                serde_json::from_slice::<please_core::CallerContext>(&bytes)
+                    .map_err(|e| e.to_string())
+            }) {
+            Ok(context) => policy.caller_context = Some(context),
+            Err(detail) => {
+                eprintln!("plz: review context: {detail}");
                 return EXIT_USAGE;
             }
         }
@@ -115,6 +131,24 @@ fn run() -> i32 {
         }
     };
 
+    // Once per invocation. An unavailable requested model remains an explicit gap on each input.
+    #[cfg(feature = "ml-candle")]
+    let model = if scan_args.ml {
+        let path = scan_args
+            .ml_config
+            .as_deref()
+            .expect("clap requires --ml-config");
+        match please_scan::load_classifier(path) {
+            Ok(model) => Some(model),
+            Err(detail) => {
+                eprintln!("plz: ML configuration: {detail}");
+                return EXIT_USAGE;
+            }
+        }
+    } else {
+        None
+    };
+
     // The judgement tier, if this build has it and this invocation asked for it (FR-401). Built once
     // rather than per target: credential resolution reads the environment, and doing that in a loop would
     // make a directory walk's behaviour depend on when each target happened to be reached.
@@ -134,12 +168,27 @@ fn run() -> i32 {
             );
         }
         let mut judge = please_judge::Judge::new(resolution);
+        if scan_args.judge_allow_release {
+            judge = judge.with_authority(please_judge::ReviewAuthority::MayRelease);
+        }
         if let Some(seconds) = scan_args.judge_timeout {
             judge = judge.with_timeout(std::time::Duration::from_secs(seconds));
         }
         Some(judge)
     } else {
         None
+    };
+
+    let session = please_scan::ScanSession::new(&engine, policy.clone());
+    #[cfg(feature = "ml-candle")]
+    let session = match &model {
+        Some(model) => session.with_model(model),
+        None => session,
+    };
+    #[cfg(feature = "judge")]
+    let session = match &judge {
+        Some(judge) => session.with_judge(judge),
+        None => session,
     };
 
     // Results to stdout, diagnostics to stderr. Nothing but results ever reaches stdout, in either format:
@@ -166,7 +215,7 @@ fn run() -> i32 {
     // Load, scan, render, drop — one target at a time. What is resident is the largest single target, not
     // the sum of them, and the first verdict reaches a reader before the second file is opened.
     for source in &sources {
-        let target = match target::load(source) {
+        let target = match target::load(source, policy.max_input_bytes) {
             Ok(target) => target,
             // Only standard input can fail here, and it is the whole of what was asked for.
             Err(e) => {
@@ -176,17 +225,12 @@ fn run() -> i32 {
         };
 
         let verdict = match target {
-            Target::Content { bytes, reference } => {
-                let verdict = engine.scan(&bytes, &policy, reference);
-                // `Verdict → Verdict`, infallible. Every failure mode is a coverage gap inside the returned
-                // verdict rather than an `Err` this loop could quietly skip (R4, FR-402).
-                #[cfg(feature = "judge")]
-                let verdict = match &judge {
-                    Some(judge) => judge.review(verdict, &bytes, engine.bands()),
-                    None => verdict,
-                };
-                verdict
-            }
+            Target::Oversized { reference } => please_core::finalize::acquisition_limit_exceeded(
+                reference,
+                &policy,
+                engine.ruleset_id().clone(),
+            ),
+            Target::Content { bytes, reference } => session.scan(&bytes, reference),
             // An unreadable file is inconclusive for that target and the walk continues (FR-032a). It is
             // constructed here because the core never opens a file, so the caller doing the I/O owns this
             // case — and skipping it instead is the one thing that must not happen.
@@ -302,41 +346,17 @@ fn run_judge(args: &args::JudgeArgs) -> i32 {
 /// Before this existed there was one arm and it returned 70 for both, so a typo in someone's TOML reported
 /// itself as an internal error worth filing a bug about.
 ///
-/// Filesystem access stays here rather than in the core: `Ruleset::from_toml` takes text, deliberately, so
-/// that the same engine runs in a browser. [`target::read_rules`] does the opening.
+/// Acquisition is shared with evaluation through `please-scan`; this adapter owns diagnostics
+/// and maps failures to process status. Core preparation continues to accept text, never paths.
 fn build_engine(scan_args: &args::ScanArgs) -> Result<Engine, i32> {
-    // No rule flags: the built-in set, and a failure is ours.
-    if scan_args.rules.is_empty() && scan_args.disable_rule.is_empty() {
-        return Engine::builtin().map_err(|e| {
-            eprintln!("plz: the built-in rule set failed to load: {e}");
-            EXIT_INTERNAL
-        });
-    }
-
-    let mut builder = Engine::builder();
-    for path in &scan_args.rules {
-        let source = target::read_rules(path).map_err(|e| {
-            eprintln!("plz: {e}");
-            EXIT_USAGE
-        })?;
-        // Parsed here rather than handed to the builder as text, so the diagnostic can name the file. A
-        // `RulesetError` already names the offending *rule*; with several `--rules` it does not know which
-        // file that rule came from, and the operator has to.
-        let ruleset = please_core::Ruleset::from_toml(&source).map_err(|e| {
-            eprintln!("plz: {}: {e}", path.display());
-            EXIT_USAGE
-        })?;
-        builder = builder.add_ruleset(ruleset);
-    }
-    for id in &scan_args.disable_rule {
-        builder = builder.disable(id.clone());
-    }
-
-    // Resolution errors — an unknown suppression, too many rules after layering — are the caller's, so 64.
-    // Replacement warnings are NOT errors and reach stderr through `engine.warnings()` below, unchanged.
-    builder.build().map_err(|e| {
-        eprintln!("plz: {e}");
-        EXIT_USAGE
+    please_scan::load_engine(&scan_args.rules, &scan_args.disable_rule).map_err(|error| {
+        eprintln!("plz: {error}");
+        match error {
+            please_scan::RuleLoadError::Builtin(_) => EXIT_INTERNAL,
+            please_scan::RuleLoadError::Read { .. }
+            | please_scan::RuleLoadError::Parse { .. }
+            | please_scan::RuleLoadError::Prepare(_) => EXIT_USAGE,
+        }
     })
 }
 
@@ -368,7 +388,9 @@ impl Tally {
         if verdict.outcome().rank() > self.worst.rank() {
             self.worst = verdict.outcome();
         }
-        if verdict.outcome() == Outcome::RiskFound && verdict.is_at_or_above(self.threshold) {
+        if please_scan::ScanDecision::from_verdict(verdict, self.threshold)
+            == please_scan::ScanDecision::AtOrAboveThreshold
+        {
             self.at_threshold = true;
         }
     }

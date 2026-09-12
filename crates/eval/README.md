@@ -13,22 +13,70 @@ its dependencies cannot reach `please-core`, whose 27-crate resolution `ci/check
 ```sh
 # Offline — needs nothing but the repository
 cargo run --manifest-path crates/eval/Cargo.toml -- generate            # build the span-labelled corpus
-cargo run --manifest-path crates/eval/Cargo.toml -- run --offline
-cargo run --manifest-path crates/eval/Cargo.toml -- report --offline
-cargo run --manifest-path crates/eval/Cargo.toml -- gate --offline      # exits 2 on a regression
+cargo run --manifest-path crates/eval/Cargo.toml -- run --offline --mode mechanism --run offline-baseline
+cargo run --manifest-path crates/eval/Cargo.toml -- report --offline --run offline-baseline
+cargo run --manifest-path crates/eval/Cargo.toml -- gate --offline --run offline-baseline  # exits 2 on failure
 
 # The public corpus — needs the `hf` CLI and an approved dataset gate
 hf auth whoami
 cargo run --manifest-path crates/eval/Cargo.toml -- fetch
 cargo run --manifest-path crates/eval/Cargo.toml -- manifest            # verify cache against manifests
-cargo run --release --manifest-path crates/eval/Cargo.toml -- run
-cargo run --release --manifest-path crates/eval/Cargo.toml -- report --out /tmp/report.md
+cargo run --release --manifest-path crates/eval/Cargo.toml -- run --run public-product
+cargo run --release --manifest-path crates/eval/Cargo.toml -- report --run public-product --out /tmp/report.md
 ```
 
 Use `--release` for the public corpus. A debug build scans 60,000 rows at roughly a tenth of the speed;
 the results are identical either way, which is the point of SC-011.
 
+Use a fresh run label each time you repeat a measurement.
+
+## Saved-run integrity
+
+`run` records its fixed selection of slices before acquiring or scanning rows. It publishes each
+complete result file atomically, records its row count and SHA-256, and marks the run complete only
+after every selected slice has been saved. `run.json` also retains the pipeline configuration and the
+resolved slice definitions, including exclusions and baselines. Reports use those saved definitions.
+
+`report` and `gate` verify the entire recorded selection. Missing, unreadable, truncated, or modified
+results make the run incomplete. Missing or invalid completion metadata makes it unverified, including
+older runs that never recorded their expected slices. Unknown completeness is a failure requiring a
+rerun; there is no legacy exception.
+
+- Reports can still render available results, with `INCOMPLETE` or `UNVERIFIED` prominently displayed.
+  JSON includes `integrity.status`, expected/verified slice counts, and per-slice issues. An unverified
+  report's readable rows are for inspection; they are not established as complete.
+- `gate` exits **2** for an incomplete or unverified run, even with `--allow-unpinned`.
+- Existing run labels cannot be overwritten, extended, or resumed. Rerun the intended selection with
+  a fresh `--run` label; previous artifacts remain available for inspection.
+- `run --offline` selects local corpora. `report --offline` filters its metric tables, but integrity
+  checks and the gate always cover every slice in the saved run. Reporting never fetches corpus data.
+- Updating a mechanism baseline in `corpus/slices.toml` requires a fresh run to use that baseline.
+  Product baselines remain unpinned, as before.
+
+These checks establish saved-result completeness for the rows supplied to the scan. Verification of
+the input corpus against its sampling manifest and detector coverage gaps within saved rows remain
+separate checks. The checksums detect damaged artifacts; they do not authenticate a cache against
+someone who can rewrite both its files and completion records.
+
+## Shipping product measurements
+
+`run` now defaults to product mode: the shared `please-scan::ScanSession`, enforcement profile, and
+High action threshold. The quick-start gate above explicitly selects historical `--mode mechanism`.
+Use a fresh `--run` label for product measurements. `run.json` records the policy, tiers, and scanned
+ruleset identity; reports do not substitute the current ruleset. Product baselines start unpinned.
+
+Enable `shipping-ml` and/or `shipping-judge` to use the same optional tiers as `plz`, with
+`--ml-config`, `--ml-impact`, `--judge`, `--judge-allow-release`, and `--review-context`.
+Profile and provenance are selected independently with `--profile` and `--provenance`.
+The [migration notes](../../docs/research/policy-and-pipeline-2026-09-11.md) include complete examples.
+
 ## Replay actual lab captures
+
+For a fresh published benchmark sample, see [dataset selection and freeze](DATASETS.md). The prepared
+September 11 set contains 600 upstream-labeled direct prompts; it requires no live-site traffic.
+
+Use [capture freeze/check](CAPTURE.md) to prepare fresh owner-labeled holdouts, reject known exposed
+bytes and split leakage, and verify the collection before replay without inspecting detector outcomes.
 
 The `replay` command compares local labeled captures with hash-matched saved results from an existing
 scanner. It uses the shipped source policy at `High`, retains both sides' reasons and incomplete
@@ -38,8 +86,7 @@ an external scanner.
 
 ## Phase-0 model feasibility
 
-The draft local-ML specification does not yet justify a shipping `please-ml` crate. Its real-model
-experiments therefore live here, behind the eval crate's opt-in `ml` feature. The ordinary eval build and
+Historical model-feasibility experiments remain here, behind the eval crate's opt-in `ml` feature. The ordinary eval build and
 the workspace dependency graph do not resolve Candle or `tokenizers`.
 
 ```sh
@@ -162,6 +209,7 @@ src/manifest.rs    row identity: why the content hash, and why sampling needs no
 src/rows.rs        one scannable row and one row result, whatever the source
 src/cases.rs       readers for the committed corpora
 src/scan.rs        engine construction and the scan loop
+src/run.rs         saved-run identity, atomic publication, completeness, and report assembly
 src/metrics.rs     stratified aggregation, report rendering, the gate
 src/generate.rs    carrier x payload x position, with span-level ground truth
 src/models.rs      revision-pinned model acquisition, integrity, and bundle attribution
@@ -191,3 +239,13 @@ is a number without a referent, and `report` deliberately prints none for any mu
 
 The first [actual lab replay](../../docs/research/lab-replay-shart-2026-09-10.md) compares
 20 SHART user inputs with its original PromptGuard + WulfRegex input scanner.
+
+Tokenizer-verified boundary suites and overlap measurements use the shipping pipeline; see [BOUNDARY.md](BOUNDARY.md).
+
+
+Judge response acceptance is versioned independently of request recipes. Inference metadata now
+includes `response_acceptance_version`, `ordinary_max_response_bytes`, and `ml_max_response_bytes`.
+Use a fresh run label for results produced under acceptance version `2026-09-12.1`; historical
+structural responses without `stop_reason: "tool_use"` are rejected. Re-run those requests rather
+than adding completion evidence to captured JSON. Prompts and request recipe hashes are unchanged
+by this acceptance change.

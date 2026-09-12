@@ -20,6 +20,7 @@
 //! | [`rows`] | one scannable row, whatever it came from |
 //! | [`cases`] | readers for the committed corpora: fixtures, generated rows, repository prose |
 //! | [`scan`] | engine construction and the scan loop |
+//! | [`run`] | saved run identity, atomic publication, completeness, and report assembly |
 //! | [`metrics`] | stratified aggregation, report rendering, and the gate |
 //! | [`generate`] | the carrier x payload x position generator, with span-level ground truth |
 //! | [`segment`] | a local subset of `document-map.md` §1.1, for the phase-0 outlier experiment |
@@ -54,6 +55,7 @@ pub type Error = Box<dyn std::error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
 
 pub mod cache;
+pub mod capture;
 pub mod cases;
 pub mod fetch;
 pub mod generate;
@@ -65,6 +67,7 @@ pub mod models;
 pub mod outlier;
 pub mod replay;
 pub mod rows;
+pub mod run;
 pub mod scan;
 pub mod segment;
 pub mod slice;
@@ -89,3 +92,8 @@ pub fn repo_root() -> Result<std::path::PathBuf> {
 pub fn crate_path(relative: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
 }
+
+pub mod product;
+
+#[cfg(feature = "boundary")]
+pub mod boundary;

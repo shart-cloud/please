@@ -425,7 +425,7 @@ pub(crate) fn observe(
                     let end = ts[(pos + ats.len() - 1).max(sink)].end;
                     let (matched, excerpt_truncated) = crate::sanitize::sanitize_bytes(
                         &input[start..end],
-                        policy.max_excerpt_bytes as usize,
+                        crate::finalize::analysis::RETAINED_EXCERPT_BYTES,
                     );
                     let action = String::from_utf8_lossy(&input[ts[sink].start..ts[sink].end]);
                     let description = format!(

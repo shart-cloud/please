@@ -29,6 +29,9 @@ pub const DEFAULT_MAX_DECODE_DEPTH: u8 = 3;
 /// design forbids. Capping at a constant makes it `O(K·m·n)` (research D2).
 pub const DEFAULT_MAX_MATCHES_PER_RULE: u32 = 16;
 
+/// Maximum observations retained across active and suppressed evidence.
+pub const DEFAULT_MAX_OBSERVATIONS: u32 = 4096;
+
 /// Default reasons reported per verdict. Bounded independently of input length (FR-007).
 pub const DEFAULT_MAX_REASONS: u32 = 64;
 
@@ -51,22 +54,20 @@ pub const ALL_CLASSES: [DetectionClass; 8] = [
     DetectionClass::Privilege,
 ];
 
-/// How the caller intends to use the scanned content. Never inferred from text or filenames.
-///
-/// A security reference is material the caller selected for explanation or analysis. An untrusted
-/// tool response can contain arbitrary third-party instructions, even when it looks like a lesson.
+/// Compatibility vocabulary combining origin and purpose. New callers should set `InputProvenance`
+/// and `ScanProfile` separately. Only `ScanPolicy::for_source` maps SecurityReference to reference analysis.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
 pub enum ScanSource {
-    /// Preserve the historical policy when the caller supplies no source context.
+    /// No caller-established provenance; the default profile is enforcement.
     #[default]
     Unspecified,
-    /// Caller-selected reference material; quoted examples may be suppressed.
+    /// Compatibility request for caller-provided reference material.
     SecurityReference,
-    /// Lower-trust tool output; quoting never suppresses findings.
+    /// Compatibility provenance for tool output.
     UntrustedToolResponse,
-    /// Untrusted user task input to an agent; quoting never suppresses findings.
+    /// Compatibility provenance for user input.
     UntrustedUserInput,
 }
 
@@ -82,6 +83,70 @@ impl ScanSource {
     }
 }
 
+/// The caller's use of the scan. Formatting in the input cannot select a profile.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum ScanProfile {
+    #[default]
+    Enforcement,
+    ReferenceAnalysis,
+}
+impl ScanProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Enforcement => "enforcement",
+            Self::ReferenceAnalysis => "reference_analysis",
+        }
+    }
+}
+
+/// Origin established by the host, independently of the purpose of analysis or review authority.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "snake_case"))]
+pub enum InputProvenance {
+    #[default]
+    Unspecified,
+    CallerProvided,
+    UserInput,
+    ToolResponse,
+}
+impl InputProvenance {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unspecified => "unspecified",
+            Self::CallerProvided => "caller_provided",
+            Self::UserInput => "user_input",
+            Self::ToolResponse => "tool_response",
+        }
+    }
+}
+
+/// Caller-assessed impact of an admitted classifier finding, independent of its raw score.
+/// The default 75 is a provisional policy choice, not a model calibration claim.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
+pub struct MlImpact(u8);
+impl MlImpact {
+    pub fn new(severity: u8) -> Result<Self, &'static str> {
+        if severity > 100 {
+            Err("ML impact must be in 0..=100")
+        } else {
+            Ok(Self(severity))
+        }
+    }
+    pub fn severity(self) -> u8 {
+        self.0
+    }
+}
+impl Default for MlImpact {
+    fn default() -> Self {
+        Self(75)
+    }
+}
+
 /// Configuration governing one scan.
 ///
 /// Defaults are **provisional** pending calibration against per-source corpus metrics, and
@@ -89,8 +154,21 @@ impl ScanSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct ScanPolicy {
-    /// Caller-supplied origin and intended use. Text claiming a different source has no effect.
+    /// Compatibility input. Prefer `provenance` and `profile` for new integrations.
     pub source: ScanSource,
+    pub provenance: InputProvenance,
+    pub profile: ScanProfile,
+    pub ml_impact: MlImpact,
+    /// Host-established task and permissions, never derived from scanned content.
+    #[cfg_attr(
+        feature = "serde",
+        serde(
+            skip_serializing_if = "Option::is_none",
+            rename = "caller_context_id",
+            serialize_with = "crate::context::serialize_identity"
+        )
+    )]
+    pub caller_context: Option<crate::context::CallerContext>,
     /// Optional caller-owned permissions for experimental protected-data export detection.
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub export_policy: Option<crate::ExportPolicy>,
@@ -100,7 +178,9 @@ pub struct ScanPolicy {
     pub max_decode_depth: u8,
     /// Matches collected per rule before saturation is recorded (research D2).
     pub max_matches_per_rule: u32,
-    /// Reasons reported before truncation is recorded (FR-007).
+    /// Total retained observations, independent of reporting limits. Exhaustion is a coverage gap.
+    pub max_observations: u32,
+    /// Reasons displayed per list; shortening never changes analysis or decisions.
     pub max_reasons: u32,
     /// Excerpt length before truncation (FR-021).
     pub max_excerpt_bytes: u32,
@@ -111,15 +191,7 @@ pub struct ScanPolicy {
     /// Active detection classes (FR-015). Order-insensitive; a `Vec` rather than a set so iteration
     /// order is deterministic (SC-011).
     pub classes: Vec<DetectionClass>,
-    /// Whether matches inside quoting contexts are suppressed (FR-014, research D8).
-    ///
-    /// This is a caller preference. For untrusted tool responses and user inputs, source policy takes precedence and
-    /// suppression is always off. Use [`Self::suppresses_quotes`] to read the effective setting.
-    ///
-    /// On by default. Without it the scanner flags documents that *discuss* prompt injection — threat
-    /// models, advisories, this repository's own specification — which makes it unusable by the people
-    /// most likely to evaluate it. The cost is a real false negative: a payload inside a code fence is
-    /// suppressed. That trade is recorded in `docs/limits.md` rather than left to be discovered.
+    /// Optional quote suppression within reference analysis. Enforcement always ignores this preference.
     pub suppress_in_quotes: bool,
 }
 
@@ -127,45 +199,76 @@ impl Default for ScanPolicy {
     fn default() -> Self {
         Self {
             source: ScanSource::Unspecified,
+            provenance: InputProvenance::Unspecified,
+            profile: ScanProfile::Enforcement,
+            ml_impact: MlImpact::default(),
+            caller_context: None,
             export_policy: None,
             max_input_bytes: DEFAULT_MAX_INPUT_BYTES,
             max_decode_depth: DEFAULT_MAX_DECODE_DEPTH,
             max_matches_per_rule: DEFAULT_MAX_MATCHES_PER_RULE,
+            max_observations: DEFAULT_MAX_OBSERVATIONS,
             max_reasons: DEFAULT_MAX_REASONS,
             max_excerpt_bytes: DEFAULT_MAX_EXCERPT_BYTES,
             threshold: RiskLevel::High,
             classes: ALL_CLASSES.to_vec(),
-            suppress_in_quotes: true,
+            suppress_in_quotes: false,
         }
     }
 }
 
 impl ScanPolicy {
-    /// Start from the shipped threshold and bounds with an explicit caller-selected source.
-    pub fn for_source(source: ScanSource) -> Self {
+    /// Review identity excludes report-only settings. Their defaults provide a canonical representation.
+    pub(crate) fn analysis_identity(&self) -> Self {
         Self {
-            source,
-            suppress_in_quotes: !matches!(
-                source,
-                ScanSource::UntrustedToolResponse | ScanSource::UntrustedUserInput
-            ),
+            max_reasons: DEFAULT_MAX_REASONS,
+            max_excerpt_bytes: DEFAULT_MAX_EXCERPT_BYTES,
+            ..self.clone()
+        }
+    }
+
+    /// Compatibility adapter for the former combined source/use enum. A security reference explicitly
+    /// selects reference analysis; every other source selects enforcement.
+    pub fn for_source(source: ScanSource) -> Self {
+        let mut policy = if source == ScanSource::SecurityReference {
+            Self::reference_analysis()
+        } else {
+            Self::default()
+        };
+        policy.source = source;
+        policy.provenance = policy.effective_provenance();
+        policy
+    }
+
+    pub fn reference_analysis() -> Self {
+        Self {
+            profile: ScanProfile::ReferenceAnalysis,
+            suppress_in_quotes: true,
             ..Self::default()
         }
     }
 
-    /// Effective quoting policy. Lower-trust input cannot earn suppression through formatting.
+    pub fn effective_provenance(&self) -> InputProvenance {
+        if self.provenance != InputProvenance::Unspecified {
+            return self.provenance;
+        }
+        match self.source {
+            ScanSource::Unspecified => InputProvenance::Unspecified,
+            ScanSource::SecurityReference => InputProvenance::CallerProvided,
+            ScanSource::UntrustedUserInput => InputProvenance::UserInput,
+            ScanSource::UntrustedToolResponse => InputProvenance::ToolResponse,
+        }
+    }
+
     pub fn suppresses_quotes(&self) -> bool {
-        self.suppress_in_quotes
-            && !matches!(
-                self.source,
-                ScanSource::UntrustedToolResponse | ScanSource::UntrustedUserInput
-            )
+        self.profile == ScanProfile::ReferenceAnalysis && self.suppress_in_quotes
     }
 
     /// Snapshot the values actually used by the engine for attribution.
     pub(crate) fn effective(&self) -> Self {
         Self {
             suppress_in_quotes: self.suppresses_quotes(),
+            provenance: self.effective_provenance(),
             ..self.clone()
         }
     }
@@ -173,6 +276,31 @@ impl ScanPolicy {
     /// True when `class` is active under this policy.
     pub fn is_active(&self, class: DetectionClass) -> bool {
         self.classes.contains(&class)
+    }
+}
+
+impl std::str::FromStr for ScanProfile {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "enforcement" => Ok(Self::Enforcement),
+            "reference-analysis" | "reference_analysis" => Ok(Self::ReferenceAnalysis),
+            _ => Err("profile must be enforcement or reference-analysis"),
+        }
+    }
+}
+impl std::str::FromStr for InputProvenance {
+    type Err = &'static str;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "unspecified" => Ok(Self::Unspecified),
+            "caller-provided" | "caller_provided" => Ok(Self::CallerProvided),
+            "user-input" | "user_input" => Ok(Self::UserInput),
+            "tool-response" | "tool_response" => Ok(Self::ToolResponse),
+            _ => {
+                Err("provenance must be unspecified, caller-provided, user-input, or tool-response")
+            }
+        }
     }
 }
 
@@ -189,7 +317,8 @@ mod tests {
         assert_eq!(p.max_reasons, 64);
         assert_eq!(p.max_excerpt_bytes, 256);
         assert_eq!(p.threshold, RiskLevel::High);
-        assert!(p.suppress_in_quotes);
+        assert!(!p.suppresses_quotes());
+        assert_eq!(p.profile, ScanProfile::Enforcement);
     }
 
     #[test]

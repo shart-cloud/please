@@ -38,6 +38,7 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
             // benign-tool-001 case, and "clean because a model said so" is exactly the claim a reader
             // needs to be able to attribute.
             judge_attribution(out, v);
+            ml_attribution(out, v);
             return;
         }
         Outcome::Inconclusive => {
@@ -63,6 +64,9 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
             reason.span().end
         ));
         out.push_str(&format!("         {:?}\n", reason.matched()));
+        if reason.excerpt_truncated() {
+            out.push_str("         (displayed excerpt shortened)\n");
+        }
         if explain {
             out.push_str(&format!("         {}\n", reason.description()));
             // Acceptance scenario 3: reported *because* suppression is off, and annotated with what would
@@ -119,6 +123,34 @@ fn verdict(out: &mut String, v: &Verdict, explain: bool) {
         v.ruleset().digest
     ));
     judge_attribution(out, v);
+    ml_attribution(out, v);
+}
+
+fn ml_attribution(out: &mut String, v: &Verdict) {
+    if let Some(report) = v.ml() {
+        out.push_str(&format!(
+            "  local ML: {} @ {} (weights {}; threshold {}/1000)\n",
+            please_core::sanitize::sanitize_str(report.model(), 512).0,
+            please_core::sanitize::sanitize_str(report.revision(), 512).0,
+            report.digest(),
+            report.threshold()
+        ));
+        if let Some(impact) = report.assessed_impact() {
+            out.push_str(&format!(
+                "    caller-assessed impact: {}\n",
+                impact.severity()
+            ));
+        }
+        for segment in report.segments() {
+            if let Some(probability) = segment.raw_score() {
+                out.push_str(&format!(
+                    "    bytes {}–{}: uncalibrated score {probability}/1000\n",
+                    segment.span().start,
+                    segment.span().end
+                ));
+            }
+        }
+    }
 }
 
 fn source_attribution(out: &mut String, v: &Verdict) {
@@ -130,18 +162,17 @@ fn source_attribution(out: &mut String, v: &Verdict) {
                 exports.digest()
             ));
         }
-        if policy.source != please_core::ScanSource::Unspecified {
-            out.push_str(&format!(
-                "  source: {}; threshold: {}; quote suppression: {}\n",
-                policy.source.as_str(),
-                policy.threshold.as_str(),
-                if policy.suppress_in_quotes {
-                    "on"
-                } else {
-                    "off"
-                },
-            ));
-        }
+        out.push_str(&format!(
+            "  profile: {}; provenance: {}; threshold: {}; quote suppression: {}\n",
+            policy.profile.as_str(),
+            policy.effective_provenance().as_str(),
+            policy.threshold.as_str(),
+            if policy.suppress_in_quotes {
+                "on"
+            } else {
+                "off"
+            }
+        ));
     }
 }
 
@@ -178,6 +209,7 @@ fn judgement(out: &mut String, v: &Verdict) {
 
     let features = report.features();
     out.push_str("\n  judged:\n");
+    out.push_str(&format!("    authority  {}\n", report.authority().as_str()));
     out.push_str(&format!(
         "    document   addressed to {}, imperatives {}, framing {}, purpose explains content {}\n",
         features.addressed_to.as_str(),
@@ -240,6 +272,9 @@ fn suppressed(out: &mut String, v: &Verdict) {
             context_label(reason.suppressed_by()),
         ));
         out.push_str(&format!("         {:?}\n", reason.matched()));
+        if reason.excerpt_truncated() {
+            out.push_str("         (displayed excerpt shortened)\n");
+        }
     }
     if v.suppressions_truncated() {
         out.push_str("    (more were suppressed than the limit reports)\n");
@@ -274,6 +309,7 @@ fn context_label(context: Option<SuppressedBy>) -> &'static str {
         // Feature 004. Deliberately says who rather than where: a judge suppression is not a property of
         // the document, it is an external opinion about it, and a reader deciding whether to trust it needs
         // to know which of the two they are looking at. `--explain` prints the feature answers underneath.
+        Some(SuppressedBy::MlReview) => "ML review found no supported boundary violation",
         Some(SuppressedBy::Judge) => "judged to describe an instruction rather than issue one",
         // Both enums are `non_exhaustive`, so a variant added later lands here rather than failing to
         // compile. Naming it honestly beats guessing.

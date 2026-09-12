@@ -30,13 +30,16 @@ Please can scan files, directories, and from `stdin` and look for potential prom
 
 `plz scan skill.md --format json`
 
-#### Select the source at the caller boundary
+#### Select the scan purpose and provenance
 
-Use `--source security-reference` for caller-selected lessons and reference material, or
-`--source untrusted-tool-response` for lower-trust tool output. The latter keeps quoted findings
-active. The default threshold remains `High`; omitting `--source` preserves existing detection behavior.
-See [source policies and paired examples](docs/source-policies.md) for Rust usage, verdict attribution,
-and the acceptance matrix.
+Default scans use enforcement: quoted instructions remain active. Choose
+`--profile reference-analysis` explicitly for reference material whose quoted examples may be
+suppressed. Set input origin independently with `--provenance tool-response`, `user-input`, or
+`caller-provided`. The action threshold remains `High`.
+
+The legacy `--source security-reference` option maps to reference analysis;
+`--source untrusted-tool-response` maps to enforcement. See
+[profiles and trusted caller context](docs/source-policies.md) for migration and Rust usage.
 
 #### Please Exit with some Codes:
 
@@ -71,10 +74,12 @@ It reads `ANTHROPIC_API_KEY` (or `ANTHROPIC_AUTH_TOKEN`, and `ANTHROPIC_BASE_URL
 
 `plz judge --check`
 
-The judge can only ever **narrow** a verdict — confirm a finding, or move it into the suppressed channel. It
-cannot add a finding, cannot raise a severity, and cannot clear one. So it improves precision and cannot
-improve recall. If it is unreachable, unauthenticated, times out, or answers with anything unexpected, the
-verdict becomes `inconclusive` (exit 2) and never `clean`.
+Reviews are advisory by default: `--judge` records recommendations while preserving findings and the
+exit status they imply. To let the reviewer lower that result, explicitly use
+`plz scan --judge --judge-allow-release skill.md`. With that authority, demoting every finding can produce
+`clean` and exit 0. The reviewer is then part of the enforcement trust boundary; an audit trail does not
+prevent release. Failures preserve findings and add a coverage gap. See
+[review authority and binding](docs/research/review-boundaries-2026-09-11.md).
 
 ## Please Tell Me Why You Built This:
 
