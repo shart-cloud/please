@@ -257,7 +257,7 @@ fn a_bad_rule_is_rejected_naming_the_rule() {
 
 /// A `--rules` path that does not exist is an invocation fault, **not** an inconclusive verdict.
 ///
-/// This is why `target::read_rules` exists rather than reusing `read_file`: the latter maps a read failure
+/// Shared rule acquisition must stay separate from target `read_file`: the latter maps a read failure
 /// to `Target::Unreadable`, which is right for one locked file among hundreds during a walk and wrong here.
 /// The scan the operator asked for cannot be performed at all.
 #[test]

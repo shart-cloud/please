@@ -1,0 +1,202 @@
+{
+  "lab_development": {
+    "please_original": {
+      "injection": {
+        "total": 14,
+        "blocked": 1
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 1
+      }
+    },
+    "please_with_export": {
+      "injection": {
+        "total": 14,
+        "blocked": 11
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 1
+      }
+    },
+    "model_probe": {
+      "injection": {
+        "total": 14,
+        "blocked": 1
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 0
+      }
+    },
+    "please_plus_model": {
+      "injection": {
+        "total": 14,
+        "blocked": 11
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 1
+      }
+    },
+    "existing_scanner": {
+      "injection": {
+        "total": 14,
+        "blocked": 7
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 1
+      }
+    },
+    "export_or_existing": {
+      "injection": {
+        "total": 14,
+        "blocked": 13
+      },
+      "benign": {
+        "total": 5,
+        "blocked": 0
+      },
+      "uncertain": {
+        "total": 1,
+        "blocked": 1
+      }
+    }
+  },
+  "authored_challenge": {
+    "please_original": {
+      "injection": {
+        "total": 10,
+        "blocked": 2
+      },
+      "benign": {
+        "total": 10,
+        "blocked": 1
+      },
+      "uncertain": {
+        "total": 0,
+        "blocked": 0
+      }
+    },
+    "please_with_export": {
+      "injection": {
+        "total": 10,
+        "blocked": 8
+      },
+      "benign": {
+        "total": 10,
+        "blocked": 2
+      },
+      "uncertain": {
+        "total": 0,
+        "blocked": 0
+      }
+    },
+    "model_probe": {
+      "injection": {
+        "total": 10,
+        "blocked": 2
+      },
+      "benign": {
+        "total": 10,
+        "blocked": 1
+      },
+      "uncertain": {
+        "total": 0,
+        "blocked": 0
+      }
+    },
+    "please_plus_model": {
+      "injection": {
+        "total": 10,
+        "blocked": 8
+      },
+      "benign": {
+        "total": 10,
+        "blocked": 3
+      },
+      "uncertain": {
+        "total": 0,
+        "blocked": 0
+      }
+    }
+  },
+  "artifacts": {
+    "tests/fixtures/action-evidence/experiment.jsonl": "6106f620472c78359069e04466a6ec59deca380818fc62dfbf907592593481c7",
+    "examples/export-policy.toml": "1bc73940d4fc549d4092cf168da7f79f45c5cc4b2a59a8eccd6e012a7aa71469",
+    "tests/fixtures/action-evidence/approved.toml": "11eb8aa3ba4c4c5b31183f4dc5935584a1c738f5cec00f5cadcfbf43c8e2fb9e",
+    "crates/core/data/export-actions.toml": "91fd9955b606c63ac1c25fe53cb08128c28bdb23a8288a225b70ca50c8918c96",
+    ".cache/action-evidence-20260910/authored-final-results.jsonl": "353e76ca8c7d8a503e44d36061e567e4ae754ff18c37f6761dd98e65c9a458b2",
+    ".cache/action-evidence-20260910/lab-final-results.jsonl": "5d77d2506847eecc68674d0f1662423c0708caababe6d0f68d6bf88fdcf5ad48",
+    ".cache/action-evidence-20260910/model-final/results.jsonl": "2578abc8f00cc817b4f533320eba652f77b7216057e84d9ba4d0fe4e046c9b24",
+    ".cache/action-evidence-20260910/model-final/head.json": "da97a16c7a881608fc82c4bae82bc80be7be0502899094a78de76c5f4b3bcd91",
+    ".cache/action-evidence-20260910/model-final/run.json": "43637b3f74e32786ea261368c3909c6b8c0be1f97eeb65f27e7c68a1c65e3d98",
+    "crates/eval/target/release/examples/export_experiment": "f47cf47e4ccb401a48bd5f4207591ab2936913178f09bb9153be598091b9def0"
+  },
+  "challenge_by_source": {
+    "security_reference": {
+      "injection": {
+        "total": 0,
+        "original_blocked": 0,
+        "export_blocked": 0,
+        "model_blocked": 0
+      },
+      "benign": {
+        "total": 1,
+        "original_blocked": 0,
+        "export_blocked": 0,
+        "model_blocked": 0
+      }
+    },
+    "untrusted_tool_response": {
+      "injection": {
+        "total": 1,
+        "original_blocked": 0,
+        "export_blocked": 1,
+        "model_blocked": 0
+      },
+      "benign": {
+        "total": 0,
+        "original_blocked": 0,
+        "export_blocked": 0,
+        "model_blocked": 0
+      }
+    },
+    "untrusted_user_input": {
+      "injection": {
+        "total": 9,
+        "original_blocked": 2,
+        "export_blocked": 7,
+        "model_blocked": 2
+      },
+      "benign": {
+        "total": 9,
+        "original_blocked": 1,
+        "export_blocked": 2,
+        "model_blocked": 1
+      }
+    }
+  }
+}

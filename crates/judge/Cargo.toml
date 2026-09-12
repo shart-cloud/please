@@ -20,9 +20,10 @@ rust-version.workspace = true
 #
 # Reversing this arrow, or adding a dev-dependency edge from core to here, defeats all three at once.
 [dependencies]
-please-core = { workspace = true }
+please-core = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+sha2.workspace = true
 ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
 
 [dev-dependencies]

@@ -1,7 +1,7 @@
 //! SC-407 — **feature extraction is measured, not assumed.**
 //!
 //! ```sh
-//! cargo test -p please-judge --test agreement -- --nocapture
+//! cargo test -p please-judge --test agreement -- --ignored --nocapture
 //! ```
 //!
 //! # Reported, never gated
@@ -23,7 +23,7 @@
 //! excluded from the count rather than guessed — a disagreement measured against a coin flip is noise
 //! wearing a percentage sign.
 //!
-//! Skips loudly without a credential, like `discriminates.rs`.
+//! Ignored during normal test runs; explicit runs still report a missing credential.
 
 mod support;
 
@@ -316,6 +316,7 @@ impl Tally {
 }
 
 #[test]
+#[ignore = "live judge evaluation; run explicitly with --ignored --nocapture"]
 fn feature_extraction_agreement_is_measured() {
     let Some(resolution) = skip_without_endpoint("feature_extraction_agreement_is_measured") else {
         return;

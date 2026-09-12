@@ -177,7 +177,7 @@ proptest! {
             model_severity,
         );
 
-        let judged = please_core::finalize::rejudge(
+        let judged = apply_authorized(
             structural_verdict.clone(),
             report,
             engine.bands(),
@@ -234,7 +234,7 @@ fn demoting_everything_loses_nothing() {
         Some(0),
     );
 
-    let judged = please_core::finalize::rejudge(structural_verdict, report, engine.bands());
+    let judged = apply_authorized(structural_verdict, report, engine.bands());
 
     assert!(
         judged.reasons().is_empty(),
@@ -279,7 +279,7 @@ fn a_demoted_observation_is_still_present_readable_and_attributed() {
         None,
     );
 
-    let judged = please_core::finalize::rejudge(structural_verdict, report, engine.bands());
+    let judged = apply_authorized(structural_verdict, report, engine.bands());
 
     let moved = judged
         .suppressed()
@@ -311,7 +311,7 @@ fn a_demoted_observation_is_still_present_readable_and_attributed() {
 /// deliberately noisy judge produces. Neither answer is more trustworthy than the other, so the question is
 /// which way to fail — and the answer is the one that keeps the finding reported.
 #[test]
-fn a_self_contradictory_report_does_not_un_demote() {
+fn a_self_contradictory_report_is_rejected_atomically() {
     let (engine, structural_verdict) = structural();
     let report = JudgeReport::new(
         "contradictory-model",
@@ -340,17 +340,19 @@ fn a_self_contradictory_report_does_not_un_demote() {
     );
 
     let before = population(&structural_verdict);
-    let judged = please_core::finalize::rejudge(structural_verdict, report, engine.bands());
+    let judged = apply_authorized(structural_verdict, report, engine.bands());
 
     assert_eq!(population(&judged), before);
+    assert!(judged.is_incomplete());
+    assert!(judged.judge().is_none());
     assert_eq!(
         judged
             .suppressed()
             .iter()
             .filter(|r| r.suppressed_by() == Some(SuppressedBy::Judge))
             .count(),
-        1,
-        "the demotion stands; a later `Confirmed` for the same span cannot reverse it"
+        0,
+        "contradictory decisions must not demote any evidence"
     );
 }
 
@@ -391,7 +393,7 @@ fn a_report_naming_an_unknown_observation_is_refused_entire() {
         None,
     );
 
-    let judged = please_core::finalize::rejudge(structural_verdict, report, engine.bands());
+    let judged = apply_authorized(structural_verdict, report, engine.bands());
 
     assert_eq!(
         judged.reasons().len(),
@@ -409,4 +411,15 @@ fn a_report_naming_an_unknown_observation_is_refused_entire() {
         judged.judge().is_none(),
         "a refused report must not be attached to the verdict as though it had been applied"
     );
+}
+
+fn apply_authorized(
+    verdict: please_core::Verdict,
+    report: please_core::JudgeReport,
+    bands: &please_core::ruleset::Bands,
+) -> please_core::Verdict {
+    use please_core::finalize::review::{ReviewAuthority, ReviewScope};
+    assert_eq!(verdict.bands(), bands);
+    let report = ReviewScope::capture(&verdict).bind(report);
+    please_core::finalize::rejudge_with_authority(verdict, report, ReviewAuthority::MayRelease)
 }

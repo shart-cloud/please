@@ -21,10 +21,14 @@
 
 #![forbid(unsafe_code)]
 
+pub mod context;
 pub mod decode;
 pub mod detect;
 pub mod engine;
+pub mod export;
+pub use export::ExportPolicy;
 pub mod finalize;
+pub mod inference;
 pub mod matcher;
 pub mod policy;
 pub mod prepare;
@@ -47,10 +51,12 @@ pub use finalize::score;
 /// outside: `please_core::verdict::Verdict` names what it always named.
 pub use finalize::types as verdict;
 
+pub use context::CallerContext;
 pub use engine::{Engine, EngineBuilder};
+pub use finalize::analysis::{Analysis, DisplayLimits};
 pub use finalize::evidence::{CoverageGap, Evidence, Observation};
 pub use finalize::plan::{Bounds, ScanPlan};
-pub use policy::ScanPolicy;
+pub use policy::{InputProvenance, MlImpact, ScanPolicy, ScanProfile, ScanSource};
 pub use ruleset::{Anchor, Rule, Ruleset, RulesetError, RulesetLimits};
 /// The judgement tier's vocabulary (feature 004, plan D10).
 ///

@@ -33,7 +33,7 @@ use crate::request::{JudgeRequest, SYSTEM_PROMPT};
 ///
 /// Neutral, like everything else the model sees. Not `detect_injection`, not `assess_risk` — naming the
 /// interesting answer produces it (FR-406).
-pub const TOOL_NAME: &str = "classify_document";
+pub const TOOL_NAME: &str = crate::envelope::STRUCTURAL.tool_name;
 
 /// Every way the transport can fail. All of them become `TierUnavailable` (FR-402).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -181,11 +181,10 @@ pub fn tool_schema() -> Value {
     })
 }
 
-/// Send the request and return the tool input the model produced.
+/// Compatibility helper returning decoded tool input after envelope acceptance.
 ///
-/// Returns the raw tool input as a `Value`; validating it against the request is
-/// [`crate::response::JudgeResponse::parse`]'s job, so that transport failures and schema failures cannot
-/// be confused for one another in the gap detail.
+/// A `Value` cannot retain duplicate payload fields. Shipping review uses [`send_captured`]
+/// followed by [`JudgeRequest::parse_envelope`] to validate the raw response against its request.
 pub fn send(
     resolution: &Resolution,
     request: &JudgeRequest,
@@ -194,43 +193,89 @@ pub fn send(
     send_with_schema(resolution, tool_schema(), &request.user_content(), timeout)
 }
 
-/// Send an arbitrary tool schema. **For calibration experiments only.**
+/// Send a structural request with a supplied schema. Alternate schemas are for calibration experiments.
 ///
 /// Public because `tests/axis_probe.rs` has to ask candidate questions the shipping schema does not
 /// contain, and the alternative — exposing the credential value so a test could build its own request —
 /// would put a hole in FR-413 for the sake of an experiment. The value's only exit stays
 /// `Credential::header_value`, which is still `pub(crate)`.
 ///
-/// Nothing in the shipping path calls this with anything but [`tool_schema`]. A response obtained through
-/// it is **not** validated against [`crate::response::JudgeResponse`] and must never reach a verdict.
+/// Shipping callers retain raw envelopes and use [`JudgeRequest::parse_envelope`].
+/// This compatibility helper checks the envelope, but converting input to `Value` loses duplicate fields.
+/// Experimental schemas must supply their own validation before any result reaches a verdict.
 pub fn send_with_schema(
     resolution: &Resolution,
     schema: Value,
     user_content: &str,
     timeout: Duration,
 ) -> Result<Value, TransportError> {
+    let raw = send_with_schema_captured(resolution, schema, user_content, timeout)?;
+    let input = crate::envelope::accept(&raw, &crate::envelope::STRUCTURAL).map_err(|detail| {
+        TransportError::UnreadableBody {
+            detail: detail.into(),
+        }
+    })?;
+    serde_json::from_str(input.get()).map_err(|_| TransportError::UnreadableBody {
+        detail: "malformed judge tool input".into(),
+    })
+}
+
+/// Capture the exact baseline tool response without changing its prompt, schema, or request assembly.
+/// Store raw bodies privately, along with request hashes and transport failures.
+pub fn send_captured(
+    resolution: &Resolution,
+    request: &JudgeRequest,
+    timeout: Duration,
+) -> Result<String, TransportError> {
+    send_with_schema_captured(resolution, tool_schema(), &request.user_content(), timeout)
+}
+
+pub(crate) fn send_with_schema_captured(
+    resolution: &Resolution,
+    schema: Value,
+    user_content: &str,
+    timeout: Duration,
+) -> Result<String, TransportError> {
+    let mut body = ordinary_recipe(resolution, schema);
+    body["messages"] = json!([{"role": "user", "content": user_content}]);
+
+    send_body(
+        resolution,
+        &body,
+        timeout,
+        crate::envelope::STRUCTURAL.max_bytes as u64,
+    )
+}
+
+/// Exact successful response body for private evaluation capture. Never written into a verdict.
+/// HTTP/status failures remain errors so an evaluator can retain them in its denominator.
+pub fn send_ml_review(
+    resolution: &Resolution,
+    request: &crate::ml_review::MlReviewRequest,
+    timeout: Duration,
+) -> Result<String, TransportError> {
+    let mut body = ml_recipe(resolution);
+    body["messages"] = json!([{"role": "user", "content": request.user_content()}]);
+
+    send_body(
+        resolution,
+        &body,
+        timeout,
+        crate::ml_review::MAX_RESPONSE_BYTES as u64,
+    )
+}
+
+fn send_body(
+    resolution: &Resolution,
+    body: &Value,
+    timeout: Duration,
+    limit: u64,
+) -> Result<String, TransportError> {
     let Some(credential) = resolution.credential() else {
         return Err(TransportError::NoCredential {
             consulted: Resolution::consulted(),
         });
     };
-
-    let body = json!({
-        "model": resolution.model(),
-        "max_tokens": 1024,
-        // Narrows the non-determinism without closing it (plan D7). The honest position is that this tier
-        // is outside SC-011 and says so in docs/limits.md, rather than that temperature 0 fixed it.
-        "temperature": 0,
-        "system": SYSTEM_PROMPT,
-        "tools": [schema],
-        // Required, not merely offered. A model that answers in prose has been talked to, and this is what
-        // makes that a transport-level failure rather than something to parse around.
-        "tool_choice": { "type": "tool", "name": TOOL_NAME },
-        "messages": [{
-            "role": "user",
-            "content": user_content,
-        }],
-    });
 
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
@@ -243,7 +288,7 @@ pub fn send_with_schema(
         .header("anthropic-version", API_VERSION)
         .header("content-type", "application/json")
         .header(credential.source().header(), &credential.header_value())
-        .send_json(&body);
+        .send_json(body);
 
     let mut response = match response {
         Ok(response) => response,
@@ -263,46 +308,48 @@ pub fn send_with_schema(
         }
     };
 
-    let parsed: Value =
-        response
-            .body_mut()
-            .read_json()
-            .map_err(|e| TransportError::UnreadableBody {
-                detail: e.to_string(),
-            })?;
-
-    extract_tool_input(&parsed)
+    // ureq's reader errors when it reaches its limit before checking EOF. Reserve one byte
+    // for that check, then enforce the same inclusive byte bound as captured parsing.
+    let raw = response
+        .body_mut()
+        .with_config()
+        .limit(limit + 1)
+        .read_to_string()
+        .map_err(|_| TransportError::UnreadableBody {
+            detail: "unreadable or oversized response body".into(),
+        })?;
+    if raw.len() as u64 > limit {
+        return Err(TransportError::UnreadableBody {
+            detail: "unreadable or oversized response body".into(),
+        });
+    }
+    Ok(raw)
 }
 
-/// Pull the one tool call's input out of a Messages API response.
-///
-/// Anything else in `content` is ignored — a model may emit a text block before its tool call and that is
-/// not a failure. What *is* a failure is no tool block at all, which per R2 is `TierUnavailable` rather
-/// than an invitation to read the prose.
-fn extract_tool_input(response: &Value) -> Result<Value, TransportError> {
-    let content = response
-        .get("content")
-        .and_then(Value::as_array)
-        .ok_or_else(|| TransportError::UnreadableBody {
-            detail: "response has no content array".to_string(),
-        })?;
+fn ordinary_recipe(resolution: &Resolution, schema: Value) -> Value {
+    json!({"model": resolution.model(), "max_tokens": 1024, "temperature": 0,
+        "system": SYSTEM_PROMPT, "tools": [schema],
+        "tool_choice": {"type": "tool", "name": TOOL_NAME}})
+}
+fn ml_recipe(resolution: &Resolution) -> Value {
+    json!({"model": resolution.model(), "max_tokens": 8192, "temperature": 0,
+        "system": crate::ml_review::SYSTEM_PROMPT, "tools": [crate::ml_review::tool_schema()],
+        "tool_choice": {"type": "tool", "name": crate::ml_review::TOOL_NAME}})
+}
 
-    for block in content {
-        if block.get("type").and_then(Value::as_str) == Some("tool_use")
-            && block.get("name").and_then(Value::as_str) == Some(TOOL_NAME)
-        {
-            return block
-                .get("input")
-                .cloned()
-                .ok_or_else(|| TransportError::UnreadableBody {
-                    detail: "tool call carried no input".to_string(),
-                });
-        }
-    }
-
-    Err(TransportError::UnreadableBody {
-        detail: format!(
-            "the model did not call {TOOL_NAME}; a response in prose is not parsed as a fallback"
-        ),
-    })
+pub(crate) fn inference_metadata(resolution: &Resolution) -> Value {
+    use sha2::{Digest, Sha256};
+    let digest = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    // Hash the full resolved endpoint: URL credentials, paths and queries need not be published.
+    json!({"model": resolution.model(),
+        "endpoint_sha256": digest(resolution.endpoint().as_bytes()),
+        "ordinary_recipe_sha256": digest(ordinary_recipe(resolution, tool_schema()).to_string().as_bytes()),
+        "ml_recipe_sha256": digest(ml_recipe(resolution).to_string().as_bytes()),
+        "prompt_version": crate::request::PROMPT_VERSION,
+        "ml_contract_version": crate::ml_review::CONTRACT_VERSION,
+        "response_acceptance_version": crate::envelope::VERSION,
+        "ordinary_max_response_bytes": crate::envelope::STRUCTURAL.max_bytes,
+        "ml_max_response_bytes": crate::envelope::ML.max_bytes,
+        "temperature": 0, "ordinary_max_tokens": 1024, "ml_max_tokens": 8192,
+        "remote_weights": "provider-controlled-unrecorded"})
 }

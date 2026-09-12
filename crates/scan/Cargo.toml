@@ -1,0 +1,24 @@
+[package]
+name = "please-scan"
+description = "Shared shipping scan composition for the CLI and evaluation harness."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+judge = ["dep:please-judge"]
+ml-candle = ["dep:please-ml", "please-ml/candle", "dep:serde", "dep:serde_json"]
+
+[dependencies]
+please-core = { workspace = true }
+please-judge = { workspace = true, optional = true }
+please-ml = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+please-core = { workspace = true, features = ["serde"] }
+tempfile = { workspace = true }

@@ -51,45 +51,48 @@ const MIN_TOKEN_LEN: usize = 3;
 
 /// Scan for tokens that imitate ASCII words.
 pub fn scan(input: &[u8]) -> Vec<Confusable> {
-    let text = String::from_utf8_lossy(input);
     let mut found = Vec::new();
+    let mut base = 0;
+    // Invalid byte sequences are boundaries, not replacement characters that shift later spans.
+    for chunk in input.utf8_chunks() {
+        for (offset, token) in tokens(chunk.valid()) {
+            if token.chars().count() < MIN_TOKEN_LEN {
+                continue;
+            }
 
-    for (offset, token) in tokens(&text) {
-        if token.chars().count() < MIN_TOKEN_LEN {
-            continue;
+            // A token entirely in one script is a word, not a disguise. This single check is what keeps
+            // ordinary Chinese, Arabic, Cyrillic, and Japanese prose out of the results.
+            if token.is_single_script() {
+                continue;
+            }
+
+            // Mixed script alone is not enough either — "iPhone7" and "café" mix categories harmlessly. The
+            // signal is that folding the token yields something *different* and entirely ASCII: that is what
+            // "disguised as an ASCII word" means.
+            let skeleton: String = unicode_security::skeleton(token).collect();
+            if skeleton == *token {
+                continue;
+            }
+            if !skeleton.is_ascii() || !skeleton.chars().any(|c| c.is_ascii_alphabetic()) {
+                continue;
+            }
+
+            // Require at least one character that is *restricted* for identifiers under UTS #39. This is the
+            // standard's own judgement about which characters exist mainly to be confused with others, and
+            // deferring to it beats maintaining a homoglyph table by hand.
+            if !token.chars().any(|c| !c.identifier_allowed()) && !mixes_latin_with_other(token) {
+                continue;
+            }
+
+            found.push(Confusable {
+                span: Span::new(base + offset, base + offset + token.len()),
+                token: token.to_string(),
+                skeleton,
+            });
         }
 
-        // A token entirely in one script is a word, not a disguise. This single check is what keeps
-        // ordinary Chinese, Arabic, Cyrillic, and Japanese prose out of the results.
-        if token.is_single_script() {
-            continue;
-        }
-
-        // Mixed script alone is not enough either — "iPhone7" and "café" mix categories harmlessly. The
-        // signal is that folding the token yields something *different* and entirely ASCII: that is what
-        // "disguised as an ASCII word" means.
-        let skeleton: String = unicode_security::skeleton(token).collect();
-        if skeleton == *token {
-            continue;
-        }
-        if !skeleton.is_ascii() || !skeleton.chars().any(|c| c.is_ascii_alphabetic()) {
-            continue;
-        }
-
-        // Require at least one character that is *restricted* for identifiers under UTS #39. This is the
-        // standard's own judgement about which characters exist mainly to be confused with others, and
-        // deferring to it beats maintaining a homoglyph table by hand.
-        if !token.chars().any(|c| !c.identifier_allowed()) && !mixes_latin_with_other(token) {
-            continue;
-        }
-
-        found.push(Confusable {
-            span: Span::new(offset, offset + token.len()),
-            token: token.to_string(),
-            skeleton,
-        });
+        base += chunk.valid().len() + chunk.invalid().len();
     }
-
     found
 }
 
@@ -142,6 +145,19 @@ fn tokens(text: &str) -> Vec<(usize, &str)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn malformed_prefix_does_not_shift_original_spans() {
+        let mut input = vec![0xff, 0xfe];
+        input.extend_from_slice("ignоre".as_bytes());
+        let hits = scan(&input);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].span, Span::new(2, input.len()));
+        assert_eq!(
+            &input[hits[0].span.start..hits[0].span.end],
+            hits[0].token.as_bytes()
+        );
+    }
 
     fn tokens_found(input: &str) -> Vec<String> {
         scan(input.as_bytes())

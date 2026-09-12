@@ -181,5 +181,52 @@ fn stages(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, scaling, throughput, stages);
+/// Frame-heavy workloads complement the mostly nonmatching benign throughput gate.
+fn frames(c: &mut Criterion) {
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    let engine = Engine::from_toml(
+        r#"
+[ruleset]
+name = "bench.frame"
+version = "1"
+[[rule]]
+id = "boundary.marker"
+class = "boundary"
+severity = 80
+anchor = "frame"
+literals = ["MARKER"]
+pattern = 'MARKER'
+description = "Benchmark marker."
+"#,
+    )
+    .unwrap();
+    let encoded = (0..8)
+        .map(|i| STANDARD.encode(format!("MARKER. unique payload {i}")))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let inputs = [
+        ("eligible", "MARKER. ".repeat(512)),
+        ("off_frame", "ordinary MARKER ".repeat(512)),
+        (
+            "json",
+            format!("{{\"text\":\"{}MARKER\"}}", "ordinary ".repeat(8192)),
+        ),
+        ("whitespace", format!("{}MARKER", " ".repeat(65536))),
+        ("decoded", encoded),
+    ];
+    let mut group = c.benchmark_group("frames");
+    for (name, text) in inputs {
+        let policy = ScanPolicy {
+            max_decode_depth: if name == "decoded" { 1 } else { 0 },
+            ..ScanPolicy::default()
+        };
+        group.throughput(Throughput::Bytes(text.len() as u64));
+        group.bench_function(name, |b| {
+            b.iter(|| engine.scan(text.as_bytes(), &policy, TargetRef::stdin(text.len())))
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, scaling, throughput, stages, frames);
 criterion_main!(benches);

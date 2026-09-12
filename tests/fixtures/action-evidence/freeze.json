@@ -1,0 +1,10 @@
+{
+  "frozen_at": "2026-09-10T21:57:30.906012+00:00",
+  "sha256": "6106f620472c78359069e04466a6ec59deca380818fc62dfbf907592593481c7",
+  "counts": {
+    "train": 32,
+    "calibration": 8,
+    "holdout": 20
+  },
+  "note": "Authored before detector implementation; shared authorship means this is not an independent blind evaluation. Existing 20 SHART captures are development data."
+}

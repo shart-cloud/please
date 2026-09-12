@@ -114,8 +114,8 @@ fn exactly_one_place_constructs_a_verdict() {
                `finalize` from adding one; only this test stops a second appearing inside it."
     );
     assert!(
-        found[0].0.ends_with("finalize/mod.rs"),
-        "the one producer must be in finalize/mod.rs, found in {}",
+        found[0].0.ends_with("finalize/analysis.rs"),
+        "the one producer must be in finalize/analysis.rs, found in {}",
         found[0].0
     );
 }

@@ -12,7 +12,7 @@
 //! population, and neither could be re-derived. A slice definition that lives in a reviewed file, with
 //! the SQL that produced it, is the fix.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::Result;
@@ -23,7 +23,7 @@ use crate::Result;
 /// *chosen* to be difficult, so it is the one the gate is entitled to run against. Blending OR-Bench's
 /// deliberate over-refusal traps into the same denominator as ordinary benign chatter would let an
 /// easy population dilute a gate that exists to be hard to pass.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SliceKind {
     /// Rows that are attacks. Detection rate is measured here.
@@ -50,7 +50,7 @@ impl SliceKind {
 }
 
 /// Where a slice's rows come from.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum Origin {
     /// A DuckDB query against the pinned upstream dataset, run through the `hf` CLI. Needs the
@@ -62,7 +62,7 @@ pub enum Origin {
 }
 
 /// The committed corpora, each with its own reader in [`crate::cases`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LocalReader {
     /// Labelled cases from `tests/fixtures/*.jsonl`, filtered to `expected = injection`.
@@ -98,14 +98,14 @@ pub enum LocalReader {
 /// The rows are still fetched, still scanned, and still reported. What an exclusion changes is two
 /// things: the hits do not count against the gate, and the report prints the caveat beside the number.
 /// A dropped population would hide a real defect; a reported-but-caveated one names it.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExcludedSource {
     pub source: String,
     pub reason: String,
 }
 
 /// One slice definition.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Slice {
     /// Stable identifier, e.g. `pos_llmail`. Names the cache file, the manifest, and every row in
     /// every report, so it is not renamed casually.
@@ -158,7 +158,7 @@ impl Slice {
 /// Revision-pinned, not branch-pinned. `corpus-analysis.md` measured a specific revision, and a
 /// manifest verifying against `main` would silently stop verifying anything the moment upstream
 /// appended a shard.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Dataset {
     pub repo: String,
     pub revision: String,
@@ -176,7 +176,7 @@ impl Dataset {
 }
 
 /// The gate's operating point.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct GateConfig {
     /// Maximum false-positive rate over gate-eligible rows, in per-mille.
     ///
@@ -195,7 +195,7 @@ pub struct GateConfig {
 }
 
 /// Everything in `corpus/slices.toml`.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SliceSet {
     pub dataset: Dataset,
     pub gate: GateConfig,
@@ -252,7 +252,7 @@ impl SliceSet {
     /// Each of these is a mistake somebody will make once. A duplicate id silently overwrites a cache
     /// file and a manifest; a gated positive slice would count true positives as false ones; an
     /// exclusion naming a source the slice cannot contain looks like a live protection and is not.
-    fn validate(&self) -> Result<()> {
+    pub(crate) fn validate(&self) -> Result<()> {
         let mut seen: BTreeMap<&str, ()> = BTreeMap::new();
         for slice in &self.slices {
             if seen.insert(slice.id.as_str(), ()).is_some() {

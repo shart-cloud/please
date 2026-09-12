@@ -11,11 +11,8 @@
 #   every line would grep completely clean. `-- --nocapture` is therefore not a convenience here, it is the
 #   whole check. quickstart.md originally specified this without it.
 #
-#   `--no-fail-fast` matters just as much, and for a reason specific to this repository. `cargo test` stops
-#   after the first failing test BINARY, and the fixture accuracy tests are red at the 004 baseline by
-#   design. Without this flag the run aborts before it ever reaches please-judge's tests — which are the
-#   only ones that touch a credential. Found by mutation: leaking the value from `Debug` on purpose did not
-#   fail this script, because the code that would have printed it never ran.
+# Run every test target even when one fails, so a failure cannot hide later credential output.
+# Test failures are fatal after the output has also been checked for leaks.
 #
 # Distinct canary values per variable, so a failure says WHICH credential leaked rather than only that one
 # did. They are nonsense strings that cannot collide with anything a test legitimately prints.
@@ -32,15 +29,13 @@ trap 'rm -f "$out"' EXIT
 
 echo "running the suite with canary credentials in the environment..."
 
-# `|| true` so a genuine test failure does not mask the leak check. A red suite and a leaking suite are
-# different problems, and this script is only responsible for the second — it reports the first separately
-# so nobody reads "no leak" as "all good".
+# Retain the exit status while checking all captured output for credential leaks.
 set +e
 ANTHROPIC_AUTH_TOKEN="$AUTH_CANARY" \
 CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_CANARY" \
 ANTHROPIC_API_KEY="$KEY_CANARY" \
 ANTHROPIC_BASE_URL="http://127.0.0.1:1" \
-  cargo test --workspace --features please-cli/judge --no-fail-fast -- --nocapture > "$out" 2>&1
+  cargo test --workspace --locked --no-fail-fast -- --nocapture > "$out" 2>&1
 suite_status=$?
 set -e
 
@@ -60,18 +55,10 @@ for pair in "ANTHROPIC_AUTH_TOKEN:$AUTH_CANARY" \
   fi
 done
 
-# A suite that did not COMPILE proves nothing about leaks, so that is fatal here. A suite that compiled,
-# ran, and had failing tests is a different matter: this repository's fixture accuracy tests are RED at the
-# 004 baseline by design (31/41 positives, one false positive — see docs/004-accuracy-baseline.txt), and
-# those failures print more output rather than less. Treating them as fatal would make this check
-# permanently unrunnable until an unrelated problem is solved, which is how a check gets deleted.
-if grep -qE '^error: could not compile|^error\[E[0-9]+\]' "$out"; then
-  echo "error: the suite did not compile, so it cannot demonstrate the absence of a leak." >&2
-  grep -E '^error' "$out" | head -5 | sed 's/^/  /' >&2
+if [ "$suite_status" -ne 0 ]; then
+  echo "error: the test suite exited $suite_status; output was checked for leaks, but the gate failed." >&2
+  tail -30 "$out" >&2
   status=1
-elif [ "$suite_status" -ne 0 ]; then
-  echo "note: the suite exited $suite_status — some tests failed. Their output WAS scanned (failing tests"
-  echo "      print more, not less), so the leak result above stands. Fix them separately."
 fi
 
 if [ "$status" -eq 0 ]; then

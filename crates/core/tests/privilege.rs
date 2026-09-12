@@ -37,7 +37,7 @@ fn scan(input: &str) -> please_core::Verdict {
         .expect("the built-in rule set must load")
         .scan(
             input.as_bytes(),
-            &ScanPolicy::default(),
+            &ScanPolicy::reference_analysis(),
             TargetRef::buffer("test", input.len()),
         )
 }

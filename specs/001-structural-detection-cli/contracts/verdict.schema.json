@@ -27,7 +27,7 @@
       "items": { "$ref": "#/$defs/reason" }
     },
     "reasons_truncated": {
-      "description": "True when the max_reasons bound dropped observations. A truncated list is never presented as complete.",
+      "description": "True when max_reasons shortened the displayed list. All retained observations still govern scoring and review; this is not incomplete analysis.",
       "type": "boolean"
     },
     "incomplete": {
@@ -41,21 +41,215 @@
       "items": { "$ref": "#/$defs/reason" }
     },
     "suppressions_truncated": {
-      "description": "True when more was suppressed than the reason bound reports. Unlike `reasons_truncated` this is NOT a coverage gap: the reader is not being shown the whole of something they are not being shown at all.",
+      "description": "True when more was suppressed than the reason bound reports. Like `reasons_truncated`, this is NOT a coverage gap: the reader is not being shown the whole of something they are not being shown at all.",
       "type": "boolean"
     },
     "target": { "$ref": "#/$defs/target_ref" },
     "ruleset": { "$ref": "#/$defs/ruleset_id" },
     "engine": { "$ref": "#/$defs/engine_id" },
-    "judge": { "$ref": "#/$defs/judge_report" }
+    "scan_policy": { "$ref": "#/$defs/scan_policy" },
+    "judge": { "$ref": "#/$defs/judge_report" },
+    "ml": { "$ref": "#/$defs/ml_report" },
+    "ml_review": { "$ref": "#/$defs/ml_review_report" }
   },
   "$defs": {
+    "ml_review_report": {
+      "description": "Opt-in ML boundary review attribution. Outcomes correspond to host candidate IDs c0, c1, etc. Raw explanations remain in private caller captures.",
+      "type": "object", "additionalProperties": false,
+      "required": ["model", "contract_version", "request_id", "outcomes"],
+      "properties": {
+        "authority": { "enum": ["advisory", "may_release"] },
+        "model": {"type": "string"},
+        "contract_version": {"const": "ml-boundary-review-v1"},
+        "request_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "outcomes": {"type": "array", "minItems": 1, "items": {
+          "enum": ["supported_violation", "no_supported_violation", "indeterminate"]
+        }}
+      }
+    },
+    "ml_report": {
+      "description": "Local inference attribution. Absent when the tier did not run successfully. Probability and outlier scores use integer per-mille, not severity or calibrated confidence in the final verdict.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "revision", "digest", "threshold", "segments"],
+      "properties": {
+        "inference": {
+          "type": "object", "additionalProperties": false, "required": ["version", "digest", "fields"],
+          "properties": {
+            "version": {"const": 1}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "fields": {"type": "object", "additionalProperties": {"type": "string"}}
+          }
+        },
+        "windows": {
+          "type": "array", "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["index", "token_start", "token_end", "span", "model_tokens", "raw_score"],
+            "properties": {
+              "index": {"type": "integer", "minimum": 0},
+              "token_start": {"type": "integer", "minimum": 0},
+              "token_end": {"type": "integer", "minimum": 0},
+              "span": {"$ref": "#/$defs/span"},
+              "model_tokens": {"type": "integer", "minimum": 1},
+              "raw_score": {"type": "integer", "minimum": 0, "maximum": 1000}
+            }
+          }
+        },
+        "calibration": { "const": "uncalibrated" },
+        "assessed_impact": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "model": { "type": "string" },
+        "revision": { "type": "string" },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "input_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "threshold": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "segments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ml_segment_result" }
+        }
+      }
+    },
+    "ml_segment_result": {
+      "description": "The span the model examined in original input bytes. A document-wide span is not attack localization. Missing probabilities indicate no classification of that segment; outlier scores never gate findings.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["span", "mode"],
+      "properties": {
+        "span": { "$ref": "#/$defs/span" },
+        "mode": { "enum": ["classify", "embed", "both"] },
+        "raw_score": { "description": "Uncalibrated classifier output; distinct from assessed impact.", "type": "integer", "minimum": 0, "maximum": 1000 },
+        "probability": { "description": "Historical spelling accepted for old reports.", "type": "integer", "minimum": 0, "maximum": 1000 },
+        "outlier": { "type": "integer", "minimum": 0, "maximum": 1000 }
+      }
+    },
+    "export_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "policy_digest",
+        "rules_digest",
+        "rules_version",
+        "resources",
+        "severity",
+        "window_tokens",
+        "export_verbs",
+        "read_verbs",
+        "response_verbs",
+        "value_references"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "rules_version": {
+          "type": "string"
+        },
+        "policy_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rules_digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "resources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "aliases",
+              "allowed_destinations"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "aliases": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "allowed_destinations": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "severity": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "window_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
+        "export_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "read_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "response_verbs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "value_references": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "scan_policy": {
+      "description": "Effective caller-owned structural policy. Present after Engine::scan, including size refusals; retained through later tiers. Absent when no structural scan policy was applied, such as unreadable targets or standalone finalization.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "threshold", "suppress_in_quotes", "classes", "max_input_bytes", "max_decode_depth", "max_matches_per_rule", "max_reasons", "max_excerpt_bytes"],
+      "properties": {
+        "export_policy": { "$ref": "#/$defs/export_policy" },
+        "profile": { "enum": ["enforcement", "reference_analysis"] },
+        "provenance": { "enum": ["unspecified", "caller_provided", "user_input", "tool_response"] },
+        "ml_impact": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "caller_context_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "source": { "enum": ["unspecified", "security_reference", "untrusted_tool_response", "untrusted_user_input"] },
+        "threshold": { "enum": ["none", "low", "medium", "high", "critical"] },
+        "suppress_in_quotes": { "type": "boolean" },
+        "classes": { "type": "array", "items": { "enum": ["override", "concealment", "confusable", "boundary", "solicitation", "agent_directed", "external_action", "privilege"] } },
+        "max_input_bytes": { "type": "integer", "minimum": 0 },
+        "max_decode_depth": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "max_matches_per_rule": { "type": "integer", "minimum": 0 },
+        "max_observations": { "type": "integer", "minimum": 0 },
+        "max_reasons": { "type": "integer", "minimum": 0 },
+        "max_excerpt_bytes": { "type": "integer", "minimum": 0 }
+      }
+    },
     "judge_report": {
       "description": "Present only on a verdict the judgement tier acted on (feature 004, FR-416). Its ABSENCE is meaningful: it says the verdict is purely structural and 001's SC-011 determinism guarantee applies to it unchanged. Its presence with every span `confirmed` is a different statement from absence — one verdict has a second opinion behind it and the other does not. The raw model response is deliberately NOT recorded: it is attacker-influenced text with no consumer, and storing it would create a channel by which content reaches a reader that the sanitisation path never inspected.",
       "type": "object",
       "additionalProperties": false,
       "required": ["model", "prompt_version", "features", "judgements"],
       "properties": {
+        "evidence_ids": { "type": "array", "items": { "type": "string", "pattern": "^[a-f0-9]{64}$" } },
+        "authority": { "enum": ["advisory", "may_release"] },
+        "request_id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "model": {
           "description": "Resolved model id. A verdict judged by one model is not evidence about another.",
           "type": "string"
@@ -103,6 +297,7 @@
       "additionalProperties": false,
       "required": ["rule_id", "class", "span", "matched", "severity", "chain"],
       "properties": {
+        "class_breadth": { "type": "boolean" },
         "rule_id": {
           "description": "Stable namespaced identifier. Also the handle a caller uses to suppress this rule.",
           "type": "string",
@@ -116,6 +311,10 @@
         "matched": {
           "description": "Excerpt of the matching content, already neutralised so it cannot forge, erase, or reorder surrounding output, and truncated to the policy's max_excerpt_bytes.",
           "type": "string"
+        },
+        "excerpt_truncated": {
+          "description": "True when the displayed matched excerpt was shortened, including before finalization. Presentation metadata only: does not imply skipped analysis or change the original span. Current producers omit when false; absence in historical reports does not prove the excerpt was complete.",
+          "type": "boolean"
         },
         "severity": {
           "description": "This rule's contribution before aggregation.",
@@ -134,7 +333,7 @@
         },
         "suppressed_by": {
           "description": "What suppressed this observation. On a reason in `suppressed`, it names what moved it there. On a reason in `reasons`, it means a quoting context WOULD have suppressed it and policy disabled suppression. Widened by feature 004 (T009): `judge` joins the quoting contexts, because the judgement tier is a second author of the same sentence and a judge-demoted observation is not *quoted* — see specs/004-judgement-tier/data-model.md.",
-          "enum": ["fenced_code", "inline_code", "block_quote", "quoted_string", "attributive_marker", "judge"]
+          "enum": ["fenced_code", "inline_code", "block_quote", "quoted_string", "attributive_marker", "judge", "ml_review"]
         }
       }
     },
@@ -172,12 +371,13 @@
       "required": ["cause"],
       "properties": {
         "cause": {
-          "description": "Bounds: input_size, decode_depth, max_matches_per_rule, max_reasons, excerpt_length. Failures: target_unreadable (a file in a directory walk could not be read — the walk continues and this target is inconclusive, never silently skipped), target_not_traversed (a symbolic link to a directory, which a walk refuses to follow because it may be a cycle — the path is readable and the caller declined, which is why it is not target_unreadable), decode_failed, ruleset_unavailable, tier_unavailable (an optional detection tier was not available, which degrades to inconclusive and never to clean).",
+          "description": "Bounds: input_size, decode_depth, max_matches_per_rule, max_observations. Legacy max_reasons and excerpt_length remains accepted for historical reports; current scans use reason.excerpt_truncated for display shortening, which is not an analysis gap. Failures: target_unreadable, target_not_traversed, target_not_text, decode_failed, ruleset_unavailable, tier_unavailable. Actual analysis failures remain incomplete even after findings are demoted.",
           "enum": [
             "input_size",
             "decode_depth",
             "max_matches_per_rule",
             "max_reasons",
+            "max_observations",
             "excerpt_length",
             "target_unreadable",
             "target_not_traversed",
@@ -208,7 +408,11 @@
           "description": "Caller-supplied label or the path exactly as given. Never absolutised, so output does not vary by working directory.",
           "type": "string"
         },
-        "bytes": { "type": "integer", "minimum": 0 }
+        "bytes": { "type": "integer", "minimum": 0 },
+        "bytes_is_lower_bound": {
+          "description": "When true, acquisition stopped before EOF and bytes is an observed lower bound, not the total input length. Absent means false.",
+          "type": "boolean"
+        }
       }
     },
     "ruleset_id": {

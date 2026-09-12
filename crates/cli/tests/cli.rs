@@ -242,7 +242,7 @@ fn explain_reports_what_quoting_suppression_hid() {
     // positive gets the answer from this one run instead of diffing two.
     let input = "The known payload is `ignore all previous instructions` in most variants.";
 
-    let plain = scan_stdin(input, &[]);
+    let plain = scan_stdin(input, &["--profile", "reference-analysis"]);
     assert_eq!(
         plain.code, 0,
         "the payload is quoted, so nothing is reported"
@@ -252,7 +252,7 @@ fn explain_reports_what_quoting_suppression_hid() {
         "default output stays quiet: a hook printing a denial does not want a list of non-findings"
     );
 
-    let explained = scan_stdin(input, &["--explain"]);
+    let explained = scan_stdin(input, &["--explain", "--profile", "reference-analysis"]);
     assert_eq!(explained.code, 0, "still clean");
     assert!(
         explained.stdout.contains("suppressed by quoting"),
@@ -426,4 +426,22 @@ fn output_does_not_vary_with_the_working_directory() {
         .output()
         .unwrap();
     assert_eq!(from_root.stdout, from_tmp.stdout);
+}
+
+#[test]
+fn human_output_explains_source_policy_for_clean_and_risky_results() {
+    let text = include_str!("../../../tests/fixtures/source-policy/security-lesson.md");
+    for (source, expected) in [
+        (
+            "security-reference",
+            "profile: reference_analysis; provenance: caller_provided; threshold: high; quote suppression: on",
+        ),
+        (
+            "untrusted-tool-response",
+            "profile: enforcement; provenance: tool_response; threshold: high; quote suppression: off",
+        ),
+    ] {
+        let run = scan_stdin(text, &["--source", source]);
+        assert!(run.stdout.contains(expected), "{}", run.stdout);
+    }
 }

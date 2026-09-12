@@ -14,7 +14,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use please_core::verdict::{DetectionClass, RiskLevel};
-use please_core::ScanPolicy;
+use please_core::{ScanPolicy, ScanSource};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -36,7 +36,7 @@ pub struct Args {
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
     /// Scan one or more targets.
-    Scan(ScanArgs),
+    Scan(Box<ScanArgs>),
 
     /// Inspect the judgement tier's configuration. **Makes no network request.**
     ///
@@ -59,10 +59,101 @@ pub struct JudgeArgs {
     pub check: bool,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum Source {
+    Unspecified,
+    SecurityReference,
+    UntrustedToolResponse,
+    UntrustedUserInput,
+}
+
+impl From<Source> for ScanSource {
+    fn from(source: Source) -> Self {
+        match source {
+            Source::Unspecified => Self::Unspecified,
+            Source::SecurityReference => Self::SecurityReference,
+            Source::UntrustedToolResponse => Self::UntrustedToolResponse,
+            Source::UntrustedUserInput => Self::UntrustedUserInput,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum Profile {
+    Enforcement,
+    ReferenceAnalysis,
+}
+impl From<Profile> for please_core::ScanProfile {
+    fn from(value: Profile) -> Self {
+        match value {
+            Profile::Enforcement => Self::Enforcement,
+            Profile::ReferenceAnalysis => Self::ReferenceAnalysis,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub enum Provenance {
+    Unspecified,
+    CallerProvided,
+    UserInput,
+    ToolResponse,
+}
+impl From<Provenance> for please_core::InputProvenance {
+    fn from(value: Provenance) -> Self {
+        match value {
+            Provenance::Unspecified => Self::Unspecified,
+            Provenance::CallerProvided => Self::CallerProvided,
+            Provenance::UserInput => Self::UserInput,
+            Provenance::ToolResponse => Self::ToolResponse,
+        }
+    }
+}
+
 #[derive(Debug, Parser)]
 pub struct ScanArgs {
     /// Files, directories, or `-` for standard input. Defaults to standard input.
     pub targets: Vec<String>,
+
+    /// Caller-selected source and intended use. Untrusted tool responses and user inputs never suppress quoted findings.
+    #[arg(long, value_enum, default_value_t = Source::Unspecified)]
+    pub source: Source,
+
+    /// Scan purpose. Defaults to enforcement; reference-analysis explicitly allows quote suppression.
+    #[arg(long, value_enum)]
+    pub profile: Option<Profile>,
+
+    /// Input origin established by the caller, independently of scan purpose.
+    #[arg(long, value_enum)]
+    pub provenance: Option<Provenance>,
+
+    /// Host-owned JSON task and permission context for boundary review.
+    #[cfg(feature = "judge")]
+    #[arg(long, requires = "judge")]
+    pub review_context: Option<PathBuf>,
+
+    /// Caller-owned TOML permissions for experimental protected-data export detection.
+    #[arg(long)]
+    pub export_policy: Option<PathBuf>,
+
+    /// Classify the complete input locally with the explicitly configured model (experimental).
+    #[cfg(feature = "ml-candle")]
+    #[arg(long, overrides_with = "no_ml", requires = "ml_config")]
+    pub ml: bool,
+
+    /// Disable local inference, reproducing the structural scan. The last ML toggle wins.
+    #[cfg(feature = "ml-candle")]
+    #[arg(long, overrides_with = "ml")]
+    pub no_ml: bool,
+
+    /// Local classifier configuration JSON: model path, identity, label index, context, threshold.
+    #[cfg(feature = "ml-candle")]
+    #[arg(long, value_name = "PATH")]
+    pub ml_config: Option<PathBuf>,
+
+    /// Assessed impact of an admitted ML finding, independent of the classifier score and threshold.
+    #[cfg(feature = "ml-candle")]
+    #[arg(long, value_parser = clap::value_parser!(u8).range(0..=100), default_value_t = 75)]
+    pub ml_impact: u8,
 
     /// Risk band at or above which the exit status reports "risk found".
     #[arg(long, value_enum, default_value_t = Band::High)]
@@ -102,7 +193,11 @@ pub struct ScanArgs {
     #[arg(long)]
     pub max_decode_depth: Option<u8>,
 
-    /// Maximum reasons reported per target.
+    /// Maximum observations retained for analysis, including suppressed findings.
+    #[arg(long)]
+    pub max_observations: Option<u32>,
+
+    /// Maximum reasons displayed per target. Does not affect scoring or optional tiers.
     #[arg(long)]
     pub max_reasons: Option<u32>,
 
@@ -130,6 +225,11 @@ pub struct ScanArgs {
     #[cfg(feature = "judge")]
     #[arg(long, overrides_with = "no_judge")]
     pub judge: bool,
+
+    /// Permit judge demotions to lower the result, including releasing all-demoted input.
+    #[cfg(feature = "judge")]
+    #[arg(long, requires = "judge")]
+    pub judge_allow_release: bool,
 
     /// Do not ask the judgement tier. The default, and the way to reproduce a structural verdict exactly.
     ///
@@ -233,9 +333,24 @@ impl ScanArgs {
     pub fn policy(&self) -> ScanPolicy {
         let mut policy = ScanPolicy {
             threshold: self.threshold.into(),
-            suppress_in_quotes: !self.no_suppress_in_quotes,
-            ..ScanPolicy::default()
+            ..ScanPolicy::for_source(self.source.into())
         };
+        #[cfg(feature = "ml-candle")]
+        {
+            policy.ml_impact =
+                please_core::MlImpact::new(self.ml_impact).expect("clap validated impact");
+        }
+        if let Some(profile) = self.profile {
+            policy.profile = profile.into();
+            policy.suppress_in_quotes =
+                policy.profile == please_core::ScanProfile::ReferenceAnalysis;
+        }
+        if let Some(provenance) = self.provenance {
+            policy.provenance = provenance.into();
+        }
+        if self.no_suppress_in_quotes {
+            policy.suppress_in_quotes = false;
+        }
         if !self.classes.is_empty() {
             policy.classes = self
                 .classes
@@ -248,6 +363,9 @@ impl ScanArgs {
         }
         if let Some(v) = self.max_decode_depth {
             policy.max_decode_depth = v;
+        }
+        if let Some(v) = self.max_observations {
+            policy.max_observations = v;
         }
         if let Some(v) = self.max_reasons {
             policy.max_reasons = v;

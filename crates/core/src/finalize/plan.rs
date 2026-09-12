@@ -32,6 +32,7 @@ pub struct Bounds {
     pub max_input_bytes: u64,
     pub max_decode_depth: u8,
     pub max_matches_per_rule: u32,
+    pub max_observations: u32,
     pub max_reasons: u32,
     pub max_excerpt_bytes: u32,
 }
@@ -60,10 +61,11 @@ impl<'a> ScanPlan<'a> {
                 max_input_bytes: policy.max_input_bytes,
                 max_decode_depth: policy.max_decode_depth,
                 max_matches_per_rule: policy.max_matches_per_rule,
+                max_observations: policy.max_observations,
                 max_reasons: policy.max_reasons,
                 max_excerpt_bytes: policy.max_excerpt_bytes,
             },
-            suppress_in_quotes: policy.suppress_in_quotes,
+            suppress_in_quotes: policy.suppresses_quotes(),
         }
     }
 

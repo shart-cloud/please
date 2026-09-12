@@ -143,7 +143,9 @@ pub struct JudgeResponse {
 }
 
 impl JudgeResponse {
-    /// Parse and validate the tool input against the request that produced it.
+    /// Validate an already-decoded tool input (compatibility for experiments).
+    /// This cannot validate the original envelope or recover duplicate JSON fields.
+    /// Shipping callers must use [`JudgeRequest::parse_envelope`].
     pub fn parse(
         tool_input: &serde_json::Value,
         request: &JudgeRequest,
@@ -151,6 +153,16 @@ impl JudgeResponse {
         let wire: WireResponse = serde_json::from_value(tool_input.clone())
             .map_err(|e| InvalidResponse::Malformed(e.to_string()))?;
 
+        Self::from_wire(wire, request)
+    }
+
+    pub(crate) fn parse_raw(raw: &str, request: &JudgeRequest) -> Result<Self, InvalidResponse> {
+        let wire = serde_json::from_str(raw)
+            .map_err(|_| InvalidResponse::Malformed("invalid tool input schema".into()))?;
+        Self::from_wire(wire, request)
+    }
+
+    fn from_wire(wire: WireResponse, request: &JudgeRequest) -> Result<Self, InvalidResponse> {
         // Exactly the requested spans, no more and no fewer. A schema can require an array of objects; it
         // cannot know which ids were asked about, so this is the part that has to live here.
         #[allow(clippy::type_complexity)]

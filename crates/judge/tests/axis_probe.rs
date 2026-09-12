@@ -213,7 +213,7 @@ fn which_question_separates_the_pair() {
                 .expect("both fixtures produce findings");
             let content = request.user_content();
 
-            println!("   {id} ({expectation}) — {} spans", request.spans.len());
+            println!("   {id} ({expectation}) — {} spans", request.spans().len());
             for round in 1..=ROUNDS {
                 match ask(&resolution, candidate, &content) {
                     Some(answers) => {

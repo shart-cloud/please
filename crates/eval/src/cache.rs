@@ -44,16 +44,11 @@ pub fn slice_path(slice_id: &str) -> Result<PathBuf> {
     Ok(ensure(root()?.join("slices"))?.join(format!("{slice_id}.jsonl")))
 }
 
-/// Scan results for one slice under one run label.
+/// The local directory for one exact model revision.
 ///
-/// Results are derived data and stay out of git for a less principled reason than the text does: they
-/// are large, they are reproducible from the manifest plus a commit, and a committed results file
-/// would be a second place for a number to live and drift from the report beside it.
-pub fn results_path(run: &str, slice_id: &str) -> Result<PathBuf> {
-    Ok(ensure(root()?.join("results").join(run))?.join(format!("{slice_id}.jsonl")))
-}
-
-/// The directory holding one run's results.
-pub fn results_dir(run: &str) -> Result<PathBuf> {
-    ensure(root()?.join("results").join(run))
+/// Unlike [`slice_path`] this does not create anything. A scan or feasibility probe is cache-only:
+/// observing that a model is absent must not mutate the cache, much less reach the network. The
+/// explicit `please-eval model fetch` command owns directory creation and acquisition.
+pub fn model_dir(model_id: &str, revision: &str) -> Result<PathBuf> {
+    Ok(root()?.join("models").join(model_id).join(revision))
 }

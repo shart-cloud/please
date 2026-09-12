@@ -291,6 +291,14 @@ The trade is deliberate. Without this suppression the tool flags security docume
 unusable by the people most likely to evaluate it — and a firewall that gets switched off protects
 nothing. `--no-suppress-in-quotes` disables the behaviour for callers who prefer the noise.
 
+The judge receives only active findings. If quoting suppression hides every finding, `--judge`
+makes no request and cannot resolve that ambiguity. Caller-selected source policies now distinguish
+security references from untrusted tool responses: `--source untrusted-tool-response` keeps quoted
+findings active, while `--source security-reference` retains the quoting heuristic. The default with
+no source is unchanged. [Paired examples](source-policies.md) exercise this distinction at `High`;
+they do not establish broader deployment accuracy. Markdown formatting alone establishes no source
+authority.
+
 **The false-negative rate this costs is still not measured, but the population it acts on now is.** Over
 the 2026-08-17 run, suppression moved at least one finding to the suppressed channel on **726 positive
 rows** — 641 of them in LLMail-Inject, 11 of the 42 documents in this repository's own `docs/` and

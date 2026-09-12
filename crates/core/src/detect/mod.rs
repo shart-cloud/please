@@ -87,6 +87,7 @@ pub mod structural {
                     found.kind.as_str()
                 ),
                 chain: Vec::new(),
+                excerpt_truncated: false,
                 suppressed_by: None,
             });
         }
@@ -102,6 +103,7 @@ pub mod structural {
                     "Token uses characters resembling other characters, disguising an ASCII word."
                         .to_string(),
                 chain: Vec::new(),
+                excerpt_truncated: false,
                 suppressed_by: None,
             });
         }
@@ -129,43 +131,11 @@ pub mod structural {
 ///
 /// `fires_in_quotes` on a rule opts it out: a rule matching a mechanism rather than a phrase should still
 /// fire inside a code block.
-/// Drop matches that a frame-anchored rule made outside a frame (005 FR-501, FR-511).
 ///
-/// # Why this is a separate pass, and why it runs first
-///
-/// The frame and suppression answer different questions, and conflating them was the defect this
-/// feature exists to fix.
-///
-/// * **The frame asks whether this was ever a finding.** A rule declaring `anchor = "frame"` says its
-///   payload only means anything at the start of a semantic unit; `system:` in the middle of a sentence
-///   about email headers is not a forged role marker, it is a word.
-/// * **Suppression asks whether a finding should be reported.** It already happened; the question is
-///   whether the author was quoting it.
-///
-/// So a dropped match goes into **neither** channel. It is not suppressed — nothing was hidden from the
-/// user, because there was nothing to hide. Putting it in the suppressed list would be a lie of a
-/// specific and expensive kind: `--no-suppress-in-quotes` would then "reveal" matches that were never
-/// findings, and the suppressed channel is the one place a user looks to check whether the tool is
-/// hiding something from them.
-///
-/// # Ordering
-///
-/// Frame first, then suppression. The two are independent — widening the frame must not widen live text
-/// (FR-504) — and running the cheaper, more selective filter first means suppression looks at fewer
-/// candidates. A frame boundary inside a fenced code block is still inside a fenced code block, which
-/// `tests/frame.rs::widening_the_frame_does_not_widen_live_text` is written to catch if it ever stops
-/// being true.
-pub fn apply_frame(
-    hits: Vec<Observation>,
-    input: &[u8],
-    structure: &QuotingMap,
-    is_frame_anchored: impl Fn(&str) -> bool,
-) -> Vec<Observation> {
-    hits.into_iter()
-        .filter(|hit| !is_frame_anchored(&hit.rule_id) || structure.is_frame(input, hit.span.start))
-        .collect()
-}
-
+/// Rule frame eligibility is enforced by the matcher before observations are constructed. An
+/// off-frame occurrence enters neither channel. Quoting asks a separate question of an eligible
+/// finding: a frame inside a fence is still quoted, and disabling suppression cannot revive an
+/// occurrence rejected by its anchor (005 FR-504).
 pub fn apply_suppression(
     hits: Vec<Observation>,
     quoting: &QuotingMap,
@@ -190,7 +160,12 @@ pub fn apply_suppression(
             kept.push(hit);
             continue;
         }
-        match quoting.is_quoted(hit.span.start) {
+        let context = if hit.rule_id.starts_with("action.export.") {
+            quoting.covering_quote(hit.span.start, hit.span.end)
+        } else {
+            quoting.is_quoted(hit.span.start)
+        };
+        match context {
             Some(context) if !fires_in_quotes(&hit.rule_id) => suppressed.push((hit, context)),
             _ => kept.push(hit),
         }
@@ -255,6 +230,7 @@ pub fn conceal_markup(found: &[Observation], quoting: &QuotingMap) -> Vec<Observ
             chain: Vec::new(),
             // Never suppressed: `is_quoted` cannot return a concealing region, so nothing upstream could
             // have set this. Stated rather than left implicit.
+            excerpt_truncated: false,
             suppressed_by: None,
         });
     }
@@ -308,6 +284,7 @@ mod tests {
             severity: 80,
             description: "test".to_string(),
             chain: Vec::new(),
+            excerpt_truncated: false,
             suppressed_by: None,
         }
     }

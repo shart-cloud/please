@@ -1,0 +1,51 @@
+name: ML inference
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  real-weights:
+    name: verified public models and real Candle inference
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      PLEASE_EVAL_CACHE: ${{ github.workspace }}/.cache/ci-models
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        id: models
+        with:
+          path: .cache/ci-models/models
+          key: public-inference-models-${{ hashFiles('crates/eval/corpus/models.toml') }}
+      - name: Install pinned download client
+        if: steps.models.outputs.cache-hit != 'true'
+        run: python -m pip install 'huggingface_hub==1.27.0'
+      - name: Fetch the two ungated model bundles
+        if: steps.models.outputs.cache-hit != 'true'
+        run: >-
+          cargo run --manifest-path crates/eval/Cargo.toml --locked --
+          model fetch protectai-deberta-v3-small all-minilm-l6-v2
+      - name: Cache Rust dependencies before the offline gate
+        run: |
+          cargo fetch --locked
+          cargo fetch --manifest-path crates/eval/Cargo.toml --locked
+      - name: Verify all asset hashes and execute inference offline
+        shell: bash
+        run: bash ci/check-ml-inference.sh 2>&1 | tee ml-inference.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ml-inference
+          path: ml-inference.log
+          if-no-files-found: warn

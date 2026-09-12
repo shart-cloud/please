@@ -20,9 +20,12 @@ fn main() {
         class: DetectionClass::Override,
         span: Span::new(0, 4),
         matched: "raw \u{1b}[2J unneutralised bytes".to_string(),
+        excerpt_truncated: false,
         severity: 100,
         chain: Vec::new(),
         description: "built outside finalization".to_string(),
         suppressed_by: None,
+        ml_origin: None,
+        contributes_class_breadth: true,
     };
 }

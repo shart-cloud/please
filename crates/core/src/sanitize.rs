@@ -71,14 +71,9 @@ fn escape(c: char, out: &mut String) {
 
 /// Sanitise text, capping the **output** at `max_bytes`.
 ///
-/// Returns the sanitised text and whether the cap truncated it. Truncation is reported rather than silent
-/// because a limit the reader cannot see reads as complete coverage.
-///
-/// The boolean stays a boolean, and this function does **not** record a coverage gap itself, which is worth
-/// justifying since T022 and T021 moved gap recording into the decoder and the matcher. Those two knew
-/// *why* their bound mattered; this one does not. It shortens a string and has no idea whose excerpt it is
-/// or what the bound is called, so a gap constructed here would carry no detail worth reading. Its single
-/// caller — `finalize::into_reason` — knows both, and records it there (FR-122).
+/// Returns the sanitised text and whether the cap truncated its display. Callers retain that flag so
+/// readers can distinguish an excerpt from complete content. Finalization carries it on `Reason` as
+/// presentation metadata; shortening display text does not itself mean analysis was skipped.
 ///
 /// Truncation never splits a character and never splits an escape sequence: a half-written `\u{202`
 /// in a log is both unreadable and a misrepresentation of what was found.

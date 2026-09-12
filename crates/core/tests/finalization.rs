@@ -51,6 +51,7 @@ fn bounds() -> Bounds {
         max_input_bytes: 1_048_576,
         max_decode_depth: 3,
         max_matches_per_rule: 16,
+        max_observations: 4096,
         max_reasons: 64,
         max_excerpt_bytes: 256,
     }
@@ -78,6 +79,7 @@ fn an_observation(rule_id: &str, start: usize, severity: u8) -> Observation {
         severity,
         description: "test rule".to_string(),
         chain: Vec::new(),
+        excerpt_truncated: false,
         suppressed_by: None,
     }
 }
@@ -94,6 +96,21 @@ fn clean_when_nothing_found_and_nothing_unexamined() {
     let v = verdict_from(Evidence::new());
     assert_eq!(v.outcome(), Outcome::Clean);
     assert_eq!(v.score(), 0);
+}
+
+#[test]
+fn reader_size_refusal_preserves_policy_without_claiming_complete_input_identity() {
+    let policy = please_core::ScanPolicy {
+        max_input_bytes: 8,
+        ..please_core::ScanPolicy::for_source(please_core::ScanSource::UntrustedToolResponse)
+    };
+    let verdict =
+        please_core::finalize::acquisition_limit_exceeded(TargetRef::stdin(9), &policy, ruleset());
+    assert_eq!(verdict.outcome(), Outcome::Inconclusive);
+    assert_eq!(verdict.scan_policy(), Some(&policy));
+    assert!(verdict.input_digest().is_none());
+    assert!(verdict.target().bytes_is_lower_bound);
+    assert_eq!(verdict.incomplete()[0].cause(), IncompleteCause::InputSize);
 }
 
 #[test]
@@ -200,7 +217,7 @@ fn reasons_are_ordered_by_offset_then_rule_id() {
 }
 
 #[test]
-fn truncation_keeps_the_earliest_reasons_and_records_the_bound() {
+fn truncation_keeps_the_earliest_reasons_without_a_coverage_gap() {
     // Truncating after ordering, not before: the reasons kept must be the earliest in the input rather
     // than whichever the detector iteration order happened to produce.
     let mut evidence = Evidence::new();
@@ -220,8 +237,8 @@ fn truncation_keeps_the_earliest_reasons_and_records_the_bound() {
     assert!(
         v.incomplete()
             .iter()
-            .any(|i| i.cause() == IncompleteCause::MaxReasons),
-        "a truncated report is incomplete coverage and must say so"
+            .all(|i| i.cause() != IncompleteCause::MaxReasons),
+        "shortening a report does not shorten analysis"
     );
 }
 
@@ -245,9 +262,7 @@ fn an_excerpt_is_neutralised_on_the_way_into_a_reason() {
 }
 
 #[test]
-fn a_truncated_excerpt_is_recorded_as_a_coverage_gap() {
-    // The fourth of 001's four gap booleans (FR-122). Sanitisation returns "I shortened this", and the
-    // only place that knows whose excerpt it was and what the bound was called is here.
+fn a_truncated_excerpt_is_recorded_as_presentation_metadata() {
     let mut observation = an_observation("override.x", 0, 80);
     observation.matched = "a".repeat(500);
 
@@ -260,17 +275,9 @@ fn a_truncated_excerpt_is_recorded_as_a_coverage_gap() {
     };
     let v = finalize(evidence, tight, attribution());
 
-    let gap = v
-        .incomplete()
-        .iter()
-        .find(|i| i.cause() == IncompleteCause::ExcerptLength)
-        .expect("a shortened excerpt is a gap in what the reader can see");
-    assert_eq!(gap.configured(), Some(16));
-    assert!(
-        gap.detail().is_some_and(|d| d.contains("override.x")),
-        "the gap must name whose excerpt was shortened, got {:?}",
-        gap.detail()
-    );
+    assert!(v.incomplete().is_empty());
+    assert!(v.reasons()[0].excerpt_truncated());
+    assert_eq!(v.reasons()[0].matched().len(), 16);
 }
 
 // ── FR-124, SC-109: the score aggregates over everything, then reasons truncate ────────────────
@@ -370,8 +377,8 @@ fn a_saturated_rule_and_a_truncated_excerpt_and_a_found_payload_at_once() {
     // finalization, and it would break whenever the rules changed.
     //
     // What must hold when they coincide: the verdict is `RiskFound` (a confirmed payload outranks any gap),
-    // the score reflects the worst observation, and **all three** gaps are reported. A verdict that reported
-    // the payload and dropped the gaps would be claiming coverage it did not have.
+    // the score reflects the worst observation, and the actual coverage gap survives independently
+    // of display truncation metadata.
     let mut evidence = Evidence::new();
 
     let mut long_excerpt = an_observation("a.verbose", 0, 40);
@@ -404,14 +411,12 @@ fn a_saturated_rule_and_a_truncated_excerpt_and_a_found_payload_at_once() {
         causes.contains(&IncompleteCause::MaxMatchesPerRule),
         "the saturated rule must still be reported: {causes:?}"
     );
-    assert!(
-        causes.contains(&IncompleteCause::ExcerptLength),
-        "the truncated excerpt must still be reported: {causes:?}"
-    );
+    assert_eq!(causes, vec![IncompleteCause::MaxMatchesPerRule]);
+    assert!(v.reasons()[0].excerpt_truncated());
     assert_eq!(
         v.reasons().len(),
         2,
-        "both findings are reported; neither gap suppressed a finding"
+        "both findings are reported; display truncation never suppresses a finding"
     );
 }
 

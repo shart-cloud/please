@@ -1,0 +1,1 @@
+An incident report discusses why applications separate trusted instructions from retrieved text. Quoted examples are evidence for analysis.

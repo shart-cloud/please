@@ -143,6 +143,44 @@ field describes what actually ran rather than what was requested.
 
 ---
 
+## Frame-anchored matching
+
+Rules declaring `anchor = "frame"` are eligible only when their match starts at a semantic-unit
+boundary in the searched bytes. Both matcher operations enforce this before returning results:
+`Matcher::find` returns eligible occurrences and `Matcher::matching_rules` returns each eligible
+rule once. Raw regex occurrences count toward the match cap before frame filtering; an exhausted
+cap remains a coverage gap even if all retained hits are off-frame.
+
+Decoded buffers use their own frame coordinates. Original encoded-region spans are attached only
+when observations are constructed. Quoting suppression is separate and follows eligibility;
+turning it off cannot restore an off-frame occurrence. Frame syntax and quoting semantics are
+unchanged by this consolidation.
+
+For low-level Rust callers, `detect::apply_frame` and `Matcher::is_frame_anchored` are removed.
+Consume the frame-aware matcher results directly, then apply quoting suppression where appropriate.
+The placement decision is recorded in [005 D2's amendment](../../005-agentic-surface/plan.md#d2-amendment--frame-eligibility-ownership-2026-09-12).
+
+---
+
+## Shared file acquisition
+
+The CLI and evaluation harness use `please_scan::load_engine(files, disabled)` to acquire rule sets.
+It reads and parses files in the supplied order, then delegates one layered build to core. Core
+preparation remains filesystem-free. No engine is returned if any file fails or preparation rejects
+the resolved set; evaluation rejects invalid rules before creating an evaluation run.
+
+`RuleLoadError` distinguishes default built-in loading, file reads, file parsing, and final preparation.
+Read and parse errors retain the supplied path and underlying error. Preparation errors retain core's
+rule IDs where available, without inventing a file attribution for a whole-set failure. The CLI owns
+presentation: default built-in failures exit 70, caller selection failures exit 64, and replacement
+warnings go to stderr. Evaluation retains its selection description and reports the same attributed
+acquisition errors.
+
+This consolidation preserves resolution order, suppression behavior, base calibration, provenance,
+and compiled validation. It adds no production dependencies or storage interface.
+
+---
+
 ## Worked example: a team suppresses a rule and adds their own
 
 Satisfies SC-010. No rebuild, no reinstall.

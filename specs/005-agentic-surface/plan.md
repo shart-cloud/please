@@ -191,6 +191,25 @@ different bug is the trade this project has already made once and written down.
 boundary inside a fence is still inside a fence. The two questions are independent and stay independent —
 which is also why User Story 1 scenario 4 exists as a test.
 
+### D2 amendment — frame eligibility ownership (2026-09-12)
+
+The placement above is historical. Architecture recommendation 4 moves rule frame eligibility into
+`matcher`: `find` returns eligible occurrences, and `matching_rules` returns each eligible rule
+once. Both use the same anchor check and the structure module's existing frame predicate. The
+reason for revisiting placement is concrete: direct matching required a detect callback after
+observation construction, while decoded matching already enforced anchors internally.
+
+Raw regex collection and its cap still run before eligibility filtering. Off-frame hits consume
+the cap and can leave a coverage gap even when no eligible finding survives. Direct eligibility
+uses original bytes; decoded eligibility uses decoded bytes before evidence is attributed to the
+original encoded region. Frame rejection enters neither reported nor suppressed evidence.
+
+Quoting suppression remains in detect and still follows frame eligibility. No frame delimiters,
+rule patterns, calibration, or suppression heuristics change. The old `detect::apply_frame` and
+`Matcher::is_frame_anchored` helpers are removed: callers consume eligible matcher results directly.
+This is a low-level Rust interface migration, not a change to `Engine::scan` or verdict schemas.
+See `crates/core/FRAME-MATCHING-PLAN.md` for validation and performance measurements.
+
 ## D3 — `Privilege`, and the bar it has to clear
 
 002 *removed* a class for failing FR-130; 003 added one only after arguing it past the same bar. An eighth
