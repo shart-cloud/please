@@ -9,6 +9,7 @@
 //! please-eval run                 scan every slice
 //! please-eval report              per-source stratified metrics
 //! please-eval gate                the false-positive gate, as an exit code
+//! please-eval bench               versioned prompt-injection test-bench commands
 //!
 //! please-eval model fetch         explicit networked acquisition of pinned model assets
 //! please-eval model check         cache-only integrity and attribution
@@ -53,6 +54,11 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Validate case packs and run the versioned prompt-injection test bench.
+    Bench {
+        #[command(subcommand)]
+        action: BenchCommand,
+    },
     /// Freeze and measure tokenizer-verified window-boundary placements, without network access.
     #[cfg(feature = "boundary")]
     Boundary {
@@ -146,6 +152,81 @@ enum Command {
     Model {
         #[command(subcommand)]
         action: ModelCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum BenchCommand {
+    /// Inspect or verify an immutable case pack without invoking a system.
+    Pack {
+        #[command(subcommand)]
+        action: BenchPackCommand,
+    },
+    /// Validate a system manifest and its executable or rule-set references.
+    System {
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Permit validation of a manifest that declares network capability.
+        #[arg(long)]
+        allow_network: bool,
+    },
+    /// Validate an experiment, its pack, systems, exposure history, and fixed limits.
+    Experiment {
+        #[arg(long)]
+        manifest: PathBuf,
+    },
+    /// Execute a verified experiment into a new append-only run directory.
+    Run {
+        #[arg(long)]
+        experiment: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+    /// Render stratified effectiveness, coverage, failure, cost, and paired-context results.
+    Report {
+        #[arg(long)]
+        run: PathBuf,
+        #[arg(long, default_value = "md", value_parser = ["md", "json"])]
+        format: String,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Compare semantic decisions from two identity-compatible deterministic runs.
+    Compare {
+        #[arg(long)]
+        left: PathBuf,
+        #[arg(long)]
+        right: PathBuf,
+        #[arg(long)]
+        out: Option<PathBuf>,
+    },
+    /// Record every case in a completed run as exposed, without copying candidate bytes.
+    Exposure {
+        #[arg(long)]
+        run: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        use_kind: String,
+        #[arg(long)]
+        recorded_at: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum BenchPackCommand {
+    /// Print the canonical digest to place in content_digest while authoring a pack.
+    Digest {
+        #[arg(long)]
+        pack: PathBuf,
+    },
+    /// Verify schema, taxonomy, assets, split isolation, and exposure history.
+    Check {
+        #[arg(long)]
+        pack: PathBuf,
+        /// Exposure JSONL paths relative to the pack directory.
+        #[arg(long = "exposure")]
+        exposures: Vec<PathBuf>,
     },
 }
 
@@ -294,6 +375,7 @@ fn main() -> ExitCode {
 fn run() -> Result<ExitCode> {
     let cli = Cli::parse();
     match cli.command {
+        Command::Bench { action } => run_bench(action),
         #[cfg(feature = "boundary")]
         Command::Boundary { action } => {
             match action {
@@ -443,6 +525,89 @@ fn run() -> Result<ExitCode> {
             ),
         },
     }
+}
+
+fn run_bench(action: BenchCommand) -> Result<ExitCode> {
+    use please_eval::bench::model::ExecutionMode;
+    match action {
+        BenchCommand::Pack { action } => match action {
+            BenchPackCommand::Digest { pack } => {
+                println!("{}", please_eval::bench::pack::expected_digest(&pack)?);
+            }
+            BenchPackCommand::Check { pack, exposures } => {
+                let verified = please_eval::bench::pack::check(&pack, &exposures)?;
+                println!(
+                    "Verified {}@{}: {} cases, digest {}",
+                    verified.manifest.pack_id,
+                    verified.manifest.version,
+                    verified.manifest.cases.len(),
+                    verified.digest
+                );
+            }
+        },
+        BenchCommand::System {
+            manifest,
+            allow_network,
+        } => {
+            let verified = please_eval::bench::system::check(
+                &manifest,
+                if allow_network {
+                    ExecutionMode::NetworkAllowed
+                } else {
+                    ExecutionMode::Offline
+                },
+            )?;
+            println!(
+                "Verified {}@{}: {}",
+                verified.manifest.system_id, verified.manifest.version, verified.digest
+            );
+        }
+        BenchCommand::Experiment { manifest } => {
+            let verified = please_eval::bench::runner::check_experiment(&manifest)?;
+            println!(
+                "Verified {}@{}: {} cases, {} systems, digest {}",
+                verified.manifest.experiment_id,
+                verified.manifest.version,
+                verified.pack.manifest.cases.len(),
+                verified.systems.len(),
+                verified.digest
+            );
+        }
+        BenchCommand::Run { experiment, out } => {
+            let manifest = please_eval::bench::runner::run(&experiment, &out)?;
+            println!(
+                "Completed {} rows in {} (run {})",
+                manifest.results.as_ref().map_or(0, |saved| saved.rows),
+                out.display(),
+                manifest.run_id
+            );
+        }
+        BenchCommand::Report { run, format, out } => {
+            let rendered = please_eval::bench::report::write_report(&run, &format, out.as_deref())?;
+            if out.is_none() {
+                print!("{rendered}");
+            }
+        }
+        BenchCommand::Compare { left, right, out } => {
+            let comparison = please_eval::bench::report::compare(&left, &right)?;
+            let rendered = format!("{}\n", serde_json::to_string_pretty(&comparison)?);
+            if let Some(path) = out {
+                std::fs::write(path, rendered)?;
+            } else {
+                print!("{rendered}");
+            }
+        }
+        BenchCommand::Exposure {
+            run,
+            out,
+            use_kind,
+            recorded_at,
+        } => {
+            let cases = please_eval::bench::exposure::record(&run, &out, &use_kind, &recorded_at)?;
+            println!("Recorded {cases} exposed cases in {}", out.display());
+        }
+    }
+    Ok(ExitCode::SUCCESS)
 }
 
 fn list_models() -> Result<ExitCode> {

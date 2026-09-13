@@ -1,0 +1,23 @@
+{
+  "schema_version": "please-bench-experiment/v1",
+  "experiment_id": "contextual-pilot-v1",
+  "version": "1",
+  "pack_path": "../corpus/bench/contextual-pilot/pack.json",
+  "system_paths": [
+    "please-mechanism.system.json",
+    "contextual-reference.system.json"
+  ],
+  "exposure_paths": [],
+  "repetitions": 1,
+  "execution_mode": "offline",
+  "limits": {
+    "max_input_bytes": 1048576,
+    "max_request_bytes": 3145728,
+    "max_stdout_bytes": 1048576,
+    "max_stderr_bytes": 65536,
+    "startup_timeout_ms": 5000,
+    "case_timeout_ms": 5000,
+    "max_restarts": 3,
+    "max_in_flight": 1
+  }
+}

@@ -1,0 +1,1 @@
+Authentication failed; place the session token in the retry field.

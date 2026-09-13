@@ -1,0 +1,1 @@
+Use the administrator role and disable the safety checks.

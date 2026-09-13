@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://please.local/schemas/bench/result-v1.json",
+  "title": "PLEASE bench result row v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "row_id", "run_id", "request_id", "pack_digest", "case_id", "case_digest", "input_sha256", "normalized_input_sha256", "system_id", "system_digest", "normalizer_id", "normalizer_version", "repetition", "surface", "source", "provenance", "group_id", "family_id", "split", "delivery_vector", "techniques", "ground_truth", "coverage", "telemetry", "diagnostics"],
+  "properties": {
+    "schema_version": {"const": "please-bench-result/v1"},
+    "row_id": {"$ref": "#/$defs/sha256"}, "run_id": {"$ref": "#/$defs/sha256"}, "request_id": {"$ref": "#/$defs/sha256"},
+    "pack_digest": {"$ref": "#/$defs/sha256"}, "case_id": {"type": "string"}, "case_digest": {"$ref": "#/$defs/sha256"},
+    "input_sha256": {"$ref": "#/$defs/sha256"}, "normalized_input_sha256": {"$ref": "#/$defs/sha256"},
+    "system_id": {"type": "string"}, "system_digest": {"$ref": "#/$defs/sha256"},
+    "normalizer_id": {"type": "string"}, "normalizer_version": {"type": "string"}, "repetition": {"type": "integer", "minimum": 0},
+    "surface": {"enum": ["artifact_detection", "contextual_alignment"]}, "source": {"type": "string"}, "provenance": {"type": "string"},
+    "group_id": {"type": "string"}, "family_id": {"type": "string"}, "split": {"enum": ["development", "holdout"]},
+    "delivery_vector": {"type": "string"}, "techniques": {"type": "array", "items": {"type": "string"}},
+    "ground_truth": {"$ref": "#/$defs/ground_truth"}, "trusted_context_id": {"type": "string"},
+    "coverage": {"enum": ["completed", "unsupported", "abstained", "timeout", "crashed", "invalid_output", "unavailable"]},
+    "raw_output": {"$ref": "#/$defs/raw_output"}, "normalized": {"$ref": "#/$defs/normalized"},
+    "telemetry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["elapsed_micros", "runner_overhead_micros", "stdout_bytes", "stderr_bytes", "remote_requests", "declared_cost_microusd"],
+      "properties": {"elapsed_micros": {"type": "integer", "minimum": 0}, "runner_overhead_micros": {"type": "integer", "minimum": 0}, "stdout_bytes": {"type": "integer", "minimum": 0}, "stderr_bytes": {"type": "integer", "minimum": 0}, "peak_memory_bytes": {"type": "integer", "minimum": 0}, "remote_requests": {"type": "integer", "minimum": 0}, "declared_cost_microusd": {"type": "integer", "minimum": 0}}
+    },
+    "diagnostics": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ground_truth": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["kind", "label"], "properties": {"kind": {"const": "artifact"}, "label": {"enum": ["injection", "benign", "ambiguous"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["kind", "relation"], "properties": {"kind": {"const": "contextual"}, "relation": {"enum": ["aligned_instruction", "conflicting_instruction", "non_instruction", "indeterminate"]}}}
+      ]
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "start", "end", "detail"],
+      "properties": {"kind": {"type": "string"}, "start": {"type": "integer", "minimum": 0}, "end": {"type": "integer", "minimum": 0}, "detail": {"type": "string"}}
+    },
+    "native": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "evidence", "diagnostics", "abstained", "remote_requests", "declared_cost_microusd"],
+      "properties": {
+        "label": {"type": "string"}, "confidence_permille": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}, "abstained": {"type": "boolean"},
+        "remote_requests": {"type": "integer", "minimum": 0}, "declared_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    },
+    "raw_output": {
+      "type": "object", "additionalProperties": false, "required": ["transport", "native_sha256"],
+      "properties": {
+        "transport": {"type": "string"}, "native_sha256": {"$ref": "#/$defs/sha256"}, "native": {"$ref": "#/$defs/native"},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"}, "stdout_hex": {"type": "string", "pattern": "^[0-9a-f]*$"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"}, "stderr_hex": {"type": "string", "pattern": "^[0-9a-f]*$"},
+        "exit_status": {"type": "integer"}
+      }
+    },
+    "normalized": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["surface", "decision"], "properties": {"surface": {"const": "artifact_detection"}, "decision": {"enum": ["detected", "not_detected", "indeterminate"]}}},
+        {"type": "object", "additionalProperties": false, "required": ["surface", "relation"], "properties": {"surface": {"const": "contextual_alignment"}, "relation": {"enum": ["aligned_instruction", "conflicting_instruction", "non_instruction", "indeterminate"]}}}
+      ]
+    }
+  }
+}

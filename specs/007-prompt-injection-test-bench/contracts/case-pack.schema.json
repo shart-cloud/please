@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://please.local/schemas/bench/case-pack-v2.json",
+  "title": "PLEASE bench case pack v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "pack_id", "version", "content_digest", "created_at", "creation_provenance", "license_summary", "purpose", "taxonomy_path", "taxonomy_sha256", "cases"],
+  "properties": {
+    "schema_version": {"const": "please-bench-case-pack/v2"},
+    "pack_id": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "content_digest": {"$ref": "#/$defs/sha256"},
+    "created_at": {"type": "string", "minLength": 1},
+    "creation_provenance": {"type": "string", "minLength": 1},
+    "license_summary": {"type": "string", "minLength": 1},
+    "purpose": {"enum": ["development", "holdout", "instrument"]},
+    "taxonomy_path": {"type": "string", "minLength": 1},
+    "taxonomy_sha256": {"$ref": "#/$defs/sha256"},
+    "group_baselines": {
+      "type": "object",
+      "description": "Optional contextual-group id to baseline case id mapping.",
+      "propertyNames": {"minLength": 1},
+      "additionalProperties": {"type": "string", "minLength": 1}
+    },
+    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "permission": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resource", "action", "decision"],
+      "properties": {
+        "resource": {"type": "string", "minLength": 1},
+        "action": {"type": "string", "minLength": 1},
+        "decision": {"enum": ["allow", "deny"]}
+      }
+    },
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "required": ["context_id", "task", "permissions"],
+      "properties": {
+        "context_id": {"type": "string", "minLength": 1},
+        "task": {"type": "string", "minLength": 1},
+        "permissions": {"type": "array", "items": {"$ref": "#/$defs/permission"}}
+      }
+    },
+    "ground_truth": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "label"],
+          "properties": {"kind": {"const": "artifact"}, "label": {"enum": ["injection", "benign", "ambiguous"]}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "relation"],
+          "properties": {"kind": {"const": "contextual"}, "relation": {"enum": ["aligned_instruction", "conflicting_instruction", "non_instruction", "indeterminate"]}}
+        }
+      ]
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": ["case_id", "surface", "source", "provenance", "ground_truth", "label_provenance", "group_id", "family_id", "split", "delivery_vector", "techniques", "presentation_context", "asset_path", "asset_sha256", "byte_length"],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "surface": {"enum": ["artifact_detection", "contextual_alignment"]},
+        "source": {"type": "string", "minLength": 1},
+        "provenance": {"type": "string", "minLength": 1},
+        "ground_truth": {"$ref": "#/$defs/ground_truth"},
+        "label_provenance": {"type": "string", "minLength": 1},
+        "label_disagreement": {"type": "string", "minLength": 1},
+        "group_id": {"type": "string", "minLength": 1},
+        "family_id": {"type": "string", "minLength": 1},
+        "split": {"enum": ["development", "holdout"]},
+        "delivery_vector": {"type": "string", "minLength": 1},
+        "techniques": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "presentation_context": {"type": "string", "minLength": 1},
+        "asset_path": {"type": "string", "pattern": "^assets/"},
+        "asset_sha256": {"$ref": "#/$defs/sha256"},
+        "byte_length": {"type": "integer", "minimum": 0},
+        "trusted_context": {"$ref": "#/$defs/context"}
+      },
+      "allOf": [
+        {"if": {"properties": {"surface": {"const": "artifact_detection"}}}, "then": {"properties": {"ground_truth": {"properties": {"kind": {"const": "artifact"}}}}, "not": {"required": ["trusted_context"]}}},
+        {"if": {"properties": {"surface": {"const": "contextual_alignment"}}}, "then": {"required": ["trusted_context"], "properties": {"ground_truth": {"properties": {"kind": {"const": "contextual"}}}}}}
+      ]
+    }
+  }
+}

@@ -23,6 +23,7 @@ license = "MIT OR Apache-2.0"
 authors = ["Jared Gore"]
 repository = "https://github.com/jlgore/please"
 publish = false
+default-run = "please-eval"
 
 [lib]
 name = "please_eval"
@@ -31,6 +32,10 @@ path = "src/lib.rs"
 [[bin]]
 name = "please-eval"
 path = "src/main.rs"
+
+[[bin]]
+name = "please-eval-bench-fixture"
+path = "src/bin/please-eval-bench-fixture.rs"
 
 [dependencies]
 please-scan = { path = "../scan" }
@@ -61,6 +66,17 @@ toml = "1"
 # src/manifest.rs. SHA-256 rather than a std hasher for the reason the root manifest already gives:
 # a digest whose job is attribution has to outlive the compiler that produced it.
 sha2 = "0.10"
+# Canonical NFKC normalization for cross-split and exposure-leak checks. Measured on 2026-09-13:
+# this exact version was already in the evaluator graph through please-core, so the direct edge adds
+# zero locked packages, duplicate versions, or shipping-workspace dependencies.
+unicode-normalization = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+# Eval-only Linux process containment: O_NOFOLLOW plus process-group termination. Measured on
+# 2026-09-13: libc was already present in the evaluator lock through the tempfile dev dependency; this
+# promotes it to one direct Unix-only compile edge. The excluded evaluator does not change the 27-package
+# shipping workspace resolution.
+libc = "0.2"
 
 # Phase-0 model feasibility only. These stay optional so the ordinary evaluation/CI path pays no
 # compile-time or dependency cost for ML, just as the shipping CLI must eventually pay no cost unless

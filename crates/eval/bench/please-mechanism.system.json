@@ -1,0 +1,40 @@
+{
+  "schema_version": "please-bench-system/v1",
+  "system_id": "please-structural-mechanism",
+  "version": "006-frozen",
+  "adapter_version": "please-in-process/v1",
+  "configuration_identity": "builtin/reference-analysis/low",
+  "supported_surfaces": ["artifact_detection"],
+  "requires_trusted_context": false,
+  "deterministic": true,
+  "review_authority": "none",
+  "operating_point": {
+    "threshold": "low",
+    "description": "Feature-006 structural mechanism at the historical low floor"
+  },
+  "identities": {
+    "rule_set": "builtin",
+    "runtime": "in-process please-scan::ScanSession"
+  },
+  "adapter": {
+    "kind": "please",
+    "mode": "mechanism",
+    "profile": "reference_analysis",
+    "threshold": "low",
+    "provenance_mapping": {
+      "repository_file": "tool_response",
+      "tool_response": "tool_response",
+      "user_input": "user_input"
+    },
+    "rules": [],
+    "disabled_rules": []
+  },
+  "normalizers": [
+    {
+      "normalizer_id": "please-artifact",
+      "version": "1",
+      "surface": "artifact_detection",
+      "mapping": {"kind": "please_artifact_v1"}
+    }
+  ]
+}

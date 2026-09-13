@@ -1,0 +1,18 @@
+{
+  "schema_version": "please-bench-taxonomy/v1",
+  "taxonomy_id": "please-agentic-techniques",
+  "version": "1",
+  "techniques": [
+    "authority_forgery",
+    "concealment",
+    "credential_solicitation",
+    "external_action",
+    "override",
+    "privilege_widening"
+  ],
+  "delivery_vectors": [
+    "repository_file",
+    "tool_response",
+    "user_input"
+  ]
+}

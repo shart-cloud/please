@@ -118,8 +118,54 @@ impl ProductOptions {
     }
 }
 impl Runtime {
+    /// Construct the structural-only runtime shared by first-party callers such as the bench.
+    pub fn structural(
+        mode: Mode,
+        profile: ScanProfile,
+        threshold: please_core::RiskLevel,
+    ) -> Result<Self> {
+        if matches!(mode, Mode::Mechanism) && profile != ScanProfile::ReferenceAnalysis {
+            return Err("mechanism mode requires the reference_analysis profile".into());
+        }
+        ProductOptions {
+            mode,
+            profile: matches!(mode, Mode::Product).then_some(profile),
+            provenance: None,
+            threshold: matches!(mode, Mode::Product).then(|| threshold.as_str().to_string()),
+            #[cfg(feature = "shipping-ml")]
+            ml_config: None,
+            #[cfg(feature = "shipping-ml")]
+            ml_impact: 75,
+            #[cfg(feature = "shipping-judge")]
+            judge: false,
+            #[cfg(feature = "shipping-judge")]
+            judge_allow_release: false,
+            #[cfg(feature = "shipping-judge")]
+            review_context: None,
+        }
+        .resolve(threshold)
+    }
+
     pub fn session<'a>(&'a self, engine: &'a please_core::Engine) -> please_scan::ScanSession<'a> {
-        let session = please_scan::ScanSession::new(engine, self.policy.clone());
+        self.session_with_policy(engine, self.policy.clone())
+    }
+
+    pub fn session_with_provenance<'a>(
+        &'a self,
+        engine: &'a please_core::Engine,
+        provenance: InputProvenance,
+    ) -> please_scan::ScanSession<'a> {
+        let mut policy = self.policy.clone();
+        policy.provenance = provenance;
+        self.session_with_policy(engine, policy)
+    }
+
+    fn session_with_policy<'a>(
+        &'a self,
+        engine: &'a please_core::Engine,
+        policy: ScanPolicy,
+    ) -> please_scan::ScanSession<'a> {
+        let session = please_scan::ScanSession::new(engine, policy);
         #[cfg(feature = "shipping-ml")]
         let session = match &self.model {
             Some(model) => session.with_model(model),

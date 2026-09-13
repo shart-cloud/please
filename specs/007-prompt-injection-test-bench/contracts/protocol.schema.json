@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://please.local/schemas/bench/protocol-v1.json",
+  "title": "PLEASE bench JSONL protocol v1",
+  "oneOf": [
+    {"$ref": "#/$defs/host_handshake"}, {"$ref": "#/$defs/adapter_handshake"},
+    {"$ref": "#/$defs/case"}, {"$ref": "#/$defs/result"}
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "host_handshake": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "schema_version", "system_id", "system_digest"],
+      "properties": {"kind": {"const": "handshake"}, "schema_version": {"const": "please-bench-jsonl/v1"}, "system_id": {"type": "string"}, "system_digest": {"$ref": "#/$defs/sha256"}}
+    },
+    "adapter_handshake": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "schema_version", "system_id", "system_digest", "adapter_version"],
+      "properties": {"kind": {"const": "handshake"}, "schema_version": {"const": "please-bench-jsonl/v1"}, "system_id": {"type": "string"}, "system_digest": {"$ref": "#/$defs/sha256"}, "adapter_version": {"const": "please-bench-jsonl/v1"}}
+    },
+    "permission": {
+      "type": "object", "additionalProperties": false, "required": ["resource", "action", "decision"],
+      "properties": {"resource": {"type": "string"}, "action": {"type": "string"}, "decision": {"enum": ["allow", "deny"]}}
+    },
+    "context": {
+      "type": "object", "additionalProperties": false, "required": ["context_id", "task", "permissions"],
+      "properties": {"context_id": {"type": "string"}, "task": {"type": "string"}, "permissions": {"type": "array", "items": {"$ref": "#/$defs/permission"}}}
+    },
+    "case": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "schema_version", "request_id", "surface", "candidate_encoding", "candidate_hex", "candidate_sha256", "byte_length", "provenance"],
+      "properties": {
+        "kind": {"const": "case"}, "schema_version": {"const": "please-bench-jsonl/v1"},
+        "request_id": {"$ref": "#/$defs/sha256"}, "surface": {"enum": ["artifact_detection", "contextual_alignment"]},
+        "candidate_encoding": {"const": "hex"}, "candidate_hex": {"type": "string", "pattern": "^[0-9a-f]*$"},
+        "candidate_sha256": {"$ref": "#/$defs/sha256"}, "byte_length": {"type": "integer", "minimum": 0},
+        "provenance": {"type": "string"}, "trusted_context": {"$ref": "#/$defs/context"}
+      }
+    },
+    "native": {
+      "type": "object", "additionalProperties": false,
+      "required": ["label", "evidence", "diagnostics", "abstained", "remote_requests", "declared_cost_microusd"],
+      "properties": {
+        "label": {"type": "string"}, "confidence_permille": {"type": "integer", "minimum": 0, "maximum": 1000},
+        "evidence": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["kind", "start", "end", "detail"], "properties": {"kind": {"type": "string"}, "start": {"type": "integer", "minimum": 0}, "end": {"type": "integer", "minimum": 0}, "detail": {"type": "string"}}}},
+        "diagnostics": {"type": "array", "items": {"type": "string"}}, "abstained": {"type": "boolean"},
+        "remote_requests": {"type": "integer", "minimum": 0}, "declared_cost_microusd": {"type": "integer", "minimum": 0}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "schema_version", "request_id", "native"],
+      "properties": {"kind": {"const": "result"}, "schema_version": {"const": "please-bench-jsonl/v1"}, "request_id": {"$ref": "#/$defs/sha256"}, "native": {"$ref": "#/$defs/native"}}
+    }
+  }
+}

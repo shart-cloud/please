@@ -37,6 +37,16 @@ the second one is true here.
 | Cross-artifact analysis | Agent | Found two constitution violations in the agent's own earlier work |
 | Phase 1 scaffold | Agent | This commit |
 
+## Feature 007 — Prompt-injection test bench
+
+| Component | Authorship | Notes |
+|---|---|---|
+| Feature 007 specification, plan, research, contracts, and implementation tasks | Agent, human-directed | Human selected the goal of extending PLEASE into a comparative prompt-injection test bench while preserving the frozen feature-006 product behavior |
+| `crates/eval/src/bench/` and `please-eval-bench-fixture` | Agent, human-directed | Agent implemented the identity-bound pack, adapter, runner, reporting, comparison, and exposure contracts under human review |
+| `crates/eval/bench/contextual-reference.py` | Agent | Deterministic protocol fixture used to test contextual reporting; it is not represented as an independent defense or accuracy baseline |
+| `crates/eval/corpus/bench/contextual-pilot/` | Agent, human-directed | First-party generated development pack. Labels are same-author and exposed; an independent second pass and untouched holdout remain explicitly outstanding |
+| Feature 007 remediation review and plan | Agent, human-reviewed | Five-axis working-tree review; revision 2 incorporates the human author's corrections to the original findings |
+
 ## Feature 002 — Trustworthy Core
 
 | Component | Authorship | Notes |

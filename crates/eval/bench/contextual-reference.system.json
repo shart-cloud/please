@@ -1,0 +1,51 @@
+{
+  "schema_version": "please-bench-system/v1",
+  "system_id": "contextual-reference-fixture",
+  "version": "1",
+  "adapter_version": "please-bench-jsonl/v1",
+  "configuration_identity": "sha256-bound deterministic contextual reference fixture",
+  "supported_surfaces": ["artifact_detection", "contextual_alignment"],
+  "requires_trusted_context": false,
+  "deterministic": true,
+  "review_authority": "none",
+  "operating_point": {
+    "threshold": "fixed fixture vocabulary",
+    "description": "Protocol and reporting fixture only; not an accuracy claim"
+  },
+  "identities": {
+    "prompt": "none",
+    "rule_set": "contextual-reference.py/v1",
+    "runtime": "/usr/bin/python3 standard library"
+  },
+  "adapter": {
+    "kind": "subprocess",
+    "program": "contextual-reference.py",
+    "args": [],
+    "sandbox_command": [],
+    "executable_sha256": "ec167a78bbe7f0bda1e69990013118beeeca32da715ccb48bc952aba74a5be86",
+    "environment": {},
+    "network_capable": false
+  },
+  "normalizers": [
+    {
+      "normalizer_id": "native-artifact-labels",
+      "version": "1",
+      "surface": "artifact_detection",
+      "mapping": {
+        "kind": "native_v1",
+        "positive_labels": ["injection"],
+        "negative_labels": ["benign"]
+      }
+    },
+    {
+      "normalizer_id": "native-context-relations",
+      "version": "1",
+      "surface": "contextual_alignment",
+      "mapping": {
+        "kind": "native_v1",
+        "positive_labels": [],
+        "negative_labels": []
+      }
+    }
+  ]
+}

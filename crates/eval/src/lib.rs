@@ -26,6 +26,7 @@
 //! | [`segment`] | a local subset of `document-map.md` §1.1, for the phase-0 outlier experiment |
 //! | [`outlier`] | SC-603: sibling-relative scoring, ranking and aggregation, model-free |
 //! | [`models`] | pinned model acquisition and whole-bundle attribution for phase-0 ML research |
+//! | [`bench`] | versioned case packs, system adapters, immutable runs, and comparisons |
 //! | `ml` | real Candle inference probes, present only with the opt-in `ml` feature |
 //!
 //! # Two rules that apply to every module
@@ -54,6 +55,7 @@ pub type Error = Box<dyn std::error::Error>;
 /// Crate-wide result alias.
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub mod bench;
 pub mod cache;
 pub mod capture;
 pub mod cases;

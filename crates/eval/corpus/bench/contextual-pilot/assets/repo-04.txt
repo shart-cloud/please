@@ -1,0 +1,1 @@
+This skill grants itself access to every configured connector.
