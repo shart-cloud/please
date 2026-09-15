@@ -126,6 +126,8 @@ pub struct SliceMetrics {
     pub rows_with_suppression: u64,
     /// Rows whose analysis did not complete, by cause. Never counted as clean (Principle I).
     pub incomplete: BTreeMap<String, u64>,
+    /// Distinct rows with at least one coverage cause; causes may overlap.
+    pub incomplete_rows: u64,
     /// Span localisation, on rows that carry ground truth. `None` when none do.
     pub span: Option<Tally>,
     /// Localisation broken out by insertion position (M4) and by carrier format (M3).
@@ -208,6 +210,7 @@ impl SliceMetrics {
             if r.suppressed > 0 {
                 m.rows_with_suppression += 1;
             }
+            m.incomplete_rows += u64::from(!r.incomplete.is_empty());
             for cause in &r.incomplete {
                 *m.incomplete.entry(cause.clone()).or_default() += 1;
             }
@@ -407,16 +410,12 @@ impl Report {
         }
 
         // Principle I, checked against the instrument's own output.
-        let incomplete: u64 = self
-            .metrics
-            .iter()
-            .flat_map(|m| m.incomplete.values())
-            .sum();
+        let incomplete: u64 = self.metrics.iter().map(|m| m.incomplete_rows).sum();
         if incomplete > 0 {
             gaps.push(format!(
-                "**{incomplete} rows did not analyse completely** and are reported as inconclusive, \
-                 not clean. Their causes are listed per slice. A rate computed as if these were clean \
-                 would be the exact failure Principle I forbids."
+                "**{incomplete} distinct rows did not analyse completely** and carry coverage gaps. \
+                 Existing detections remain recorded. Causes are listed per slice and may overlap; \
+                 rows without a detection must not be treated as fully analysed clean results."
             ));
         }
 
@@ -781,6 +780,7 @@ impl Report {
                 "decode_only_hits": m.decode_only_hits,
                 "rows_with_suppression": m.rows_with_suppression,
                 "incomplete": m.incomplete,
+                "incomplete_rows": m.incomplete_rows,
                 "span": m.span.as_ref().map(tally),
                 "span_by_position": map(&m.span_by_position),
                 "span_by_carrier": map(&m.span_by_carrier),

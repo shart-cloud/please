@@ -235,3 +235,81 @@ fn empty_duplicate_or_unsafe_selections_are_refused_before_publication() {
         assert!(!dir.path().join(problem).exists());
     }
 }
+
+#[test]
+fn corpus_views_preserve_integrity_and_saved_bundle() {
+    let dir = tempfile::tempdir().unwrap();
+    complete(dir.path());
+    let report = run::report(dir.path(), "saved", false).unwrap();
+    let destination = dir.path().join("saved");
+    please_eval::corpus_presentation::save_bundle(&report, &destination).unwrap();
+    let html = fs::read_to_string(destination.join("report.html")).unwrap();
+    assert!(html.contains("Saved results: COMPLETE"));
+    assert!(html.contains("Default regression gate: PASSED"));
+    assert!(html.contains("remote_benign"));
+    let json: Value =
+        serde_json::from_slice(&fs::read(destination.join("report.json")).unwrap()).unwrap();
+    assert_eq!(json, report.to_json());
+    fs::write(destination.join("remote_benign.jsonl"), "corrupt").unwrap();
+    let damaged = run::report(dir.path(), "saved", false).unwrap();
+    let rendered = please_eval::corpus_presentation::render_html(&damaged);
+    assert!(rendered.contains("Saved results: INCOMPLETE"));
+    assert!(rendered.contains("Default regression gate: FAILED"));
+}
+
+#[test]
+fn corpus_cli_automatically_saves_reports_and_exports_saved_results() {
+    let cache = tempfile::tempdir().unwrap();
+    let command = || {
+        let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_please-eval"));
+        cmd.env("PLEASE_EVAL_CACHE", cache.path());
+        cmd
+    };
+    let result = command()
+        .args(["run", "--slice", "fix_benign", "--run", "presentation-cli"])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let run = cache.path().join("results/presentation-cli");
+    for name in ["report.html", "report.json", "report.md", "run.json"] {
+        assert!(run.join(name).is_file());
+    }
+    let result = command()
+        .args(["report", "--run", "presentation-cli", "--format", "html"])
+        .output()
+        .unwrap();
+    assert!(result.status.success());
+    assert!(String::from_utf8_lossy(&result.stdout).contains("Saved results: COMPLETE"));
+    let result = command()
+        .args(["view", "--run", "presentation-cli"])
+        .output()
+        .unwrap();
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("require terminal"));
+}
+
+#[test]
+fn overlapping_coverage_causes_count_each_row_once() {
+    let dir = tempfile::tempdir().unwrap();
+    complete(dir.path());
+    let data = fs::read_to_string(dir.path().join("saved/fix_benign.jsonl")).unwrap();
+    let mut row: please_eval::rows::RowResult =
+        serde_json::from_str(data.lines().next().unwrap()).unwrap();
+    row.incomplete = vec!["decode_depth".into(), "max_matches_per_rule".into()];
+    let set = corpus();
+    let metric =
+        please_eval::metrics::SliceMetrics::compute(set.get("fix_benign").unwrap(), &[row]);
+    assert_eq!(metric.incomplete_rows, 1);
+    assert_eq!(metric.incomplete.values().sum::<u64>(), 2);
+    let mut report = run::report(dir.path(), "saved", false).unwrap();
+    report.metrics = vec![metric];
+    assert!(report
+        .known_gaps()
+        .iter()
+        .any(|s| s.contains("1 distinct rows")));
+    assert_eq!(report.to_json()["slices"][0]["incomplete_rows"], 1);
+}

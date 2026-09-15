@@ -703,10 +703,13 @@ pub fn write_report(directory: &Path, format: &str, out: Option<&Path>) -> Resul
     let rendered = match format {
         "json" => format!("{}\n", serde_json::to_string_pretty(&report)?),
         "md" => render_markdown(&report),
+        "html" => super::presentation::render_html(&report),
+        "table" => super::presentation::render_table(&report),
         other => {
-            return Err(
-                format!("unknown bench report format {other:?}; expected md or json").into(),
+            return Err(format!(
+                "unknown bench report format {other:?}; expected md, json, html, or table"
             )
+            .into())
         }
     };
     if let Some(path) = out {

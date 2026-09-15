@@ -377,6 +377,15 @@ fn two_surfaces_are_stratified_and_compare_deterministically() {
         3
     );
     let report = report::build(&out).unwrap();
+    let html_path = fixture.root.join("report.html");
+    let html = report::write_report(&out, "html", Some(&html_path)).unwrap();
+    assert_eq!(fs::read_to_string(&html_path).unwrap(), html);
+    assert!(html.contains(&report.run_id));
+    assert!(html.contains("Contextual relation matrix"));
+    assert!(html.contains("Unsupported") || html.contains("unsupported"));
+    let table = report::write_report(&out, "table", None).unwrap();
+    assert!(table.contains("please-structural"));
+    assert!(table.contains("Gaps"));
     assert!(report.strata.iter().any(|record| record.axis == "source"));
     assert!(report
         .strata
@@ -999,4 +1008,59 @@ fn committed_contracts_systems_and_thirty_group_pilot_verify() {
     assert_eq!(groups.len(), 30);
     assert_eq!(vectors.len(), 3);
     assert_eq!(experiment.systems.len(), 2);
+}
+
+#[test]
+fn cli_run_with_relative_output_saves_html_and_reopens_without_rerun() {
+    let fixture = fixture();
+    let systems = vec![write_process_system(
+        &fixture.root,
+        "detect",
+        "fixture-process",
+    )];
+    // This test checks CLI paths and exports, not latency. Debug adapters are large and
+    // startup includes verifying their full executable digest.
+    let mut configured = limits();
+    configured.startup_timeout_ms = 5_000;
+    configured.case_timeout_ms = 5_000;
+    let experiment = write_experiment(&fixture.root, &systems, configured, "presentation-cli");
+    let binary = env!("CARGO_BIN_EXE_please-eval");
+    let run = std::process::Command::new(binary)
+        .current_dir(&fixture.root)
+        .args(["bench", "run", "--experiment"])
+        .arg(&experiment)
+        .args(["--out", "relative-run"])
+        .output()
+        .unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let out = fixture.root.join("relative-run");
+    assert!(out.join("report.html").is_file());
+    let report = report::build(&out).unwrap();
+    assert!(
+        report.strata.iter().any(|row| row.counts.completed > 0),
+        "{:?}",
+        rows(&out)
+            .iter()
+            .map(|r| &r.diagnostics)
+            .collect::<Vec<_>>()
+    );
+    let export = std::process::Command::new(binary)
+        .args(["bench", "report", "--run"])
+        .arg(&out)
+        .args(["--format", "table"])
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+    assert!(String::from_utf8_lossy(&export.stdout).contains("fixture-process"));
+    let view = std::process::Command::new(binary)
+        .args(["bench", "view", "--run"])
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(!view.status.success());
+    assert!(String::from_utf8_lossy(&view.stderr).contains("require terminal"));
 }

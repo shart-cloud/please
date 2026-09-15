@@ -265,3 +265,67 @@ Use a fresh run label for results produced under acceptance version `2026-09-12.
 structural responses without `stop_reason: "tool_use"` are rejected. Re-run those requests rather
 than adding completion evidence to captured JSON. Prompts and request recipe hashes are unchanged
 by this acceptance change.
+
+## Hugging Face corpus reports
+
+Corpus `run` commands now save `report.html`, `report.json`, and `report.md` beside the
+identity-checked result rows. The default pipeline measures the shipping structural detector in product
+mode with enforcement and the High threshold. Optional ML/judge tiers require explicit configuration.
+
+Verify the cached inputs before measuring them, then choose a fresh run label:
+
+```bash
+cargo run --release --manifest-path crates/eval/Cargo.toml -- manifest \
+  --slice pos_injecagent --slice pos_llmail --slice neg_orbench
+cargo run --release --manifest-path crates/eval/Cargo.toml -- run \
+  --run hf-product-high-next --slice pos_injecagent --slice pos_llmail --slice neg_orbench --tui
+```
+
+The terminal opens after completion. Reopen it without scanning again:
+
+```bash
+cargo run --release --manifest-path crates/eval/Cargo.toml -- view --run hf-product-high-next
+cargo run --release --manifest-path crates/eval/Cargo.toml -- report \
+  --run hf-product-high-next --format html --out /tmp/hf-report.html
+```
+
+Tabs cover datasets, source, technique, language, and coverage; arrows or j/k select rows;
+PgUp/PgDn scroll details; q exits. Omit `--tui` for redirected/noninteractive runs.
+`report --format table` prints a plain terminal summary.
+
+Both views retain saved-run integrity and gate status. Incomplete and unverified runs remain visibly
+partial. Negative-slice hit rates are false positives, and coverage cause counts can overlap:
+they cannot be summed to infer unique incomplete rows. Product baselines remain unpinned until
+deliberately established; meeting the false-positive criterion is distinct from passing a regression
+gate. The report is artifact detection evidence, not contextual-alignment accuracy.
+
+The first recorded three-slice run is documented in
+[the September 14 measurement](../../docs/research/hf-product-high-2026-09-14.md).
+
+## Reproducing historical detection experiments
+
+Use the [current reproduction guide](../../docs/research/detection-reproduction-current.md)
+for the frozen withdrawn email candidate, verified role-marker evidence, and
+clean-baseline patch checks. Building today's detector does not reproduce the
+historical email candidate's 510 InjecAgent detections.
+
+The [all-rule matching audit](../../docs/research/matching-consistency-2026-09-15.md)
+compares literal-gated matching with a test-only ungated reference. Its separate
+HTML/TUI report shows paired dataset findings, detections, coverage gaps and
+runtime costs, including five corrections deferred because they add benign findings.
+Recount retained native evidence and open that report with:
+
+```bash
+python3 crates/eval/scripts/detection_experiment/report_matching_consistency.py \
+  .cache/matching-consistency-20260915 --tui
+```
+
+The [cost attribution and fresh holdout follow-up](../../docs/research/prefilter-cost-2026-09-15.md)
+records each correction's cost, the compacted gates, five individually rejected
+rule expansions, and the freeze-first holdout. Recount its evidence and open the
+HTML/TUI tables with:
+
+```bash
+python3 crates/eval/scripts/detection_experiment/report_prefilter_cost.py \
+  .cache/prefilter-cost-20260915 --tui
+```

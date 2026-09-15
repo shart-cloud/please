@@ -38,6 +38,9 @@ name = "please-eval-bench-fixture"
 path = "src/bin/please-eval-bench-fixture.rs"
 
 [dependencies]
+# Presentation stays inside the excluded evaluator.
+ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+crossterm = "0.29"
 please-scan = { path = "../scan" }
 please-ml = { path = "../ml", optional = true }
 # The engine under measurement, by path. An instrument that measured a *published* version of the

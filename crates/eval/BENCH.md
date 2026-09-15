@@ -66,3 +66,47 @@ instrument fixture, not a defense recommendation.
 Pack and system paths are resolved relative to the experiment manifest. Exposure paths use the same base but
 may be absolute because exposure ledgers are often outputs outside the pack. Taxonomy and asset paths remain
 strictly relative to their pack, and executable/rule paths remain strictly relative to their system manifest.
+
+## Results table and HTML report
+
+A successful CLI run creates a standalone, offline `report.html` in the new run directory and prints
+a summary table. Add `--tui` to browse results after completion:
+
+```bash
+mkdir -p .cache/bench
+cargo run --manifest-path crates/eval/Cargo.toml -- bench run \
+  --experiment crates/eval/bench/contextual-pilot.experiment.json \
+  --out .cache/bench/presentation-demo --tui
+```
+
+Reopen the verified results without executing systems again:
+
+```bash
+cargo run --manifest-path crates/eval/Cargo.toml -- bench view \
+  --run .cache/bench/presentation-demo
+```
+
+Use Tab/Left/Right to switch Summary, Source, Delivery, and Technique; Up/Down or j/k to select a row;
+Home/End to jump; q/Esc/Ctrl-C to exit. The selected row shows coverage failures, timing, and operating
+point details. The terminal must be at least 90 columns by 24 rows; larger terminals fit more detail.
+This first version browses completed results; it does not display live test progress.
+
+For scripts or redirected output, omit `--tui` or export explicitly:
+
+```bash
+cargo run --manifest-path crates/eval/Cargo.toml -- bench report \
+  --run .cache/bench/presentation-demo --format html --out /tmp/bench-report.html
+cargo run --manifest-path crates/eval/Cargo.toml -- bench report \
+  --run .cache/bench/presentation-demo --format table
+```
+
+HTML includes system identities and operating points, strata, failure details, the contextual matrix,
+paired changes, and subprocess diagnostics. It uses no JavaScript, external fonts, or network assets.
+All views consume the same verified report; incomplete or corrupt runs are rejected. Verification
+establishes saved-result integrity, not a release-quality gate.
+
+Rates use integer per-mille arithmetic and show their denominators. Recall includes failed attack rows
+as misses; contextual accuracy includes all contextual rows. False-alarm rates use all benign rows and
+must be read with coverage (zero false alarms with zero completed rows is not successful coverage).
+Empty denominators show N/A. Summary rows are per system and surface; technique strata may overlap.
+The shipping workspace's dependencies and detection behavior are unchanged.

@@ -99,3 +99,6 @@ pub mod product;
 
 #[cfg(feature = "boundary")]
 pub mod boundary;
+
+/// Human-readable views of saved corpus evaluations.
+pub mod corpus_presentation;

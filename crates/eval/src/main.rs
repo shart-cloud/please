@@ -103,8 +103,16 @@ enum Command {
         /// Fresh label for this run; existing runs cannot be overwritten or extended.
         #[arg(long, default_value = "builtin")]
         run: String,
+        /// Browse saved results after writing HTML, JSON, and Markdown reports.
+        #[arg(long)]
+        tui: bool,
         #[command(flatten)]
         pipeline: please_eval::product::ProductOptions,
+    },
+    /// Browse a saved corpus evaluation without scanning again.
+    View {
+        #[arg(long)]
+        run: String,
     },
     /// Replay labeled local captures against saved results from an existing scanner. No network.
     Replay {
@@ -127,8 +135,8 @@ enum Command {
         run: String,
         #[arg(long)]
         offline: bool,
-        /// `md` or `json`.
-        #[arg(long, default_value = "md")]
+        /// Saved-result export format.
+        #[arg(long, default_value = "md", value_parser = ["md", "markdown", "json", "html", "table"])]
         format: String,
         /// Write here instead of to stdout.
         #[arg(long)]
@@ -181,12 +189,20 @@ enum BenchCommand {
         experiment: PathBuf,
         #[arg(long)]
         out: PathBuf,
+        /// Browse results in an interactive terminal after saving report.html.
+        #[arg(long)]
+        tui: bool,
+    },
+    /// Browse a verified saved run without executing tests again.
+    View {
+        #[arg(long)]
+        run: PathBuf,
     },
     /// Render stratified effectiveness, coverage, failure, cost, and paired-context results.
     Report {
         #[arg(long)]
         run: PathBuf,
-        #[arg(long, default_value = "md", value_parser = ["md", "json"])]
+        #[arg(long, default_value = "md", value_parser = ["md", "json", "html", "table"])]
         format: String,
         #[arg(long)]
         out: Option<PathBuf>,
@@ -445,16 +461,41 @@ fn run() -> Result<ExitCode> {
             disable_rule,
             run,
             pipeline,
-        } => scan_slices(
-            &slices,
-            offline,
-            RuleSelection {
-                rules,
-                disable: disable_rule,
-            },
-            &run,
-            pipeline,
-        ),
+            tui,
+        } => {
+            if tui {
+                please_eval::bench::presentation::require_terminal()?;
+            }
+            scan_slices(
+                &slices,
+                offline,
+                RuleSelection {
+                    rules,
+                    disable: disable_rule,
+                },
+                &run,
+                pipeline,
+            )?;
+            if tui {
+                let report = please_eval::run::report(
+                    &please_eval::cache::root()?.join("results"),
+                    &run,
+                    false,
+                )?;
+                please_eval::corpus_presentation::show(&report)?;
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Command::View { run } => {
+            please_eval::bench::presentation::require_terminal()?;
+            let report = please_eval::run::report(
+                &please_eval::cache::root()?.join("results"),
+                &run,
+                false,
+            )?;
+            please_eval::corpus_presentation::show(&report)?;
+            Ok(ExitCode::SUCCESS)
+        }
         Command::Replay {
             cases,
             baseline,
@@ -573,7 +614,16 @@ fn run_bench(action: BenchCommand) -> Result<ExitCode> {
                 verified.digest
             );
         }
-        BenchCommand::Run { experiment, out } => {
+        BenchCommand::Run {
+            experiment,
+            out,
+            tui,
+        } => {
+            if tui {
+                please_eval::bench::presentation::require_terminal()?;
+            }
+            // Adapters change their working directory; run-owned executable paths must stay absolute.
+            let out = std::path::absolute(out)?;
             let manifest = please_eval::bench::runner::run(&experiment, &out)?;
             println!(
                 "Completed {} rows in {} (run {})",
@@ -581,6 +631,28 @@ fn run_bench(action: BenchCommand) -> Result<ExitCode> {
                 out.display(),
                 manifest.run_id
             );
+            let report = please_eval::bench::report::build(&out)?;
+            let html = out.join("report.html");
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&html)?
+                .write_all(please_eval::bench::presentation::render_html(&report).as_bytes())?;
+            println!("HTML report: {}", html.display());
+            if tui {
+                please_eval::bench::presentation::show(&report)?;
+            } else {
+                print!(
+                    "{}",
+                    please_eval::bench::presentation::render_table(&report)
+                );
+            }
+        }
+        BenchCommand::View { run } => {
+            please_eval::bench::presentation::require_terminal()?;
+            let report = please_eval::bench::report::build(&run)?;
+            please_eval::bench::presentation::show(&report)?;
         }
         BenchCommand::Report { run, format, out } => {
             let rendered = please_eval::bench::report::write_report(&run, &format, out.as_deref())?;
@@ -1138,7 +1210,16 @@ fn scan_slices(
         );
     }
     run.finish()?;
-    println!("\nresults under {}", results_root.join(run_label).display());
+    let report = please_eval::run::report(&results_root, run_label, false)?;
+    please_eval::corpus_presentation::save_bundle(&report, &results_root.join(run_label))?;
+    print!(
+        "{}",
+        please_eval::corpus_presentation::render_table(&report)
+    );
+    println!(
+        "\nresults and report.html under {}",
+        results_root.join(run_label).display()
+    );
     Ok(ExitCode::SUCCESS)
 }
 
@@ -1156,7 +1237,13 @@ fn write_report(
     let rendered = match format {
         "md" | "markdown" => report.to_markdown(),
         "json" => serde_json::to_string_pretty(&report.to_json())?,
-        other => return Err(format!("unknown --format {other:?}; expected md or json").into()),
+        "html" => please_eval::corpus_presentation::render_html(&report),
+        "table" => please_eval::corpus_presentation::render_table(&report),
+        other => {
+            return Err(
+                format!("unknown --format {other:?}; expected md, json, html, or table").into(),
+            )
+        }
     };
     match out {
         Some(path) => {
