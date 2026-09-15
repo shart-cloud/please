@@ -343,6 +343,58 @@ fn rows(path: &Path) -> Vec<BenchResult> {
 }
 
 #[test]
+fn bench_publication_preserves_an_existing_pending_manifest() {
+    let fixture = fixture();
+    let out = fixture.root.join("pending-run");
+    let system = write_process_system(&fixture.root, "swap-source-crash-once", "pending-writer");
+    let mut manifest: SystemManifest = serde_json::from_slice(&fs::read(&system).unwrap()).unwrap();
+    let AdapterManifest::Subprocess { environment, .. } = &mut manifest.adapter else {
+        unreachable!()
+    };
+    // The fixture writes the pending file after the initial incomplete manifest is published.
+    // Its existing crash-once handshake makes the collision deterministic without a timing race.
+    environment.insert(
+        "PLEASE_BENCH_SWAP_SOURCE".into(),
+        out.join(".run.json.pending").to_string_lossy().into(),
+    );
+    environment.insert(
+        "PLEASE_BENCH_SWAP_MARKER".into(),
+        fixture
+            .root
+            .join("pending-created")
+            .to_string_lossy()
+            .into(),
+    );
+    write_json(system.clone(), &manifest);
+    let mut configured = limits();
+    configured.startup_timeout_ms = 5_000;
+    configured.case_timeout_ms = 5_000;
+    let experiment = write_experiment(&fixture.root, &[system], configured, "pending-publication");
+
+    let result = runner::run(&experiment, &out);
+    assert!(
+        out.join(".run.json.pending").exists(),
+        "fixture did not create collision: {:?}",
+        rows(&out)
+            .iter()
+            .map(|r| &r.diagnostics)
+            .collect::<Vec<_>>()
+    );
+    assert!(result.is_err());
+    assert_eq!(
+        fs::read(out.join(".run.json.pending")).unwrap(),
+        b"source replaced after staging"
+    );
+    let saved: RunManifest =
+        serde_json::from_slice(&fs::read(out.join("run.json")).unwrap()).unwrap();
+    assert_eq!(saved.status, "incomplete");
+    assert!(saved.results.is_none());
+    assert!(!rows(&out).is_empty());
+    assert!(runner::verify_saved_run(&out).is_err());
+    assert!(report::build(&out).is_err());
+}
+
+#[test]
 fn two_surfaces_are_stratified_and_compare_deterministically() {
     let fixture = fixture();
     let systems = [

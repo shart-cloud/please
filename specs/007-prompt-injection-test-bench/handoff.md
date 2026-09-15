@@ -3,7 +3,7 @@
 **Last updated**: 2026-09-15
 **Branch**: `007-Prompt-Injection-Test-Bench`
 **Implementation baseline**: `90f5676` (`feat(eval): add prompt-injection test bench`)
-**Next scope**: remediation Phase 4, then Phase 5
+**Next scope**: remediation Phase 4.3, then 4.4–4.6 and Phase 5
 
 ## September 15 checkpoint
 
@@ -30,9 +30,10 @@ to choose the correct frozen detector for historical replays. The 587-row Septem
 exposed; it must be excluded from any future fresh selection. Local corpus bytes and frozen executables
 remain under `.cache/` and are not distributed with the source reports.
 
-**Next implementation task remains 4.1 below.** The presentation work did not consolidate saved-run
-storage or identity handling, and it does not establish completion of the Phase 5 terminal-escaping
-requirement across every CLI path. Preserve the existing report interfaces and formats during cleanup.
+**Phase 4.1 is now complete; next is 4.3 below.** Shared saved-run storage preserves the existing
+manifest formats and historical reports. Metric ownership is consolidated under `metrics`, retaining
+the distinct corpus and bench meanings. Identity handling is still separate. The presentation work
+does not establish completion of the Phase 5 terminal-escaping requirement across every CLI path.
 
 ## Start here
 
@@ -95,18 +96,20 @@ removing duplication. Land each numbered item separately so regressions have a n
 
 ### 4.1 Extract one saved-run module
 
-Start here. `crates/eval/src/run.rs` and `crates/eval/src/bench/runner.rs` both own atomic publication,
-completion records, result digests, and verification. Extract `eval::saved_run::SavedRun<Row>` and move
-both callers onto it.
+Completed. `crates/eval/src/run.rs` and `crates/eval/src/bench/runner.rs` now use
+`eval::saved_run::SavedRun<Row>` for publication, completion identities, and verification. Keep domain
+selection/schema validation with each caller. Historical corpus and bench JSON reports remain equal
+to those produced by the frozen reader; see the remediation plan for validation and the metric model
+clarification.
 
-Important constraints:
+Invariants for later cleanup:
 
 - keep existing run and bench files readable unless a schema/version bump is intentional;
 - retain create-new behavior for pending files and directory syncing;
-- add the planned test proving that neither caller publishes over an existing `.pending` file;
+- retain the tests proving that neither caller publishes over an existing `.pending` file;
 - use the existing `run_integrity.rs`, `saved_run.rs`, and `bench.rs` tests as characterization tests;
-- consolidate `bench::report::{MetricCounts, RelationMatrix}` with the compatible types in `metrics.rs`
-  only after the saved-run seam is stable.
+- `metrics::bench` owns bench counts and relation matrices, with compatible public re-exports;
+  do not collapse four-way contextual outcomes into binary corpus tallies or change rate rounding.
 
 ### 4.2 Product runtime adapter
 

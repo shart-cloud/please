@@ -20,7 +20,8 @@
 //! | [`rows`] | one scannable row, whatever it came from |
 //! | [`cases`] | readers for the committed corpora: fixtures, generated rows, repository prose |
 //! | [`scan`] | engine construction and the scan loop |
-//! | [`run`] | saved run identity, atomic publication, completeness, and report assembly |
+//! | [`run`] | corpus run selection, pipeline identity, and report assembly |
+//! | [`saved_run`] | shared result publication, completion identities, and integrity verification |
 //! | [`metrics`] | stratified aggregation, report rendering, and the gate |
 //! | [`generate`] | the carrier x payload x position generator, with span-level ground truth |
 //! | [`segment`] | a local subset of `document-map.md` §1.1, for the phase-0 outlier experiment |
@@ -70,6 +71,7 @@ pub mod outlier;
 pub mod replay;
 pub mod rows;
 pub mod run;
+pub mod saved_run;
 pub mod scan;
 pub mod segment;
 pub mod slice;

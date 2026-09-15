@@ -117,6 +117,33 @@ fn failed_publication_cannot_create_a_completion_record() {
 }
 
 #[test]
+fn corpus_publication_preserves_existing_pending_files() {
+    for name in [".run.json.pending", ".fix_benign.jsonl.pending"] {
+        let dir = tempfile::tempdir().unwrap();
+        let engine = Engine::builtin().unwrap();
+        let runtime = runtime();
+        let mut run =
+            EvaluationRun::create(dir.path(), "saved", &runtime, &engine, "builtin", corpus())
+                .unwrap();
+        let directory = dir.path().join("saved");
+        let manifest = fs::read(directory.join("run.json")).unwrap();
+        let pending = directory.join(name);
+        fs::write(&pending, b"interrupted publication; retain these bytes").unwrap();
+
+        assert!(run.scan_slice("fix_benign", &rows()).is_err(), "{name}");
+        assert_eq!(
+            fs::read(&pending).unwrap(),
+            b"interrupted publication; retain these bytes"
+        );
+        assert_eq!(fs::read(directory.join("run.json")).unwrap(), manifest);
+        let report = run::report(dir.path(), "saved", false).unwrap();
+        assert_eq!(report.gate.run_integrity.status(), RunStatus::Incomplete);
+        assert!(report.metrics.is_empty());
+        assert!(report.gate.failed(false, true));
+    }
+}
+
+#[test]
 fn offline_view_never_hides_missing_public_corpus_results_from_the_gate() {
     let dir = tempfile::tempdir().unwrap();
     complete(dir.path());

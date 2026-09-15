@@ -425,13 +425,7 @@ pub struct BenchResult {
     pub diagnostics: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SavedFile {
-    pub rows: u64,
-    pub bytes: u64,
-    pub sha256: String,
-}
+pub use crate::saved_run::SavedFile;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

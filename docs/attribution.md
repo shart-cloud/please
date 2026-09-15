@@ -169,3 +169,11 @@ the accepted matching coverage. No independent label review is claimed.
 
 On resumption, Codex verified all 51 retained native runs, restored the performance report's missing
 JSON/HTML and rule snapshots, connected the Python report regressions to CI, and updated the handoff.
+
+## Shared saved-run storage (2026-09-15)
+
+At the user's request to implement remediation Phase 4.1, Codex extracted evaluator saved-run storage,
+moved bench aggregation under metrics, and added publication and wire-compatibility regressions.
+Existing corpus and bench manifest shapes, result bytes, metric semantics, and percentage rounding
+were preserved. Compatibility checks re-read 51 retained corpus runs and two bench runs with old and
+new readers; they did not rescan prompts or constitute new detector effectiveness evidence.

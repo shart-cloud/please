@@ -6,89 +6,22 @@
 //! These digests detect damaged artifacts; they do not authenticate a cache against its owner.
 
 use std::collections::{BTreeMap, BTreeSet};
-#[cfg(unix)]
-use std::fs::File;
-use std::fs::{self, OpenOptions};
-use std::io::{ErrorKind, Write};
-use std::path::{Path, PathBuf};
+use std::fs;
+use std::io::ErrorKind;
+use std::path::Path;
 
+use crate::saved_run::{digest, validate_name, SavedRun, SavedSlice};
+pub use crate::saved_run::{RunIntegrity, RunIssue, RunStatus};
 use please_core::Engine;
 use please_scan::ScanSession;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sha2::{Digest, Sha256};
 
 use crate::metrics::{Gate, Report, SliceMetrics};
 use crate::product::Runtime;
 use crate::rows::{Row, RowResult};
 use crate::slice::SliceSet;
 use crate::{scan, Result};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunStatus {
-    Complete,
-    Incomplete,
-    Unverified,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RunIssue {
-    pub slice: Option<String>,
-    pub detail: String,
-}
-
-/// Completeness is produced by inspecting saved records, not by counting passing metrics.
-#[derive(Debug, Clone, Serialize)]
-pub struct RunIntegrity {
-    status: RunStatus,
-    expected_slices: Option<usize>,
-    verified_slices: usize,
-    issues: Vec<RunIssue>,
-}
-
-impl RunIntegrity {
-    pub fn is_complete(&self) -> bool {
-        self.status == RunStatus::Complete
-    }
-
-    pub fn status(&self) -> RunStatus {
-        self.status
-    }
-
-    pub fn issues(&self) -> &[RunIssue] {
-        &self.issues
-    }
-
-    pub(crate) fn unverified(detail: impl Into<String>) -> Self {
-        Self {
-            status: RunStatus::Unverified,
-            expected_slices: None,
-            verified_slices: 0,
-            issues: vec![RunIssue {
-                slice: None,
-                detail: detail.into(),
-            }],
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn verified_for_test() -> Self {
-        Self {
-            status: RunStatus::Complete,
-            expected_slices: Some(1),
-            verified_slices: 1,
-            issues: vec![],
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SavedSlice {
-    rows: usize,
-    sha256: String,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -136,7 +69,7 @@ impl Completion {
 
 /// A single writer owns a newly created run directory. Existing runs are never overwritten.
 pub struct EvaluationRun<'a> {
-    directory: PathBuf,
+    storage: SavedRun<RowResult>,
     metadata: Value,
     completion: Completion,
     session: ScanSession<'a>,
@@ -171,26 +104,29 @@ impl<'a> EvaluationRun<'a> {
         completion.validate(&metadata)?;
         fs::create_dir_all(results_root)?;
         let directory = results_root.join(label);
-        if let Err(error) = fs::create_dir(&directory) {
-            if error.kind() == ErrorKind::AlreadyExists {
-                // Preserve the existing diagnostic for a mismatched pipeline, without permitting
-                // even an identical configuration to overwrite or extend a previous run.
-                if let Ok(bytes) = fs::read(directory.join("run.json")) {
-                    if let Ok(mut previous) = serde_json::from_slice::<Value>(&bytes) {
-                        if let Some(object) = previous.as_object_mut() {
-                            object.remove("completion");
-                        }
-                        if previous != metadata {
-                            return Err("run label already contains a different pipeline configuration; use a new --run label".into());
+        let storage = match SavedRun::create(&directory) {
+            Ok(storage) => storage,
+            Err(error) => {
+                if error.kind() == ErrorKind::AlreadyExists {
+                    // Preserve the existing diagnostic for a mismatched pipeline, without permitting
+                    // even an identical configuration to overwrite or extend a previous run.
+                    if let Ok(bytes) = fs::read(directory.join("run.json")) {
+                        if let Ok(mut previous) = serde_json::from_slice::<Value>(&bytes) {
+                            if let Some(object) = previous.as_object_mut() {
+                                object.remove("completion");
+                            }
+                            if previous != metadata {
+                                return Err("run label already contains a different pipeline configuration; use a new --run label".into());
+                            }
                         }
                     }
+                    return Err("run label already exists; rerun with a new --run label".into());
                 }
-                return Err("run label already exists; rerun with a new --run label".into());
+                return Err(error.into());
             }
-            return Err(error.into());
-        }
+        };
         let run = Self {
-            directory,
+            storage,
             metadata,
             completion,
             session: runtime.session(engine),
@@ -213,19 +149,12 @@ impl<'a> EvaluationRun<'a> {
         if results.len() != rows.len() {
             return Err(format!("slice {id} did not produce one result per input row").into());
         }
-        let mut bytes = Vec::new();
-        for result in &results {
-            serde_json::to_writer(&mut bytes, result)?;
-            bytes.push(b'\n');
-        }
-        atomic_write(&self.directory, &format!("{id}.jsonl"), &bytes)?;
-        self.completion.results.insert(
-            id.to_string(),
-            Some(SavedSlice {
-                rows: rows.len(),
-                sha256: digest(&bytes),
-            }),
-        );
+        let saved = self
+            .storage
+            .publish_rows(&format!("{id}.jsonl"), &results)?;
+        self.completion
+            .results
+            .insert(id.to_string(), Some(saved.try_into()?));
         self.persist()?;
         Ok(SliceSummary {
             rows: rows.len(),
@@ -246,11 +175,7 @@ impl<'a> EvaluationRun<'a> {
     fn persist(&self) -> Result<()> {
         let mut metadata = self.metadata.clone();
         metadata["completion"] = serde_json::to_value(&self.completion)?;
-        atomic_write(
-            &self.directory,
-            "run.json",
-            &serde_json::to_vec_pretty(&metadata)?,
-        )
+        self.storage.write_manifest(&metadata)
     }
 }
 
@@ -265,9 +190,10 @@ pub fn report(results_root: &Path, label: &str, offline: bool) -> Result<Report>
         )
         .into());
     }
+    let storage = SavedRun::<RowResult>::at(&directory);
     let mut metadata = Value::Null;
     let parsed = (|| -> Result<Completion> {
-        metadata = serde_json::from_slice(&fs::read(directory.join("run.json"))?)?;
+        metadata = storage.read_manifest()?;
         let record = metadata
             .as_object_mut()
             .and_then(|m| m.remove("completion"))
@@ -276,39 +202,16 @@ pub fn report(results_root: &Path, label: &str, offline: bool) -> Result<Report>
         completion.validate(&metadata)?;
         Ok(completion)
     })();
-    let (corpus, mut integrity, results) = match parsed {
+    let (corpus, integrity, results) = match parsed {
         Ok(completion) => {
-            let mut integrity = RunIntegrity {
-                status: RunStatus::Complete,
-                expected_slices: Some(completion.corpus.slices.len()),
-                verified_slices: 0,
-                issues: Vec::new(),
-            };
-            if !completion.finished {
-                integrity.issues.push(RunIssue {
-                    slice: None,
-                    detail: "run did not finish".into(),
-                });
-            }
-            let mut results = BTreeMap::new();
-            for slice in &completion.corpus.slices {
-                let loaded = match &completion.results[&slice.id] {
-                    Some(saved) => {
-                        read_verified(&directory.join(format!("{}.jsonl", slice.id)), saved)
-                    }
-                    None => Err("slice has no completion record".into()),
-                };
-                match loaded {
-                    Ok(rows) => {
-                        integrity.verified_slices += 1;
-                        results.insert(slice.id.clone(), rows);
-                    }
-                    Err(error) => integrity.issues.push(RunIssue {
-                        slice: Some(slice.id.clone()),
-                        detail: error.to_string(),
-                    }),
-                }
-            }
+            let (integrity, results) = storage.inspect_slices(
+                completion.finished,
+                completion
+                    .corpus
+                    .slices
+                    .iter()
+                    .map(|slice| (slice.id.as_str(), completion.results[&slice.id].as_ref())),
+            );
             (completion.corpus, integrity, results)
         }
         Err(error) => {
@@ -319,30 +222,17 @@ pub fn report(results_root: &Path, label: &str, offline: bool) -> Result<Report>
                 RunIntegrity::unverified(format!("cannot verify run completeness: {error}"));
             let mut results = BTreeMap::new();
             for slice in &corpus.slices {
-                let path = directory.join(format!("{}.jsonl", slice.id));
-                match fs::read(&path) {
-                    Ok(bytes) => match parse_rows(&bytes) {
-                        Ok(rows) => {
-                            results.insert(slice.id.clone(), rows);
-                        }
-                        Err(error) => integrity.issues.push(RunIssue {
-                            slice: Some(slice.id.clone()),
-                            detail: error.to_string(),
-                        }),
-                    },
-                    Err(error) if error.kind() == ErrorKind::NotFound => {}
-                    Err(error) => integrity.issues.push(RunIssue {
-                        slice: Some(slice.id.clone()),
-                        detail: error.to_string(),
-                    }),
+                match storage.read_legacy_slice(&format!("{}.jsonl", slice.id)) {
+                    Ok(Some(rows)) => {
+                        results.insert(slice.id.clone(), rows);
+                    }
+                    Ok(None) => {}
+                    Err(error) => integrity.issue(Some(slice.id.clone()), error.to_string()),
                 }
             }
             (corpus, integrity, results)
         }
     };
-    if !integrity.issues.is_empty() && integrity.status == RunStatus::Complete {
-        integrity.status = RunStatus::Incomplete;
-    }
     let all_metrics: Vec<_> = corpus
         .slices
         .iter()
@@ -388,70 +278,4 @@ pub fn report(results_root: &Path, label: &str, offline: bool) -> Result<Report>
         metrics,
         gate,
     })
-}
-
-fn read_verified(path: &Path, saved: &SavedSlice) -> Result<Vec<RowResult>> {
-    let bytes = fs::read(path).map_err(|e| format!("cannot read saved slice: {e}"))?;
-    if digest(&bytes) != saved.sha256 {
-        return Err(
-            "saved slice checksum mismatch (corrupt, truncated, or modified results)".into(),
-        );
-    }
-    let rows = parse_rows(&bytes)?;
-    if rows.len() != saved.rows {
-        return Err(format!(
-            "saved slice has {} rows; expected {}",
-            rows.len(),
-            saved.rows
-        )
-        .into());
-    }
-    Ok(rows)
-}
-
-fn parse_rows(bytes: &[u8]) -> Result<Vec<RowResult>> {
-    std::str::from_utf8(bytes)?
-        .lines()
-        .enumerate()
-        .filter(|(_, line)| !line.trim().is_empty())
-        .map(|(index, line)| {
-            serde_json::from_str(line)
-                .map_err(|e| format!("invalid saved row at line {}: {e}", index + 1).into())
-        })
-        .collect()
-}
-
-fn digest(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
-
-fn validate_name(name: &str) -> Result<()> {
-    if name.is_empty()
-        || name == "."
-        || name == ".."
-        || !name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
-    {
-        return Err(
-            "run and slice names must be single names containing letters, digits, '-', '_', or '.'"
-                .into(),
-        );
-    }
-    Ok(())
-}
-
-fn atomic_write(directory: &Path, name: &str, bytes: &[u8]) -> Result<()> {
-    let temporary = directory.join(format!(".{name}.pending"));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
-    file.write_all(bytes)?;
-    file.sync_all()?;
-    drop(file);
-    fs::rename(&temporary, directory.join(name))?;
-    #[cfg(unix)]
-    File::open(directory)?.sync_all()?;
-    Ok(())
 }

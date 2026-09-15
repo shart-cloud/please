@@ -1,18 +1,18 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufWriter, Read, Write};
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::saved_run::SavedRun;
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use crate::bench::adapter::NativeExecution;
 use crate::bench::identity::{canonical_digest, hex_encode, nonempty, sha256};
 use crate::bench::model::{
     AdapterManifest, BenchResult, CoverageState, ExecutionTelemetry, ExperimentManifest,
     NormalizedDecision, NormalizerManifest, PlannedSystem, ProcessTelemetry, RawOutput, RunLimits,
-    RunManifest, SavedFile, StagedExecutable,
+    RunManifest, StagedExecutable,
 };
 use crate::bench::normalize;
 use crate::bench::pack::{self, VerifiedPack};
@@ -200,7 +200,7 @@ pub fn run(experiment_path: &Path, out: &Path) -> Result<RunManifest> {
         results: None,
     };
 
-    fs::create_dir(out)?;
+    let storage = SavedRun::<BenchResult>::create(out)?;
     fs::create_dir(out.join("work"))?;
     for (system_index, (planned, system)) in manifest
         .systems
@@ -210,16 +210,8 @@ pub fn run(experiment_path: &Path, out: &Path) -> Result<RunManifest> {
     {
         planned.staged_executable = stage_executable(out, system_index, system)?;
     }
-    write_manifest(out, &manifest)?;
-    let results_path = out.join("results.jsonl");
-    let results_file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&results_path)?;
-    let mut writer = BufWriter::new(results_file);
-    let mut results_digest = Sha256::new();
-    let mut result_bytes = 0u64;
-    let mut rows = 0u64;
+    storage.write_manifest(&manifest)?;
+    let mut writer = storage.stream_rows("results.jsonl")?;
     let mut in_flight = 0u32;
     let mut max_observed_in_flight = 0u32;
 
@@ -296,26 +288,16 @@ pub fn run(experiment_path: &Path, out: &Path) -> Result<RunManifest> {
                     normalizer,
                     execution,
                 )?;
-                let mut bytes = serde_json::to_vec(&row)?;
-                bytes.push(b'\n');
-                writer.write_all(&bytes)?;
-                results_digest.update(&bytes);
-                result_bytes += bytes.len() as u64;
-                rows += 1;
+                writer.push(&row)?;
             }
         }
         manifest.processes.extend(finish_adapter(adapter));
     }
-    writer.flush()?;
-    writer.get_ref().sync_all()?;
+    let saved = writer.finish()?;
     manifest.status = "complete".into();
     manifest.max_observed_in_flight = max_observed_in_flight;
-    manifest.results = Some(SavedFile {
-        rows,
-        bytes: result_bytes,
-        sha256: format!("{:x}", results_digest.finalize()),
-    });
-    write_manifest(out, &manifest)?;
+    manifest.results = Some(saved);
+    storage.write_manifest(&manifest)?;
     Ok(manifest)
 }
 
@@ -626,21 +608,9 @@ fn host_metadata() -> BTreeMap<String, String> {
     ])
 }
 
-fn write_manifest(directory: &Path, manifest: &RunManifest) -> Result<()> {
-    let pending = directory.join(".run.json.pending");
-    let target = directory.join("run.json");
-    let bytes = serde_json::to_vec_pretty(manifest)?;
-    {
-        let mut file = File::create(&pending)?;
-        file.write_all(&bytes)?;
-        file.sync_all()?;
-    }
-    fs::rename(pending, target)?;
-    Ok(())
-}
-
 pub fn verify_saved_run(directory: &Path) -> Result<RunManifest> {
-    let manifest: RunManifest = serde_json::from_slice(&fs::read(directory.join("run.json"))?)?;
+    let storage = SavedRun::<BenchResult>::at(directory);
+    let manifest: RunManifest = storage.read_manifest()?;
     if manifest.schema_version != RUN_SCHEMA || manifest.status != "complete" {
         return Err("bench run is missing a complete version-1 manifest".into());
     }
@@ -648,29 +618,7 @@ pub fn verify_saved_run(directory: &Path) -> Result<RunManifest> {
         .results
         .as_ref()
         .ok_or("complete run has no results identity")?;
-    let mut file = File::open(directory.join("results.jsonl"))?;
-    let mut digest = Sha256::new();
-    let mut bytes = 0u64;
-    let mut rows = 0u64;
-    let mut buffer = [0u8; 64 * 1024];
-    loop {
-        let count = file.read(&mut buffer)?;
-        if count == 0 {
-            break;
-        }
-        digest.update(&buffer[..count]);
-        bytes += count as u64;
-        rows += buffer[..count]
-            .iter()
-            .filter(|byte| **byte == b'\n')
-            .count() as u64;
-    }
-    if bytes != saved.bytes
-        || rows != saved.rows
-        || format!("{:x}", digest.finalize()) != saved.sha256
-    {
-        return Err("bench results do not match their completion identity".into());
-    }
+    storage.verify_file("results.jsonl", saved)?;
     let systems: BTreeMap<_, _> = manifest
         .systems
         .iter()

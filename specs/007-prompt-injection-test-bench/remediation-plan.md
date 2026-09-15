@@ -7,7 +7,7 @@
 
 **Revision 2 (2026-09-13)**: corrected after author review. The saved-run "torn write" claim was wrong (`runner.rs:487` already writes through a synced temporary file and rename). FR-746 asks for group-level direction changes, not intervals. The request-size formula, stderr attribution, executable TOCTOU, latency test, restart-budget comparison, transition-count prediction, and product-runtime reuse are each restated below with the corrected design.
 
-**Implementation progress (2026-09-13)**: Phases 0 through 3 are implemented. The Phase 4 consolidation work and the Phase 5 gaps remain.
+**Implementation progress (2026-09-15)**: Phases 0 through 3 and Phase 4.1 are implemented. Phase 4.2 was already completed in Phase 2. The next task is 4.3; 4.4 through 4.6 and the Phase 5 gaps remain.
 
 The plan is ordered by what protects the measurement first. Each step is one commit. Each step names the test that proves it, because the bench exists to produce evidence and a fix without a test is a claim.
 
@@ -173,11 +173,33 @@ These are the architecture review's three strong candidates and one worth-explor
 
 ### 4.1 One saved-run module (cleanup, not a measurement blocker)
 
-`bench/runner.rs:487-539` and `run.rs:90-137, 393-455` both implement "a run directory whose completion record carries a digest and row count, verified before any report". The first version of this plan claimed the bench wrote in place and could leave a torn manifest. That was wrong: `write_manifest` at `runner.rs:487` writes a `.pending` file, syncs it, and renames. The two differ only in detail: `run::atomic_write` opens with `create_new` and syncs the directory afterwards; the bench does neither. Neither difference corrupts a run.
+**Completed 2026-09-15.** `eval::saved_run::SavedRun<Row>` owns directory creation, manifest publication,
+result serialization, completion identities, result verification, and corpus integrity states. Both
+`run` and `bench::runner` use it. Corpus slices retain atomic publication; the bench retains its
+create-new result stream and publishes completion only after syncing it. Both manifest writers now
+reserve `.run.json.pending` with `create_new` and sync the directory after rename. Existing pending
+files are preserved and prevent publication.
 
-So this is duplication, not a defect. Extract `eval::saved_run::SavedRun<Row>` owning publication, completion record, digest verification, and unverified-run detection, and let both `run` and `bench` call it. The bench picks up `create_new` and the directory sync as a side effect. Fold `bench/report.rs` `MetricCounts` and `RelationMatrix` onto `metrics.rs` `Tally` and `SliceMetrics`.
+The version-1 manifest shapes remain domain-owned: corpus runs bind their fixed slice selection and
+pipeline metadata, while bench runs bind case/system identities and process telemetry. `SavedSlice`
+and `SavedFile` retain their existing serialized fields. Corpus verification still counts nonblank
+parsed rows; bench file identities still count newline bytes. Public type paths remain available by
+re-export. No schema or saved artifact was migrated.
 
-**Test**: existing `run.rs` and `bench` tests pass against the shared module; one new test asserts both callers refuse to publish over an existing `.pending` file.
+**Metric consolidation clarification:** the original proposal to fold `MetricCounts` and
+`RelationMatrix` into `SliceMetrics` was not a lossless mapping. Bench counts include failures in
+attack denominators and a four-way contextual relation matrix; corpus metrics have different slice,
+exclusion, and gate semantics. The compatible consolidation moves bench counts and accumulation to
+`metrics::bench`, with re-exports from `bench::report`, and shares `Tally` arithmetic. Bench percentages
+retain truncation; corpus percentages retain half-up rounding. The schemas and meanings stay intact.
+
+**Validation:** all 122 evaluator tests and six shipping judge/ML product/boundary integration tests
+pass, along with formatting, all-target Clippy, and dependency/isolation checks. New tests cover both
+callers refusing an existing pending manifest, atomic slice collisions, exact result bytes and
+completion fields, historical row-count conventions, and damaged bench identities. All 51 retained
+corpus runs and both saved bench presentation runs verify with the new reader and produce the same
+JSON reports as the frozen pre-refactor reader. These are historical compatibility checks, not new
+detector measurements. Evidence is retained locally under `.cache/phase4-1-20260915/`.
 
 ### 4.2 Bench adapter uses the product runtime
 

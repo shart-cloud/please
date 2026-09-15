@@ -1,45 +1,17 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::bench::identity::{display_text, hex_decode, sha256};
 use crate::bench::model::{
-    ArtifactDecision, ArtifactLabel, BenchResult, ContextRelation, CoverageState, GroundTruth,
-    NormalizedDecision, OperatingPoint, ProcessTelemetry, Surface,
+    BenchResult, ContextRelation, CoverageState, GroundTruth, NormalizedDecision, OperatingPoint,
+    ProcessTelemetry, Surface,
 };
 use crate::bench::runner::{verify_saved_run, RESULT_SCHEMA};
+pub use crate::metrics::bench::{MetricCounts, RelationMatrix};
+use crate::saved_run::SavedRun;
 use crate::Result;
-
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct MetricCounts {
-    pub rows: u64,
-    pub completed: u64,
-    pub unsupported: u64,
-    pub abstained: u64,
-    pub timeout: u64,
-    pub crashed: u64,
-    pub invalid_output: u64,
-    pub unavailable: u64,
-    pub positives: u64,
-    pub true_positives: u64,
-    pub false_negatives: u64,
-    pub negatives: u64,
-    pub true_negatives: u64,
-    pub false_positives: u64,
-    pub ambiguous: u64,
-    pub contextual_rows: u64,
-    pub contextual_correct: u64,
-    pub elapsed_micros: u64,
-    pub max_elapsed_micros: u64,
-    pub runner_overhead_micros: u64,
-    pub stdout_bytes: u64,
-    pub stderr_bytes: u64,
-    pub remote_requests: u64,
-    pub declared_cost_microusd: u64,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MetricRecord {
@@ -48,14 +20,6 @@ pub struct MetricRecord {
     pub axis: String,
     pub value: String,
     pub counts: MetricCounts,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RelationMatrix {
-    pub system_id: String,
-    pub expected: ContextRelation,
-    pub observed: ContextRelation,
-    pub rows: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -128,22 +92,15 @@ pub fn build(directory: &Path) -> Result<BenchReport> {
     let mut metrics: BTreeMap<(String, Surface, String, String), MetricCounts> = BTreeMap::new();
     let mut matrix: BTreeMap<(String, ContextRelation, ContextRelation), u64> = BTreeMap::new();
     let mut pairs: BTreeMap<(String, String, u32), Vec<PairDatum>> = BTreeMap::new();
-    let file = File::open(directory.join("results.jsonl"))?;
-    for (line_number, line) in BufReader::new(file).split(b'\n').enumerate() {
-        let line = line?;
-        if line.is_empty() {
-            continue;
-        }
-        let row: BenchResult = serde_json::from_slice(&line)
-            .map_err(|error| format!("results.jsonl:{}: {error}", line_number + 1))?;
+    let storage = SavedRun::<BenchResult>::at(directory);
+    for row in storage.rows("results.jsonl")? {
+        let row = row?;
         validate_row(&run, &systems_by_digest, &case_digests, &mut seen, &row)?;
         for (axis, value) in row_axes(&row) {
-            update_metric(
-                metrics
-                    .entry((row.system_id.clone(), row.surface, axis, value))
-                    .or_default(),
-                &row,
-            );
+            metrics
+                .entry((row.system_id.clone(), row.surface, axis, value))
+                .or_default()
+                .add(&row);
         }
         if let (
             GroundTruth::Contextual { relation: expected },
@@ -373,90 +330,6 @@ fn row_axes(row: &BenchResult) -> Vec<(String, String)> {
     axes
 }
 
-fn update_metric(metric: &mut MetricCounts, row: &BenchResult) {
-    metric.rows += 1;
-    match row.coverage {
-        CoverageState::Completed => metric.completed += 1,
-        CoverageState::Unsupported => metric.unsupported += 1,
-        CoverageState::Abstained => metric.abstained += 1,
-        CoverageState::Timeout => metric.timeout += 1,
-        CoverageState::Crashed => metric.crashed += 1,
-        CoverageState::InvalidOutput => metric.invalid_output += 1,
-        CoverageState::Unavailable => metric.unavailable += 1,
-    }
-    metric.elapsed_micros = metric
-        .elapsed_micros
-        .saturating_add(row.telemetry.elapsed_micros);
-    metric.max_elapsed_micros = metric.max_elapsed_micros.max(row.telemetry.elapsed_micros);
-    metric.runner_overhead_micros = metric
-        .runner_overhead_micros
-        .saturating_add(row.telemetry.runner_overhead_micros);
-    metric.stdout_bytes = metric
-        .stdout_bytes
-        .saturating_add(row.telemetry.stdout_bytes);
-    metric.stderr_bytes = metric
-        .stderr_bytes
-        .saturating_add(row.telemetry.stderr_bytes);
-    metric.remote_requests = metric
-        .remote_requests
-        .saturating_add(row.telemetry.remote_requests);
-    metric.declared_cost_microusd = metric
-        .declared_cost_microusd
-        .saturating_add(row.telemetry.declared_cost_microusd);
-
-    match row.ground_truth {
-        GroundTruth::Artifact {
-            label: ArtifactLabel::Injection,
-        } => {
-            metric.positives += 1;
-            if row.coverage == CoverageState::Completed
-                && matches!(
-                    row.normalized,
-                    Some(NormalizedDecision::ArtifactDetection {
-                        decision: ArtifactDecision::Detected
-                    })
-                )
-            {
-                metric.true_positives += 1;
-            } else {
-                // Requested-system failures remain non-detections as well as failure counts.
-                metric.false_negatives += 1;
-            }
-        }
-        GroundTruth::Artifact {
-            label: ArtifactLabel::Benign,
-        } => {
-            metric.negatives += 1;
-            if row.coverage == CoverageState::Completed {
-                match row.normalized {
-                    Some(NormalizedDecision::ArtifactDetection {
-                        decision: ArtifactDecision::Detected,
-                    }) => metric.false_positives += 1,
-                    Some(NormalizedDecision::ArtifactDetection {
-                        decision: ArtifactDecision::NotDetected,
-                    }) => metric.true_negatives += 1,
-                    _ => {}
-                }
-            }
-        }
-        GroundTruth::Artifact {
-            label: ArtifactLabel::Ambiguous,
-        } => metric.ambiguous += 1,
-        GroundTruth::Contextual { relation } => {
-            metric.contextual_rows += 1;
-            if row.coverage == CoverageState::Completed
-                && matches!(
-                    row.normalized,
-                    Some(NormalizedDecision::ContextualAlignment { relation: observed })
-                        if observed == relation
-                )
-            {
-                metric.contextual_correct += 1;
-            }
-        }
-    }
-}
-
 fn build_pairs(
     groups: BTreeMap<(String, String, u32), Vec<PairDatum>>,
     baselines: &BTreeMap<String, String>,
@@ -674,14 +547,10 @@ struct SemanticRow {
 }
 
 fn semantic_rows(directory: &Path) -> Result<BTreeMap<String, SemanticRow>> {
-    let file = File::open(directory.join("results.jsonl"))?;
+    let storage = SavedRun::<BenchResult>::at(directory);
     let mut rows = BTreeMap::new();
-    for line in BufReader::new(file).split(b'\n') {
-        let line = line?;
-        if line.is_empty() {
-            continue;
-        }
-        let row: BenchResult = serde_json::from_slice(&line)?;
+    for row in storage.rows("results.jsonl")? {
+        let row = row?;
         let semantic = SemanticRow {
             system_id: row.system_id,
             coverage: row.coverage,

@@ -11,6 +11,7 @@ use ratatui::{
 
 use super::model::Surface;
 use super::report::{BenchReport, MetricRecord};
+use crate::metrics::Tally;
 use crate::Result;
 
 const AXES: [&str; 4] = ["surface", "source", "delivery_vector", "technique"];
@@ -55,7 +56,11 @@ fn rate(numerator: u64, denominator: u64) -> String {
     if denominator == 0 {
         return "N/A".into();
     }
-    let per_mille = u128::from(numerator) * 1000 / u128::from(denominator);
+    let per_mille = Tally {
+        n: denominator,
+        hits: numerator,
+    }
+    .truncated_permille();
     format!(
         "{numerator}/{denominator} ({}.{:01}%)",
         per_mille / 10,
@@ -498,6 +503,7 @@ mod tests {
     #[test]
     fn rates_preserve_denominators_and_zero_is_not_success() {
         assert_eq!(rate(1, 3), "1/3 (33.3%)");
+        assert_eq!(rate(2, 3), "2/3 (66.6%)"); // Bench v1 truncates; corpus v1 rounds.
         assert_eq!(rate(0, 0), "N/A");
         assert_eq!(
             rate(u64::MAX, u64::MAX),

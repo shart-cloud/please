@@ -26,6 +26,8 @@
 //! between an x86 CI runner and an ARM laptop is a figure nobody can reconcile, and this crate exists
 //! because two measurements could not be reconciled once already.
 
+pub mod bench;
+
 use std::collections::BTreeMap;
 
 use please_core::verdict::RiskLevel;
@@ -61,6 +63,15 @@ impl Tally {
     pub fn add(&mut self, hit: bool) {
         self.n += 1;
         self.hits += u64::from(hit);
+    }
+
+    /// Truncated per-mille used by bench v1 presentation. Corpus rates keep half-up rounding.
+    pub fn truncated_permille(&self) -> u128 {
+        if self.n == 0 {
+            0
+        } else {
+            u128::from(self.hits) * 1000 / u128::from(self.n)
+        }
     }
 
     /// Hit rate in per-mille, rounded half-up, saturating at an empty population.
