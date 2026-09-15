@@ -1,0 +1,3103 @@
+{
+  "scope": "Product / High / enforcement / structural; test-only ungated reference",
+  "identities": {
+    "binaries": {
+      "matching": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/bin/matching",
+        "sha256": "19369f735254342ca5d8d453c3de746ee04cef3d0cfb6e6683f2020fff3e17a2"
+      },
+      "runtime": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/bin/runtime",
+        "sha256": "e53b129aaf4299b6e815860702e2fce72619697a3099c4a31b0839e2c1af3767"
+      },
+      "verifier": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/bin/verifier",
+        "sha256": "ef9b2d7fcec0382f5dc4ff3023e30e7ebb5b44e82367a8ebd439ebd6407fa085"
+      }
+    },
+    "packages": {
+      "syntax": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/syntax.json",
+        "sha256": "c6042cef86424e8e109ef6696cc95fc1c5e74c159753481cc57afc656d79b032"
+      },
+      "development": {
+        "path": "/home/jg/git/bee-swarm/.cache/detection-improvement-20260914/development.json",
+        "sha256": "38467834f5490d6823e5525b5c71f380c6b8c6d019a2072ced1c3ea2a295ca9f"
+      },
+      "exposed-validation": {
+        "path": "/home/jg/git/bee-swarm/.cache/detection-improvement-20260914/validation/corpus.json",
+        "sha256": "4343265e93df1df322e050b5be26610d7dc2a594931e530c0aef5b27950d42ff"
+      }
+    },
+    "sources": {
+      "baseline": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/baseline.toml",
+        "sha256": "f2d63551b21cd284b8ad8ce2f73d796083d248b3dbf473d15ee327e6e50e39af"
+      },
+      "accepted": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/safe-corrections.toml",
+        "sha256": "409c86adcd402a850eca809012bb2c28d2205adfde35fa9415086b1add0fe84e"
+      },
+      "corrected": {
+        "path": "/home/jg/git/bee-swarm/.cache/matching-consistency-20260915/all-corrections.toml",
+        "sha256": "9f505b3a1c778d103977b02634dc555d4fa657c8ca6d74e470e67741ac313303"
+      }
+    },
+    "host": "Linux-6.6.114.1-microsoft-standard-WSL2-x86_64-with-glibc2.39",
+    "source_files": {
+      "crates/core/src/engine.rs": "e3f4d5e08eb2dde8bd2d9727e68c22585a23aa1a8b8c01e625bdca1b9ae1dcc9",
+      "crates/core/src/sanitize.rs": "cffe556c1a3600dceeb1be211df9da59d5b39e8245558ebd3eda7ed4f19adda4",
+      "crates/core/src/structure.rs": "b6edb3517b46ef48ee4849b1955b860cfe7fdaf578aa5f5219b8c717222e8355",
+      "crates/core/src/inference.rs": "7a51b7eb71090afb4602f2a0692b58d33be86183bb2922098df8d1dbe94d07bd",
+      "crates/core/src/export.rs": "39ac916face994f96cd97fc897b71f26266f897c8f5c2ff9ff8886951957459f",
+      "crates/core/src/policy.rs": "f309e87c9af661897b0439bec8fa6d75aff677d912d7392d62b5485b10f590c1",
+      "crates/core/src/lib.rs": "38a49db145e99834fb0f4718e8dd47daec8af7d7bd223aeb6d5936bd201d76c5",
+      "crates/core/src/context.rs": "e878411f04f656e192d02e2b86bbf9d14e1f8315bb67dc0ed7c8956a04470983",
+      "crates/core/src/finalize/ml_review.rs": "ca761b1729f803ea353eb76df191b4fd9f5761b752cb4f2f4be686f6c5781109",
+      "crates/core/src/finalize/review.rs": "12f688fc49e11db26d74010e7e1ecb58cceee981e554c19b314188df3dedcfcd",
+      "crates/core/src/finalize/score.rs": "1c7713335417d3afdab6624b7571550d0ff5871c328c54f6e82768029a267492",
+      "crates/core/src/finalize/evidence.rs": "0779ddfbb63b507c6806213b38b270430106516a1a2c3fe4eb21434caaeb367a",
+      "crates/core/src/finalize/mod.rs": "56dcf9b1c246b96afa849be5dc790605b4a6595edb8541b70ad2e3a7653a7e8f",
+      "crates/core/src/finalize/analysis.rs": "b0d75bc07b1c4c34f77103f55ef7d0d7e41a106986941b8d0c59e79d55af3dd5",
+      "crates/core/src/finalize/plan.rs": "d64e390a0b3f50be67a0e22d078000fe4e7fe1c25d094bb73c230d31d0a671c3",
+      "crates/core/src/finalize/types.rs": "cdb34d3008d0e77f56872db5ab9cd11cd78f0aee1bde36096acbb048a5f77c5e",
+      "crates/core/src/decode/unicode.rs": "9326342c14a316dc721d8cdba14ee7b598ee77b0fe0d3f6accc809846635c5ea",
+      "crates/core/src/decode/mod.rs": "4a7b609a355fa5a57f3538d0d100e42fb833deb1af11f37c191739129c39ff52",
+      "crates/core/src/decode/transforms.rs": "dbbcc3e0ba13256832feb856ab6efff1fd8d25e87a7da2f80da18a1c201d05af",
+      "crates/core/src/matcher/patterns.rs": "5794e5dc4d36248bef2b0c50ecc9afffab780697083af22e7e19ed4f9dff5ebd",
+      "crates/core/src/matcher/prefilter.rs": "ff914faed2ebc7eaa114c1c47202cd9dd61813ba31c1d269380112df99b247f2",
+      "crates/core/src/matcher/mod.rs": "d0a3cf56517150ab1dfcb6edd0260373a0f7f0a26c7cbaf56c38b92d9fb7b8b1",
+      "crates/core/src/ruleset/validate.rs": "637087eab9826021b68e3dcdaa32146a7450c415a50a0c627a0fb7b638afd4ac",
+      "crates/core/src/ruleset/parse.rs": "5f4a9d12c282b5b11bfc150b6ced0075046a01b5b30e565d8f7a1f243bf34901",
+      "crates/core/src/ruleset/mod.rs": "ec4c259e40cd90255fa8815bdc86b2ee61a692b33b86f42d54ff7a92e5c7d058",
+      "crates/core/src/detect/confusable.rs": "5f4e3e5f5d53e33758f3add0d89e843c3825f2f02fd20f0155d998a4abb6e4ab",
+      "crates/core/src/detect/concealment.rs": "d11a43f6ea452700dc7e495fbd23e57c5f7453173b490798d495fa20a6f6f5e8",
+      "crates/core/src/detect/mod.rs": "9f34f1b253fb920b64948dd8d429fcbe4916922adf9f790c14d12280c3d28bbf",
+      "crates/core/src/prepare/validate.rs": "33a0f861ecc7ab9c8c6264739d0e31772091c11c1f51ba85a981db7645a9fb73",
+      "crates/core/src/prepare/provenance.rs": "6d2d6db7d95f77a4292fc1df949c628aa13d4bbcd7dae52a696fe54f8cf20d56",
+      "crates/core/src/prepare/mod.rs": "4ac0dad83c2f3ee7710358e2f9c5ba39bc4e78b5f981512e9a99058960e4e11b",
+      "crates/core/src/prepare/prepared.rs": "075d684a22285ae91e0b83856f7b4ecf2c167101750bf531ca2c8e295f795fdd",
+      "crates/scan/src/config.rs": "5151b081b15b57236e7b87912f81305484321f5b55169dd7193a3621bf645cc4",
+      "crates/scan/src/rules.rs": "274145efe472d613c31a2d50965aab6ea93cb02273950fdf37d4cd21c5a11248",
+      "crates/scan/src/lib.rs": "fa983a38ce02e5ee9f42423e26abd23ca6d75935b0e3f6776e84840d2c040028",
+      "crates/eval/examples/matching_consistency.rs": "e52c1de1f9f90063fb823111606400f39264af0f01c0c75494d91261707a1586",
+      "crates/eval/examples/prefilter_runtime.rs": "5541cfb75a404ad3a477cd7292add629c48e547bab6349d829001dbec153ebcd",
+      "crates/core/tests/support/prefilter_reference.rs": "48b13de4f79133eedbf70433727f7d21f0d47f19bbb47f94c078413c3ace536e",
+      "Cargo.lock": "8fcb3ce5463887804f6ec0e3064504728aea91db0903d147dc77656f45bd81f1",
+      "crates/eval/Cargo.lock": "47fcf467e541158914d0ebc7110f12b6e81e5baedcd93d9452eb6e469ebf9dbc"
+    }
+  },
+  "sidecar_sha256": {
+    "experiment-identities.json": "4c3227300bba4bc2fba287eedc1b81e0f75d5390266a081a12bbd438f83aba16",
+    "runtime.json": "1087c42716c00220597ce4b4244660ebd41492340f820562f19d4a38a3f4f311",
+    "full-accepted-development.json": "b5db0dedccae05389b7c31a792ec344716589ed726b0ac78c00dfdc106a96fbd",
+    "full-corrected-syntax.json": "f045ca3fab1edc0a0535e4f2f064accd71d502dfec64fcfe6cc2d824eeacf78e",
+    "full-shipping-development.json": "0105a70c26e7b0b921c8316985182e293c31fdef5365baad0f77c62890ce022d",
+    "full-accepted-exposed-validation.json": "84ccc75e970b5ef06eb343c95b19f8dde594c1bf2a6d236bc3f66afccf76df01",
+    "full-shipping-syntax.json": "85024e9c2706ff070f9ed28cf174383a1a4cf1007652aec09cd73e33e9be13e4",
+    "full-corrected-exposed-validation.json": "a8e8b5c8fadc6cad8894648e54b753fa9d62e4ad98171da1e2cb11ee875ddeb8",
+    "full-shipping-exposed-validation.json": "0cf7e1c42bb78d0a6ae03745572335edd144ce450f40fbb5df3e27eeb133b53b",
+    "full-corrected-development.json": "71301976e26073ee8b2122d43a09d544b9565527c0387be5997d257b2a68665b",
+    "full-accepted-syntax.json": "8f1bee099ded97fd1854675ac036e0a4cd9d8c18505d188f9e881ba90652e057",
+    "eval-cache/results/baseline-syntax-1/experiment.json": "ea9618b9b972e63dc37e2bac980a798c918a729dbb8c6ff7e349764586e42a52",
+    "eval-cache/results/accepted-syntax-1/experiment.json": "b31cdd6b1b5596660ff916645c79196f07cff63fce37961ecb58adcea88cd4fc",
+    "eval-cache/results/reference-syntax-1/experiment.json": "dee3f4f1d43ee697f58272e2830e62d95c258f28ab385ecc5f3ec7f3aad472f2",
+    "eval-cache/results/corrected-syntax-1/experiment.json": "0524834c1e21940ab356fa0fe08bc66a54e19f7879ce7d2ab9d5cd384e67db30",
+    "eval-cache/results/shipping-syntax-1/experiment.json": "15ff33c436dcdd433399cfb731cdbd66f476f5e6f0f0c2d1e6299501b4af6a0f",
+    "eval-cache/results/baseline-development-1/experiment.json": "4a38fe621a6d190d817f55d468684c2592550f09ee19c00c2b35669dc699a769",
+    "eval-cache/results/baseline-development-2/experiment.json": "9567835515e3cfc9ccb06063dfa6a6f0460399af25aecdfd5045e05a4270beef",
+    "eval-cache/results/baseline-development-3/experiment.json": "8d2b53d57c035e19d11a75c906a1cd22a602d8b2b84e60fd9b6d72fbd1984dc5",
+    "eval-cache/results/accepted-development-1/experiment.json": "fcef7375c6559203c136e93667a1acabd4d8763d97e0a73177cba62cf288f5b9",
+    "eval-cache/results/accepted-development-2/experiment.json": "33a1381c6edf961f2e78cbfddd28a02de9437e62fc45f5e86fc6d7d1331061d7",
+    "eval-cache/results/accepted-development-3/experiment.json": "be6df2de400d3fdc0f35c7c7e54d784ed54b9d52d3196a2cf4a50bffb9960921",
+    "eval-cache/results/reference-development-1/experiment.json": "31652be912534182b58f08ce2ffb0fad3ff6663a1393ab6d251e633cc698a68a",
+    "eval-cache/results/reference-development-2/experiment.json": "a6a59bf60182afb197bc17fdf6e329e65b32e1ae8c9416ba2055bcae842e7bb2",
+    "eval-cache/results/reference-development-3/experiment.json": "d3008aa6779025a66b89ce8042ae2e523efc663cdeef25101ec23521b000e536",
+    "eval-cache/results/corrected-development-1/experiment.json": "8cb7efdae320dcc2a2b5e1b3aa4ecee6a281dd20dc3b49f2718446d067ff15af",
+    "eval-cache/results/shipping-development-1/experiment.json": "595002e0fa950c8d552d97dfebb53b4efcdb81e5172e7b308ae4c414b840e9c3",
+    "eval-cache/results/baseline-exposed-validation-1/experiment.json": "d06f89ca0150fb043a1dcff37546348835de3656a9ecbb71ba4322de0912bc49",
+    "eval-cache/results/accepted-exposed-validation-1/experiment.json": "897b60bc69ebb2c7c931ac9aefb12d17b478dcd42f315bfdb686acd1a90b91e7",
+    "eval-cache/results/reference-exposed-validation-1/experiment.json": "f2e1bb68afda8364f3b2288ab81b2b1db391207ba9fc4a9840ad0a1a01341fb2",
+    "eval-cache/results/corrected-exposed-validation-1/experiment.json": "5effdc4f54bdce70fa0496c795a61cc3857ced7a6fb6f9951feaa4f93b38d7d6",
+    "eval-cache/results/shipping-exposed-validation-1/experiment.json": "082b5fe89a7e10b0dc479894547e8cf739b5b0881e5d9a6965f39ed5ed56207a"
+  },
+  "native_verified": {
+    "baseline-syntax-1": {
+      "run.json": "c37d548b7d03156df012c2f2d2616916f797ffeadcb6249d9c415d45d07af9b2",
+      "prefilter_benign.jsonl": "0adb0199125ab071d9445cb6ea1a6aac311a88a2e1f65d8588e979dc0120c437",
+      "prefilter_syntax.jsonl": "9021873fd2bee002bffbe826b370af85d14cbea710a0293fffb8fbc18804ba9c"
+    },
+    "accepted-syntax-1": {
+      "run.json": "f55edb4dee3b7022915761e507b69dc0254952646887edb3d4b7abded38df307",
+      "prefilter_benign.jsonl": "0adb0199125ab071d9445cb6ea1a6aac311a88a2e1f65d8588e979dc0120c437",
+      "prefilter_syntax.jsonl": "b0f2c5c5e51523e301493d9dea04e75c6648b97bc78c2fcbe799a26b5250fd6f"
+    },
+    "reference-syntax-1": {
+      "run.json": "6f6916d0aaf7b340456901145b75571f22107ea99cea2aea22f013f55e8bfe30",
+      "prefilter_benign.jsonl": "a1499b2ccab62df7e5ab109346cb8036656f3599a4e27dba9202ccf327a1b5d2",
+      "prefilter_syntax.jsonl": "c356d8d772247d2c72f0183b1bb1ee0ec03ce12acccaf0b0160a9caeed4afe3c"
+    },
+    "corrected-syntax-1": {
+      "run.json": "ac74d42881495a08a642b3308cd23865d116a3fa90f0111496542b6e38321768",
+      "prefilter_benign.jsonl": "a1499b2ccab62df7e5ab109346cb8036656f3599a4e27dba9202ccf327a1b5d2",
+      "prefilter_syntax.jsonl": "c356d8d772247d2c72f0183b1bb1ee0ec03ce12acccaf0b0160a9caeed4afe3c"
+    },
+    "shipping-syntax-1": {
+      "run.json": "3388da8b843f8a21e16258bcc4ca7998fa4c2a0652f99b098a63b53be79ff2f2",
+      "prefilter_benign.jsonl": "0adb0199125ab071d9445cb6ea1a6aac311a88a2e1f65d8588e979dc0120c437",
+      "prefilter_syntax.jsonl": "b0f2c5c5e51523e301493d9dea04e75c6648b97bc78c2fcbe799a26b5250fd6f"
+    },
+    "baseline-development-1": {
+      "run.json": "2681aa58a3089b607d66288f11eb0ebe7646bc8a436f43ee3c9c229163b3d0d7",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "baseline-development-2": {
+      "run.json": "2681aa58a3089b607d66288f11eb0ebe7646bc8a436f43ee3c9c229163b3d0d7",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "baseline-development-3": {
+      "run.json": "2681aa58a3089b607d66288f11eb0ebe7646bc8a436f43ee3c9c229163b3d0d7",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "accepted-development-1": {
+      "run.json": "9a3c2ca91cc99e7c6a743d85bfdd2c99cd9dc5fc0cd062c4d01cfe5f72c1dba4",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "accepted-development-2": {
+      "run.json": "9a3c2ca91cc99e7c6a743d85bfdd2c99cd9dc5fc0cd062c4d01cfe5f72c1dba4",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "accepted-development-3": {
+      "run.json": "9a3c2ca91cc99e7c6a743d85bfdd2c99cd9dc5fc0cd062c4d01cfe5f72c1dba4",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "reference-development-1": {
+      "run.json": "9cdf4da25cc7e0b5834e68bd44271135904426ad3f3a974bbc3efb7ace00c82c",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "488c1d6c39f105b8c2274d81af590e9c6e8b42f845e3ac42f98e4e04cbf25bb3",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "2a3718761ad72ed9d21ce8714547ae6a2debfe340cf56f22b66ce12f01583646",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "d76a355174eb68c341cb2672c9ac2edca3c86d7575fdf05590783b5db9b35fc2",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "484c35fdf749a479bc23c0ccfb18824e56dd98b95883f2f01c8e7b26f8a59695",
+      "pos_obfuscation.jsonl": "9e5627f80c8b20d80f260e5a3293587321b6c36f2ddb828042e8c71b2152f9f5",
+      "pos_stratified.jsonl": "fb422c4260f956f2b17739ca0d648fb0a58b37dce24935022248bc3f945e0f49",
+      "repo_prose.jsonl": "b2a9da3c4237b55e86a33aac73d7a3d1781cf3e1fa708fbd9b7b7febbd74a950"
+    },
+    "reference-development-2": {
+      "run.json": "9cdf4da25cc7e0b5834e68bd44271135904426ad3f3a974bbc3efb7ace00c82c",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "488c1d6c39f105b8c2274d81af590e9c6e8b42f845e3ac42f98e4e04cbf25bb3",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "2a3718761ad72ed9d21ce8714547ae6a2debfe340cf56f22b66ce12f01583646",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "d76a355174eb68c341cb2672c9ac2edca3c86d7575fdf05590783b5db9b35fc2",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "484c35fdf749a479bc23c0ccfb18824e56dd98b95883f2f01c8e7b26f8a59695",
+      "pos_obfuscation.jsonl": "9e5627f80c8b20d80f260e5a3293587321b6c36f2ddb828042e8c71b2152f9f5",
+      "pos_stratified.jsonl": "fb422c4260f956f2b17739ca0d648fb0a58b37dce24935022248bc3f945e0f49",
+      "repo_prose.jsonl": "b2a9da3c4237b55e86a33aac73d7a3d1781cf3e1fa708fbd9b7b7febbd74a950"
+    },
+    "reference-development-3": {
+      "run.json": "9cdf4da25cc7e0b5834e68bd44271135904426ad3f3a974bbc3efb7ace00c82c",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "488c1d6c39f105b8c2274d81af590e9c6e8b42f845e3ac42f98e4e04cbf25bb3",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "2a3718761ad72ed9d21ce8714547ae6a2debfe340cf56f22b66ce12f01583646",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "d76a355174eb68c341cb2672c9ac2edca3c86d7575fdf05590783b5db9b35fc2",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "484c35fdf749a479bc23c0ccfb18824e56dd98b95883f2f01c8e7b26f8a59695",
+      "pos_obfuscation.jsonl": "9e5627f80c8b20d80f260e5a3293587321b6c36f2ddb828042e8c71b2152f9f5",
+      "pos_stratified.jsonl": "fb422c4260f956f2b17739ca0d648fb0a58b37dce24935022248bc3f945e0f49",
+      "repo_prose.jsonl": "b2a9da3c4237b55e86a33aac73d7a3d1781cf3e1fa708fbd9b7b7febbd74a950"
+    },
+    "corrected-development-1": {
+      "run.json": "45df6482f1234a2b4c965d6a3f4938c1d7fe88d2ceca9ba1ae4c5e255757ec64",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "488c1d6c39f105b8c2274d81af590e9c6e8b42f845e3ac42f98e4e04cbf25bb3",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "2a3718761ad72ed9d21ce8714547ae6a2debfe340cf56f22b66ce12f01583646",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "d76a355174eb68c341cb2672c9ac2edca3c86d7575fdf05590783b5db9b35fc2",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "484c35fdf749a479bc23c0ccfb18824e56dd98b95883f2f01c8e7b26f8a59695",
+      "pos_obfuscation.jsonl": "9e5627f80c8b20d80f260e5a3293587321b6c36f2ddb828042e8c71b2152f9f5",
+      "pos_stratified.jsonl": "fb422c4260f956f2b17739ca0d648fb0a58b37dce24935022248bc3f945e0f49",
+      "repo_prose.jsonl": "b2a9da3c4237b55e86a33aac73d7a3d1781cf3e1fa708fbd9b7b7febbd74a950"
+    },
+    "shipping-development-1": {
+      "run.json": "f9980150d106e68b0c5c83be594c18c5aa49a8dec0d98296c0675e0d15eb0731",
+      "fix_benign.jsonl": "6880d9ee169affe3c085712fcaea31c319da287d98d741b1337b738afc6b0ee7",
+      "fix_positive.jsonl": "a80a8cbda8f7b6543051e2b88797a891aae71bc12408e97a42be829bc832a09b",
+      "gen_matched_negative.jsonl": "74f4a95070ea6e4c14db8fa93e5c5f068c000fd21533d6d122989b15e22a5bac",
+      "gen_positive.jsonl": "41a2a5ab4e82277896d5c9012df8943cbaaead356e05df5b5de3b1a138668cfa",
+      "neg_clean.jsonl": "bf6a028b818950825b5884a80be3035b2d63abfaff50d21ef951220459a28828",
+      "neg_multilingual.jsonl": "aefe8b79d63ae6c2668ddcee92eaaa9f1faf1ec968d0dcb127a79102f7dc9b1b",
+      "neg_nonadversarial.jsonl": "99fb5838f11e014d14187a8bd1dade862eabe940ee4f49e67cf1f4e2930bf7c5",
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_bipia.jsonl": "68d88d65697b247519bdd3d5bf27320ec5640ae657c7ba102cb13b58a4b3d8aa",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "0cfea056a983a7c037e983e657c90ae32027b53623b539197242efcbb6fda384",
+      "pos_obfuscation.jsonl": "779fffd07d5882ecd8d80240e10f3c77842438c2f874fe700e50992c9e0c0f61",
+      "pos_stratified.jsonl": "ed45e658dfaf379171092b3a5cc4ac89bd11f97e7ff5296cbefda4e5a08228f7",
+      "repo_prose.jsonl": "e3320b5b55fb09a6b4d0a63372295da1e9e8313d6ab7a1420960b3b653f04a8d"
+    },
+    "baseline-exposed-validation-1": {
+      "run.json": "9d3c04f7b6b60c54a0ef9ff64ccd6794b28460789fc40e235d6625ca01990b70",
+      "validation_benign.jsonl": "9149f62b658580bbd05862aa139aeb77873ff975fb77cdbcb6ab2fcef6a282fa",
+      "validation_positive.jsonl": "2e24dfb8bcac63b4b1e3f5961f0dcb9fdf625850006bdaa5634e57ace2c7299f"
+    },
+    "accepted-exposed-validation-1": {
+      "run.json": "109f58cb1d0270a8a4112317ba5a2dfd0314eee37f240cbaee34fad6a6d8669e",
+      "validation_benign.jsonl": "9149f62b658580bbd05862aa139aeb77873ff975fb77cdbcb6ab2fcef6a282fa",
+      "validation_positive.jsonl": "2e24dfb8bcac63b4b1e3f5961f0dcb9fdf625850006bdaa5634e57ace2c7299f"
+    },
+    "reference-exposed-validation-1": {
+      "run.json": "b9f45dfc0306ea72dc36851961df734ff9f5f5c73c4dabb28921eecb7c91a61e",
+      "validation_benign.jsonl": "eb3d335284985dee6c017baa0c98d7be1f8a160b374efd3dce97edfebebd592d",
+      "validation_positive.jsonl": "d0ad8dfedd054db22b960c24fca1581a94616d56521ef91c880fd28c725b5348"
+    },
+    "corrected-exposed-validation-1": {
+      "run.json": "3c02f81cee6d228670f0d20d3d540ec3753963710e716c33c3f22ee5c02f4742",
+      "validation_benign.jsonl": "eb3d335284985dee6c017baa0c98d7be1f8a160b374efd3dce97edfebebd592d",
+      "validation_positive.jsonl": "d0ad8dfedd054db22b960c24fca1581a94616d56521ef91c880fd28c725b5348"
+    },
+    "shipping-exposed-validation-1": {
+      "run.json": "593787c2ea5951aefe779a936a66b0964ff11c699307464b735e8bebc7c10359",
+      "validation_benign.jsonl": "9149f62b658580bbd05862aa139aeb77873ff975fb77cdbcb6ab2fcef6a282fa",
+      "validation_positive.jsonl": "2e24dfb8bcac63b4b1e3f5961f0dcb9fdf625850006bdaa5634e57ace2c7299f"
+    }
+  },
+  "packages": {
+    "syntax": {
+      "prefilter_syntax": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 103968,
+            "detected": 61529,
+            "incomplete": 795,
+            "gap_causes": {
+              "decode_depth": 795
+            }
+          },
+          "candidate": {
+            "rows": 103968,
+            "detected": 63780,
+            "incomplete": 795,
+            "gap_causes": {
+              "decode_depth": 795
+            }
+          },
+          "added_findings": 2681,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 2251,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 103968,
+            "detected": 61529,
+            "incomplete": 795,
+            "gap_causes": {
+              "decode_depth": 795
+            }
+          },
+          "candidate": {
+            "rows": 103968,
+            "detected": 75719,
+            "incomplete": 795,
+            "gap_causes": {
+              "decode_depth": 795
+            }
+          },
+          "added_findings": 19199,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 14190,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 2339,
+        "median_slice_ms": {
+          "baseline": 2927.195674,
+          "accepted": 3108.657177,
+          "reference": 5912.575929,
+          "corrected": 3286.334122,
+          "shipping": 3082.857115
+        }
+      },
+      "prefilter_benign": {
+        "kind": "negative",
+        "accepted": {
+          "baseline": {
+            "rows": 195,
+            "detected": 10,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 195,
+            "detected": 10,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 195,
+            "detected": 10,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 195,
+            "detected": 40,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 48,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 30,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 78.983088,
+          "accepted": 88.081766,
+          "reference": 84.414757,
+          "corrected": 85.009413,
+          "shipping": 75.248086
+        }
+      }
+    },
+    "development": {
+      "fix_benign": {
+        "kind": "hard_negative",
+        "accepted": {
+          "baseline": {
+            "rows": 20,
+            "detected": 14,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 20,
+            "detected": 14,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 20,
+            "detected": 14,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 20,
+            "detected": 14,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 42.850057,
+          "accepted": 46.537149,
+          "reference": 52.667106,
+          "corrected": 47.949906,
+          "shipping": 42.557536
+        }
+      },
+      "fix_positive": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 51,
+            "detected": 42,
+            "incomplete": 1,
+            "gap_causes": {
+              "decode_depth": 1
+            }
+          },
+          "candidate": {
+            "rows": 51,
+            "detected": 42,
+            "incomplete": 1,
+            "gap_causes": {
+              "decode_depth": 1
+            }
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 51,
+            "detected": 42,
+            "incomplete": 1,
+            "gap_causes": {
+              "decode_depth": 1
+            }
+          },
+          "candidate": {
+            "rows": 51,
+            "detected": 42,
+            "incomplete": 1,
+            "gap_causes": {
+              "decode_depth": 1
+            }
+          },
+          "added_findings": 1,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 55.221492,
+          "accepted": 50.868386,
+          "reference": 54.326551,
+          "corrected": 51.200945,
+          "shipping": 46.745047
+        }
+      },
+      "gen_matched_negative": {
+        "kind": "hard_negative",
+        "accepted": {
+          "baseline": {
+            "rows": 14,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 14,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 14,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 14,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 42.304265,
+          "accepted": 47.325074,
+          "reference": 56.752497,
+          "corrected": 45.586144,
+          "shipping": 40.636814
+        }
+      },
+      "gen_positive": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 1060,
+            "detected": 316,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 1060,
+            "detected": 316,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 1060,
+            "detected": 316,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 1060,
+            "detected": 316,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 267.234103,
+          "accepted": 287.770168,
+          "reference": 1072.949712,
+          "corrected": 348.672274,
+          "shipping": 296.125509
+        }
+      },
+      "neg_clean": {
+        "kind": "negative",
+        "accepted": {
+          "baseline": {
+            "rows": 6640,
+            "detected": 516,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 6640,
+            "detected": 516,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 6640,
+            "detected": 516,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 6640,
+            "detected": 519,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 5,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 3,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 815.369975,
+          "accepted": 930.361323,
+          "reference": 3216.589062,
+          "corrected": 1117.022049,
+          "shipping": 922.21175
+        }
+      },
+      "neg_multilingual": {
+        "kind": "negative",
+        "accepted": {
+          "baseline": {
+            "rows": 3196,
+            "detected": 19,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 3196,
+            "detected": 19,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 3196,
+            "detected": 19,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 3196,
+            "detected": 19,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 301.245962,
+          "accepted": 332.005213,
+          "reference": 1607.811616,
+          "corrected": 379.352937,
+          "shipping": 336.229722
+        }
+      },
+      "neg_nonadversarial": {
+        "kind": "negative",
+        "accepted": {
+          "baseline": {
+            "rows": 13169,
+            "detected": 534,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 13169,
+            "detected": 534,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 13169,
+            "detected": 534,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 13169,
+            "detected": 540,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 10,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 6,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 1100.911,
+          "accepted": 1255.899442,
+          "reference": 3824.510437,
+          "corrected": 1498.924252,
+          "shipping": 1268.383463
+        }
+      },
+      "neg_orbench": {
+        "kind": "hard_negative",
+        "accepted": {
+          "baseline": {
+            "rows": 3000,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 3000,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 3000,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 3000,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 180.860236,
+          "accepted": 181.645191,
+          "reference": 268.92163,
+          "corrected": 192.534434,
+          "shipping": 179.302534
+        }
+      },
+      "pos_bipia": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 394,
+            "detected": 16,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 394,
+            "detected": 16,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 394,
+            "detected": 16,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 394,
+            "detected": 16,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 98.690084,
+          "accepted": 96.06061,
+          "reference": 117.554107,
+          "corrected": 102.930169,
+          "shipping": 92.597324
+        }
+      },
+      "pos_injecagent": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 1054,
+            "detected": 442,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 1054,
+            "detected": 442,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 1054,
+            "detected": 442,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 1054,
+            "detected": 442,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 184.530313,
+          "accepted": 195.226313,
+          "reference": 273.19678,
+          "corrected": 222.097166,
+          "shipping": 198.310459
+        }
+      },
+      "pos_llmail": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 27963,
+            "detected": 12239,
+            "incomplete": 157,
+            "gap_causes": {
+              "max_matches_per_rule": 158,
+              "decode_depth": 3,
+              "max_observations": 1,
+              "decode_failed": 1
+            }
+          },
+          "candidate": {
+            "rows": 27963,
+            "detected": 12239,
+            "incomplete": 157,
+            "gap_causes": {
+              "max_matches_per_rule": 158,
+              "decode_depth": 3,
+              "max_observations": 1,
+              "decode_failed": 1
+            }
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 27963,
+            "detected": 12239,
+            "incomplete": 157,
+            "gap_causes": {
+              "max_matches_per_rule": 158,
+              "decode_depth": 3,
+              "max_observations": 1,
+              "decode_failed": 1
+            }
+          },
+          "candidate": {
+            "rows": 27963,
+            "detected": 12339,
+            "incomplete": 157,
+            "gap_causes": {
+              "max_matches_per_rule": 158,
+              "decode_depth": 3,
+              "max_observations": 1,
+              "decode_failed": 1
+            }
+          },
+          "added_findings": 371,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 100,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 12263.39868,
+          "accepted": 13761.590842,
+          "reference": 55068.740801,
+          "corrected": 16860.076218,
+          "shipping": 13824.475951
+        }
+      },
+      "pos_obfuscation": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 9855,
+            "detected": 454,
+            "incomplete": 384,
+            "gap_causes": {
+              "decode_depth": 268,
+              "decode_failed": 116
+            }
+          },
+          "candidate": {
+            "rows": 9855,
+            "detected": 454,
+            "incomplete": 384,
+            "gap_causes": {
+              "decode_depth": 268,
+              "decode_failed": 116
+            }
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 9855,
+            "detected": 454,
+            "incomplete": 384,
+            "gap_causes": {
+              "decode_depth": 268,
+              "decode_failed": 116
+            }
+          },
+          "candidate": {
+            "rows": 9855,
+            "detected": 699,
+            "incomplete": 384,
+            "gap_causes": {
+              "decode_depth": 268,
+              "decode_failed": 116
+            }
+          },
+          "added_findings": 278,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 245,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 1139.225109,
+          "accepted": 1239.90517,
+          "reference": 2105.544373,
+          "corrected": 1369.875885,
+          "shipping": 1258.688366
+        }
+      },
+      "pos_stratified": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 7281,
+            "detected": 1800,
+            "incomplete": 17,
+            "gap_causes": {
+              "decode_depth": 11,
+              "max_matches_per_rule": 3,
+              "decode_failed": 3
+            }
+          },
+          "candidate": {
+            "rows": 7281,
+            "detected": 1800,
+            "incomplete": 17,
+            "gap_causes": {
+              "decode_depth": 11,
+              "max_matches_per_rule": 3,
+              "decode_failed": 3
+            }
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 7281,
+            "detected": 1800,
+            "incomplete": 17,
+            "gap_causes": {
+              "decode_depth": 11,
+              "max_matches_per_rule": 3,
+              "decode_failed": 3
+            }
+          },
+          "candidate": {
+            "rows": 7281,
+            "detected": 1852,
+            "incomplete": 17,
+            "gap_causes": {
+              "decode_depth": 11,
+              "max_matches_per_rule": 3,
+              "decode_failed": 3
+            }
+          },
+          "added_findings": 93,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 52,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 1810.574869,
+          "accepted": 2079.936608,
+          "reference": 7288.556089,
+          "corrected": 2785.879733,
+          "shipping": 2070.191405
+        }
+      },
+      "repo_prose": {
+        "kind": "hard_negative",
+        "accepted": {
+          "baseline": {
+            "rows": 87,
+            "detected": 32,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 87,
+            "detected": 32,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 87,
+            "detected": 32,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 87,
+            "detected": 34,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 4,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 2,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 493.129119,
+          "accepted": 566.541375,
+          "reference": 2399.08806,
+          "corrected": 784.835335,
+          "shipping": 561.960946
+        }
+      }
+    },
+    "exposed-validation": {
+      "validation_positive": {
+        "kind": "positive",
+        "accepted": {
+          "baseline": {
+            "rows": 300,
+            "detected": 87,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 300,
+            "detected": 87,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 300,
+            "detected": 87,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 300,
+            "detected": 99,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 14,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 12,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 69.221625,
+          "accepted": 73.284825,
+          "reference": 118.211474,
+          "corrected": 92.480277,
+          "shipping": 102.432636
+        }
+      },
+      "validation_benign": {
+        "kind": "negative",
+        "accepted": {
+          "baseline": {
+            "rows": 300,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 300,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 0,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 0,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "reference": {
+          "baseline": {
+            "rows": 300,
+            "detected": 0,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "candidate": {
+            "rows": 300,
+            "detected": 1,
+            "incomplete": 0,
+            "gap_causes": {}
+          },
+          "added_findings": 1,
+          "lost_findings": 0,
+          "added_gap_causes": 0,
+          "lost_gap_causes": 0,
+          "added_detections": 1,
+          "lost_detections": 0,
+          "newly_incomplete": 0,
+          "resolved_incomplete": 0
+        },
+        "full_behavior_changed_rows": 0,
+        "median_slice_ms": {
+          "baseline": 67.866158,
+          "accepted": 91.645067,
+          "reference": 130.939205,
+          "corrected": 82.457789,
+          "shipping": 90.468875
+        }
+      }
+    }
+  },
+  "rules": {
+    "override.disregard_prior": {
+      "disposition": "corrected",
+      "authored_probe_rows": 21416,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 16427,
+        "accepted": 17059,
+        "reference": 17059
+      },
+      "new_reference_findings": 632,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "override.forget_everything": {
+      "disposition": "corrected",
+      "authored_probe_rows": 248,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 96,
+        "accepted": 194,
+        "reference": 194
+      },
+      "new_reference_findings": 98,
+      "affected_variations": [
+        "em_space",
+        "nbsp",
+        "newlines",
+        "repeated_space",
+        "tabs",
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "override.new_identity": {
+      "disposition": "corrected",
+      "authored_probe_rows": 248,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 96,
+        "accepted": 104,
+        "reference": 104
+      },
+      "new_reference_findings": 8,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "override.new_instructions_follow": {
+      "disposition": "corrected",
+      "authored_probe_rows": 1056,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 384,
+        "accepted": 824,
+        "reference": 824
+      },
+      "new_reference_findings": 440,
+      "affected_variations": [
+        "em_space",
+        "nbsp",
+        "newlines",
+        "repeated_space",
+        "tabs",
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "boundary.forged_role_marker": {
+      "disposition": "corrected",
+      "authored_probe_rows": 336,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 220,
+        "accepted": 255,
+        "reference": 255
+      },
+      "new_reference_findings": 35,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "boundary.forged_tool_result": {
+      "disposition": "corrected",
+      "authored_probe_rows": 200,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 84,
+        "accepted": 164,
+        "reference": 164
+      },
+      "new_reference_findings": 80,
+      "affected_variations": [
+        "em_space",
+        "mixed",
+        "nbsp",
+        "newlines",
+        "original",
+        "repeated_space",
+        "sentence",
+        "tabs",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "boundary.delimiter_breakout": {
+      "disposition": "corrected",
+      "authored_probe_rows": 336,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 96,
+        "accepted": 142,
+        "reference": 142
+      },
+      "new_reference_findings": 46,
+      "affected_variations": [
+        "mixed",
+        "original",
+        "sentence",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "solicitation.system_prompt": {
+      "disposition": "corrected",
+      "authored_probe_rows": 3072,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 1198,
+        "accepted": 1320,
+        "reference": 1320
+      },
+      "new_reference_findings": 198,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "solicitation.credentials": {
+      "disposition": "deferred: new benign findings",
+      "authored_probe_rows": 16776,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 7278,
+        "accepted": 7278,
+        "reference": 12024
+      },
+      "new_reference_findings": 5687,
+      "affected_variations": [
+        "em_space",
+        "mixed",
+        "nbsp",
+        "newlines",
+        "original",
+        "punctuation",
+        "repeated_space",
+        "sentence",
+        "tabs",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "solicitation.tool_enumeration": {
+      "disposition": "deferred: new benign findings",
+      "authored_probe_rows": 1744,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 128,
+        "accepted": 128,
+        "reference": 1382
+      },
+      "new_reference_findings": 1259,
+      "affected_variations": [
+        "em_space",
+        "mixed",
+        "nbsp",
+        "original",
+        "punctuation",
+        "repeated_space",
+        "sentence",
+        "tabs",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "boundary.forged_system_directive": {
+      "disposition": "deferred: new benign findings",
+      "authored_probe_rows": 208,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 84,
+        "accepted": 84,
+        "reference": 134
+      },
+      "new_reference_findings": 50,
+      "affected_variations": [
+        "mixed",
+        "original",
+        "sentence",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "agent_directed.addressed_marker": {
+      "disposition": "deferred: new benign findings",
+      "authored_probe_rows": 10440,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 1105,
+        "accepted": 1105,
+        "reference": 7143
+      },
+      "new_reference_findings": 6039,
+      "affected_variations": [
+        "em_space",
+        "mixed",
+        "nbsp",
+        "newlines",
+        "original",
+        "repeated_space",
+        "sentence",
+        "tabs",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "solicitation.actionable_disclosure": {
+      "disposition": "corrected",
+      "authored_probe_rows": 8160,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 6226,
+        "accepted": 6442,
+        "reference": 6442
+      },
+      "new_reference_findings": 254,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "external_action.actionable_directive": {
+      "disposition": "corrected",
+      "authored_probe_rows": 13024,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 10126,
+        "accepted": 10282,
+        "reference": 10282
+      },
+      "new_reference_findings": 156,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "solicitation.actionable_disclosure_introduced": {
+      "disposition": "corrected",
+      "authored_probe_rows": 8472,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 5953,
+        "accepted": 6141,
+        "reference": 6141
+      },
+      "new_reference_findings": 188,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "external_action.actionable_directive_introduced": {
+      "disposition": "corrected",
+      "authored_probe_rows": 13920,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 9912,
+        "accepted": 10110,
+        "reference": 10110
+      },
+      "new_reference_findings": 198,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "privilege.permission_widening": {
+      "disposition": "deferred: new benign findings",
+      "authored_probe_rows": 2904,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 528,
+        "accepted": 528,
+        "reference": 2078
+      },
+      "new_reference_findings": 1558,
+      "affected_variations": [
+        "em_space",
+        "mixed",
+        "nbsp",
+        "original",
+        "punctuation",
+        "repeated_space",
+        "sentence",
+        "tabs",
+        "unicode_case",
+        "upper"
+      ],
+      "affected_carriers": [
+        "base64",
+        "hex",
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    },
+    "external_action.remote_execution": {
+      "disposition": "corrected",
+      "authored_probe_rows": 1408,
+      "probe_rows_matching_intended_rule": {
+        "baseline": 1038,
+        "accepted": 1044,
+        "reference": 1044
+      },
+      "new_reference_findings": 6,
+      "affected_variations": [
+        "unicode_case"
+      ],
+      "affected_carriers": [
+        "html",
+        "json",
+        "markdown_fence",
+        "markdown_quote",
+        "markdown_table",
+        "plain"
+      ]
+    }
+  },
+  "runtime": {
+    "cases": [
+      {
+        "accepted_equals_reference": true,
+        "bytes": 1024,
+        "case": "ordinary_prose_1024",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 143039,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              140684,
+              152714,
+              139499,
+              167121,
+              143039
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 141564,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              132893,
+              173511,
+              137593,
+              145965,
+              141564
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 257171,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              254091,
+              264503,
+              266191,
+              257171,
+              255571
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 1024,
+        "case": "many_literals_1024",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 170982,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              170982,
+              172571,
+              171856,
+              168801,
+              169081
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 155334,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              155334,
+              153076,
+              156852,
+              152940,
+              166496
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 271289,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              271289,
+              270307,
+              301912,
+              276255,
+              267881
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 16384,
+        "case": "ordinary_prose_16384",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 2007524,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              1977382,
+              2007524,
+              2133061,
+              2040773,
+              1971398
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 1889520,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              1899061,
+              1889520,
+              1888959,
+              1869746,
+              1909408
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 3658231,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              3730438,
+              3593108,
+              3644565,
+              3779592,
+              3658231
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 16384,
+        "case": "many_literals_16384",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 2449934,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              2385828,
+              2554381,
+              2397671,
+              2454299,
+              2449934
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 2204087,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              2205946,
+              2235695,
+              2156117,
+              2154076,
+              2204087
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 4094835,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              4094835,
+              4696090,
+              4094188,
+              3962223,
+              4274458
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 131072,
+        "case": "ordinary_prose_131072",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 16772514,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              16482232,
+              17241553,
+              17159812,
+              16772514,
+              16724511
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 15862897,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              15578540,
+              15744150,
+              16271252,
+              15862897,
+              15995718
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 30213581,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              30091104,
+              32009369,
+              30819606,
+              30080418,
+              30213581
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 131072,
+        "case": "many_literals_131072",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 19876499,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              19709905,
+              19906188,
+              19837326,
+              20065046,
+              19876499
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 18534505,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              17619357,
+              18057644,
+              19575439,
+              19326996,
+              18534505
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 32697223,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              32697223,
+              32026728,
+              32517980,
+              32767646,
+              32836740
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 240,
+        "case": "tool_whitespace_16",
+        "configs": {
+          "accepted": {
+            "findings": 16,
+            "gaps": [],
+            "median_ns_per_scan": 75963,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              75695,
+              75963,
+              74387,
+              87472,
+              76288
+            ],
+            "score": 80,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 43926,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              43959,
+              43926,
+              41456,
+              43366,
+              44257
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 16,
+            "gaps": [],
+            "median_ns_per_scan": 97076,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              97076,
+              96632,
+              97566,
+              110152,
+              94928
+            ],
+            "score": 80,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 412,
+        "case": "off_frame_unicode_roles_16",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 73778,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              79006,
+              72284,
+              73345,
+              74585,
+              73778
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 65731,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              79481,
+              67745,
+              64283,
+              64335,
+              65731
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 445623,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              472358,
+              445623,
+              440486,
+              452144,
+              439599
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 255,
+        "case": "tool_whitespace_17",
+        "configs": {
+          "accepted": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 78067,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              79338,
+              76266,
+              78067,
+              80064,
+              76757
+            ],
+            "score": 80,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 43829,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              47186,
+              45062,
+              43126,
+              43495,
+              43829
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 100341,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              101006,
+              98962,
+              99184,
+              100341,
+              101215
+            ],
+            "score": 80,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 437,
+        "case": "off_frame_unicode_roles_17",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 87094,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              77136,
+              76369,
+              104036,
+              87094,
+              103015
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 69967,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              66082,
+              70764,
+              69967,
+              73560,
+              67233
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 509229,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              476284,
+              534562,
+              509229,
+              564702,
+              498219
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 1920,
+        "case": "tool_whitespace_128",
+        "configs": {
+          "accepted": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 273319,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              283083,
+              330406,
+              273319,
+              270557,
+              272864
+            ],
+            "score": 80,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 230598,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              230598,
+              247560,
+              226069,
+              227321,
+              233593
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 411178,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              398711,
+              439848,
+              404568,
+              417804,
+              411178
+            ],
+            "score": 80,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 3212,
+        "case": "off_frame_unicode_roles_128",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 467778,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              437015,
+              441390,
+              467778,
+              502951,
+              477060
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 405069,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              440105,
+              456897,
+              387988,
+              397333,
+              405069
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 4655047,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              4655047,
+              4499380,
+              4629881,
+              4666885,
+              4749233
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 61440,
+        "case": "tool_whitespace_4096",
+        "configs": {
+          "accepted": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 7494102,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              8285269,
+              7578203,
+              7463589,
+              7475533,
+              7494102
+            ],
+            "score": 80,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 7172839,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              7096249,
+              7177376,
+              7172839,
+              7073973,
+              7392187
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 16,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_tool_result` saturated"
+              }
+            ],
+            "median_ns_per_scan": 11344033,
+            "outcome": "risk_found",
+            "samples_ns_per_scan": [
+              11291878,
+              11494320,
+              11250358,
+              11344033,
+              11433792
+            ],
+            "score": 80,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 102412,
+        "case": "off_frame_unicode_roles_4096",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 13182516,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              13182516,
+              13206075,
+              13062116,
+              13490372,
+              13152214
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [],
+            "median_ns_per_scan": 12449010,
+            "outcome": "clean",
+            "samples_ns_per_scan": [
+              12848339,
+              12449010,
+              12442674,
+              12194342,
+              12502394
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "max_matches_per_rule",
+                "configured": 16,
+                "detail": "rule `boundary.forged_role_marker` saturated"
+              }
+            ],
+            "median_ns_per_scan": 147396087,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              148519381,
+              146063197,
+              150973021,
+              147396087,
+              146597093
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      },
+      {
+        "accepted_equals_reference": true,
+        "bytes": 1048577,
+        "case": "input_over_limit",
+        "configs": {
+          "accepted": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "input_size",
+                "configured": 1048576,
+                "detail": "input is 1048577 bytes"
+              }
+            ],
+            "median_ns_per_scan": 520,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              545,
+              563,
+              520,
+              514,
+              515
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "baseline": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "input_size",
+                "configured": 1048576,
+                "detail": "input is 1048577 bytes"
+              }
+            ],
+            "median_ns_per_scan": 528,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              626,
+              558,
+              517,
+              528,
+              515
+            ],
+            "score": 0,
+            "suppressed": 0
+          },
+          "reference": {
+            "findings": 0,
+            "gaps": [
+              {
+                "cause": "input_size",
+                "configured": 1048576,
+                "detail": "input is 1048577 bytes"
+              }
+            ],
+            "median_ns_per_scan": 564,
+            "outcome": "inconclusive",
+            "samples_ns_per_scan": [
+              572,
+              564,
+              589,
+              516,
+              529
+            ],
+            "score": 0,
+            "suppressed": 0
+          }
+        },
+        "iterations_per_sample": 20
+      }
+    ],
+    "method": "Warmed supplied engines; five rotating-order samples per case; construction separate; single process.",
+    "policy": {
+      "classes": [
+        "override",
+        "concealment",
+        "confusable",
+        "boundary",
+        "solicitation",
+        "agent_directed",
+        "external_action",
+        "privilege"
+      ],
+      "max_decode_depth": 3,
+      "max_excerpt_bytes": 256,
+      "max_input_bytes": 1048576,
+      "max_matches_per_rule": 16,
+      "max_observations": 4096,
+      "max_reasons": 64,
+      "ml_impact": 75,
+      "profile": "enforcement",
+      "provenance": "unspecified",
+      "source": "unspecified",
+      "suppress_in_quotes": false,
+      "threshold": "high"
+    },
+    "preparation_ns": [
+      25515722,
+      22486830,
+      21927415
+    ],
+    "source_sha256": [
+      "f2d63551b21cd284b8ad8ce2f73d796083d248b3dbf473d15ee327e6e50e39af",
+      "409c86adcd402a850eca809012bb2c28d2205adfde35fa9415086b1add0fe84e",
+      "811b91c0e928532ce26a0c27ac6e25f20a7582562f85519eb650fdc4228d1017"
+    ]
+  },
+  "corpus_runtime": {
+    "syntax": {
+      "baseline": {
+        "total_scan_publish_ms": [
+          3006.178762
+        ],
+        "median_total_ms": 3006.178762,
+        "preparation_ms": [
+          28.960903
+        ]
+      },
+      "accepted": {
+        "total_scan_publish_ms": [
+          3196.738943
+        ],
+        "median_total_ms": 3196.738943,
+        "preparation_ms": [
+          23.585003
+        ]
+      },
+      "reference": {
+        "total_scan_publish_ms": [
+          5996.990686
+        ],
+        "median_total_ms": 5996.990686,
+        "preparation_ms": [
+          23.667455
+        ]
+      },
+      "corrected": {
+        "total_scan_publish_ms": [
+          3371.343535
+        ],
+        "median_total_ms": 3371.343535,
+        "preparation_ms": [
+          24.033606
+        ]
+      },
+      "shipping": {
+        "total_scan_publish_ms": [
+          3158.105201
+        ],
+        "median_total_ms": 3158.105201,
+        "preparation_ms": [
+          3.290727
+        ]
+      }
+    },
+    "development": {
+      "baseline": {
+        "total_scan_publish_ms": [
+          18815.582784,
+          18639.629844,
+          19126.598452
+        ],
+        "median_total_ms": 18815.582784,
+        "preparation_ms": [
+          25.958087,
+          22.894396,
+          23.197973
+        ]
+      },
+      "accepted": {
+        "total_scan_publish_ms": [
+          21249.971662,
+          21232.681335,
+          20883.350219
+        ],
+        "median_total_ms": 21232.681335,
+        "preparation_ms": [
+          23.339418,
+          24.640737,
+          23.638137
+        ]
+      },
+      "reference": {
+        "total_scan_publish_ms": [
+          77181.491588,
+          78527.781847,
+          76002.555276
+        ],
+        "median_total_ms": 77181.491588,
+        "preparation_ms": [
+          23.819345,
+          23.330527,
+          24.830554
+        ]
+      },
+      "corrected": {
+        "total_scan_publish_ms": [
+          25806.937447
+        ],
+        "median_total_ms": 25806.937447,
+        "preparation_ms": [
+          23.667155
+        ]
+      },
+      "shipping": {
+        "total_scan_publish_ms": [
+          21138.416826
+        ],
+        "median_total_ms": 21138.416826,
+        "preparation_ms": [
+          2.787341
+        ]
+      }
+    },
+    "exposed-validation": {
+      "baseline": {
+        "total_scan_publish_ms": [
+          137.087783
+        ],
+        "median_total_ms": 137.087783,
+        "preparation_ms": [
+          26.188686
+        ]
+      },
+      "accepted": {
+        "total_scan_publish_ms": [
+          164.929892
+        ],
+        "median_total_ms": 164.929892,
+        "preparation_ms": [
+          36.899149
+        ]
+      },
+      "reference": {
+        "total_scan_publish_ms": [
+          249.150679
+        ],
+        "median_total_ms": 249.150679,
+        "preparation_ms": [
+          43.102047
+        ]
+      },
+      "corrected": {
+        "total_scan_publish_ms": [
+          174.938066
+        ],
+        "median_total_ms": 174.938066,
+        "preparation_ms": [
+          41.850063
+        ]
+      },
+      "shipping": {
+        "total_scan_publish_ms": [
+          192.901511
+        ],
+        "median_total_ms": 192.901511,
+        "preparation_ms": [
+          9.253182
+        ]
+      }
+    }
+  },
+  "gap_investigations": [
+    {
+      "case": "off_frame_unicode_roles_16",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_role_marker` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "tool_whitespace_17",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_tool_result` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "off_frame_unicode_roles_17",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_role_marker` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "tool_whitespace_128",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_tool_result` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "off_frame_unicode_roles_128",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_role_marker` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "tool_whitespace_4096",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_tool_result` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    },
+    {
+      "case": "off_frame_unicode_roles_4096",
+      "before": [],
+      "after": [
+        {
+          "cause": "max_matches_per_rule",
+          "configured": 16,
+          "detail": "rule `boundary.forged_role_marker` saturated"
+        }
+      ],
+      "explanation": "The corrected gate admits an existing regex. More than 16 raw occurrences saturate the unchanged per-rule cap before framing. Off-frame occurrences still consume the cap; no limit was raised."
+    }
+  ],
+  "policy": {
+    "classes": [
+      "override",
+      "concealment",
+      "confusable",
+      "boundary",
+      "solicitation",
+      "agent_directed",
+      "external_action",
+      "privilege"
+    ],
+    "max_decode_depth": 3,
+    "max_excerpt_bytes": 256,
+    "max_input_bytes": 1048576,
+    "max_matches_per_rule": 16,
+    "max_observations": 4096,
+    "max_reasons": 64,
+    "ml_impact": 75,
+    "profile": "enforcement",
+    "provenance": "unspecified",
+    "source": "unspecified",
+    "suppress_in_quotes": false,
+    "threshold": "high"
+  },
+  "row_deltas_sha256": "fdc15975e032b645328425eac9266ed8cb4ddf548b2dd9d526359442cbc1411f"
+}

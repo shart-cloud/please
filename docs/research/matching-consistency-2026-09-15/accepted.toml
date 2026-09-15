@@ -11,12 +11,6 @@
 #     one automaton, and a rule's `pattern` is compiled only if one of its literals is present. Text
 #     matching no literal costs a single linear pass and compiles nothing — 0.1 ms instead of 44 ms.
 #
-# Some gates use mandatory fragments (e.g. `ystem`/`yſtem`) to cover Unicode regex case variants
-# without enumerating every spelling. Keep the fragments specific: shortening `send` to `end` costs
-# extra regex work on prose. The September 15 cost audit reduced 126 distinct literals to 96,
-# retaining matching coverage and restoring the dependency's faster automatic prefilter layout.
-# See docs/research/prefilter-cost-2026-09-15.md before expanding the shared literal set.
-#
 # Patterns are matched by a finite-automaton engine. Look-around and backreferences are NOT expressible:
 # a pattern using them fails to compile and therefore fails to load. That absence is what makes every
 # accepted rule linear-time, so the guarantee is structural rather than a review habit.
@@ -105,7 +99,17 @@ critical = 90
 id = "override.disregard_prior"
 class = "override"
 severity = 85
-literals = ["bypa", "disregard", "diſregard", "forget", "ignore", "override"]
+literals = [
+    "bypass",
+    "bypasſ",
+    "bypaſs",
+    "bypaſſ",
+    "disregard",
+    "diſregard",
+    "forget",
+    "ignore",
+    "override",
+]
 pattern = '(?i)\b(ignore|disregard|forget|override|bypass)\b(?:[^.\n]|\.[^\s\n]){0,40}\b(previous|prior|above|earlier|all|any|your)\b(?:[^.\n]|\.[^\s\n]){0,25}\b(instruction|prompt|rule|direction|guideline|constraint|context)s?\b'
 description = "Instruction directed at a reading agent to disregard its prior instructions."
 
@@ -113,7 +117,12 @@ description = "Instruction directed at a reading agent to disregard its prior in
 id = "override.forget_everything"
 class = "override"
 severity = 80
-literals = ["everything"]
+literals = [
+    "disregard",
+    "diſregard",
+    "forget",
+    "ignore",
+]
 pattern = '(?i)\b(forget|disregard|ignore)\s+everything\b'
 description = "Instruction to discard all prior context."
 
@@ -121,7 +130,12 @@ description = "Instruction to discard all prior context."
 id = "override.new_identity"
 class = "override"
 severity = 75
-literals = ["act a", "you are no longer", "you are now"]
+literals = [
+    "act as if you",
+    "act aſ if you",
+    "you are no longer",
+    "you are now",
+]
 pattern = '(?i)\byou are (now|no longer)\b|\bact as if you\b'
 description = "Attempt to reassign the agent's role or identity."
 
@@ -129,7 +143,12 @@ description = "Attempt to reassign the agent's role or identity."
 id = "override.new_instructions_follow"
 class = "override"
 severity = 70
-literals = ["instruction", "inſtruction"]
+literals = [
+    "new",
+    "revised",
+    "reviſed",
+    "updated",
+]
 pattern = '(?i)\b(new|updated|revised)\s+instructions?\b\s*[:.]'
 description = "Text announcing replacement instructions."
 
@@ -144,9 +163,22 @@ id = "boundary.forged_role_marker"
 class = "boundary"
 severity = 80
 anchor = "frame"
-# Gate on case-covered role fragments: the regex decides complete words, delimiters and whitespace.
+# Gate on role words: delimiter and whitespace variants are decided by the regex.
 # Punctuation-specific literals silently excluded valid forms such as `[ assistant ]`.
-literals = ["istant", "iſtant", "ystem", "yſtem"]
+literals = [
+    "assistant",
+    "assiſtant",
+    "asſistant",
+    "asſiſtant",
+    "aſsistant",
+    "aſsiſtant",
+    "aſſistant",
+    "aſſiſtant",
+    "system",
+    "syſtem",
+    "ſystem",
+    "ſyſtem",
+]
 # Two changes from the 001 pattern, both closing entries in `docs/limits.md`.
 #
 # The `^[\s>*+\-•\d.)\]]{0,8}` prefix is gone, replaced by `anchor = "frame"` above. It admitted a
@@ -169,7 +201,17 @@ description = "Forged conversational role marker, impersonating a higher-authori
 id = "boundary.forged_tool_result"
 class = "boundary"
 severity = 80
-literals = ["function_result", "function_reſult", "tool_output", "tool_result", "tool_reſult"]
+literals = [
+    "</tool_result",
+    "</tool_reſult",
+    "<tool_result",
+    "<tool_reſult",
+    "function_results",
+    "function_resultſ",
+    "function_reſults",
+    "function_reſultſ",
+    "tool_output",
+]
 pattern = '(?i)(</?tool_result|tool_output\s*:|function_results)'
 description = "Fabricated tool-result framing, so data is read as a completed action."
 
@@ -177,7 +219,16 @@ description = "Fabricated tool-result framing, so data is read as a completed ac
 id = "boundary.delimiter_breakout"
 class = "boundary"
 severity = 70
-literals = ["begin", "end of"]
+literals = [
+    "begin system",
+    "begin syſtem",
+    "begin ſystem",
+    "begin ſyſtem",
+    "end of context",
+    "end of document",
+    "end of user input",
+    "end of uſer input",
+]
 pattern = '(?i)-{2,}\s*(end of (document|user input|context)|begin system)'
 description = "Delimiter breakout attempting to close the data region and open an instruction region."
 
@@ -190,7 +241,18 @@ description = "Delimiter breakout attempting to close the data region and open a
 id = "solicitation.system_prompt"
 class = "solicitation"
 severity = 70
-literals = ["initial prompt", "tem prompt", "your instruction", "your inſtruction", "your prompt"]
+literals = [
+    "initial prompt",
+    "system prompt",
+    "syſtem prompt",
+    "your instructions",
+    "your instructionſ",
+    "your inſtructions",
+    "your inſtructionſ",
+    "your prompt",
+    "ſystem prompt",
+    "ſyſtem prompt",
+]
 pattern = '(?i)\b(reveal|repeat|print|show|output|display|dump|verbatim|disclose)\b(?:[^.\n]|\.[^\s\n]){0,30}\b(system prompt|your instructions|initial prompt|your prompt)\b'
 description = "Request for the agent's own instructions or configuration."
 
@@ -482,6 +544,15 @@ description = "Widens the agent's own authority — auto-approval, a permission 
 id = "external_action.remote_execution"
 class = "external_action"
 severity = 85
-literals = ["curl", "iex", "invoke-webreque", "invoKe-webreque", "iwr", "wget"]
+literals = [
+    "curl",
+    "iex",
+    "invoke-webrequest",
+    "invoke-webrequeſt",
+    "invoKe-webrequest",
+    "invoKe-webrequeſt",
+    "iwr",
+    "wget",
+]
 pattern = '''(?i)(?:\b(?:curl|wget)\b[^\n|]{0,120}\|\s*(?:sudo\s+)?(?:ba|z|k|da)?sh\b|\b(?:ba|z|k|da)?sh\s+<\(\s*(?:curl|wget)\b|\b(?:iwr|invoke-webrequest)\b[^\n|]{0,120}\|\s*(?:iex|invoke-expression)\b)'''
 description = "Instruction to download and execute a remote script — fetch-and-execute in one step."

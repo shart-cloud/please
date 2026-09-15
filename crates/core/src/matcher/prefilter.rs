@@ -149,6 +149,19 @@ mod tests {
     use super::*;
     use crate::finalize::types::DetectionClass;
 
+    #[test]
+    fn builtin_prefilter_keeps_the_measured_fast_automatic_layout() {
+        // The 2026-09-15 corrections crossed the dependency's automatic layout
+        // threshold (92 -> 126 distinct literals), adding ~12.8% runtime.
+        // New vocabulary must explicitly revisit that cost, not silently change it.
+        let engine = crate::Engine::builtin().unwrap();
+        let prefilter = Prefilter::build(engine.ruleset().all_rules());
+        assert_eq!(
+            prefilter.matcher.unwrap().kind(),
+            aho_corasick::AhoCorasickKind::DFA
+        );
+    }
+
     fn rule(id: &str, literals: &[&str]) -> Rule {
         Rule {
             id: id.to_string(),

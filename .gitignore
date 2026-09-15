@@ -2,6 +2,10 @@
 /target/
 /crates/eval/target/
 
+# Local Python bytecode from evaluation scripts.
+__pycache__/
+*.py[cod]
+
 # Cargo.lock IS committed: this workspace ships a binary (`plz`), so a reproducible
 # dependency set is part of the deliverable. crates/eval keeps its own lockfile,
 # which is committed for the same reason.

@@ -1,0 +1,197 @@
+{
+  "dataset": "hf://datasets/Necent/llm-jailbreak-prompt-injection-dataset@4edfb5aeaafe58c9bf489a478a42188f239d7c1e/**/*.parquet",
+  "floor": "high",
+  "gate": {
+    "integrity_passed": true,
+    "max_fp_permille": 10,
+    "slices": [
+      {
+        "baseline_permille": null,
+        "criterion_met": true,
+        "gated": {
+          "hits": 0,
+          "n": 3000,
+          "permille": 0
+        },
+        "permille": 0,
+        "regressed": false,
+        "slice": "neg_orbench"
+      }
+    ],
+    "unpinned": [
+      "neg_orbench"
+    ]
+  },
+  "integrity": {
+    "expected_slices": 3,
+    "issues": [],
+    "status": "complete",
+    "verified_slices": 3
+  },
+  "known_gaps": [
+    "**`attack_technique` is unlabelled for most positives.** 0 of 29017 positive rows in this run carry a technique label. Any per-technique table above describes that subset and must not be extrapolated to the rest, which is not a sample of it (`corpus-analysis.md` Finding 3).",
+    "**154 distinct rows did not analyse completely** and carry coverage gaps. Existing detections remain recorded. Causes are listed per slice and may overlap; rows without a detection must not be treated as fully analysed clean results.",
+    "**The public corpus cannot measure the product's target vector.** Its rows carry no delivery context, and its agentic subset \u2014 InjecAgent plus ToolEmu \u2014 is 0.45% of adversarial rows. Detection rates for `skill_md`, `mcp_tool_description`, `repo_config` and `manifest` come only from the hand-written fixtures and the generated corpus, whose per-context tables are above."
+  ],
+  "ruleset": "builtin; mode=product",
+  "ruleset_digest": "3b946803b23151d5",
+  "run": "hf-product-high-20260914-01",
+  "slices": [
+    {
+      "by_carrier": {},
+      "by_context": {},
+      "by_difficulty": {},
+      "by_language": {
+        "en": {
+          "hits": 442,
+          "n": 1054,
+          "permille": 419
+        }
+      },
+      "by_payload": {},
+      "by_position": {},
+      "by_source": {
+        "InjecAgent": {
+          "hits": 442,
+          "n": 1054,
+          "permille": 419
+        }
+      },
+      "by_technique": {},
+      "decode_only_hits": 0,
+      "direct_hits": 442,
+      "incomplete": {},
+      "incomplete_rows": 0,
+      "kind": "positive",
+      "label": "InjecAgent \u2014 agentic tool-output injection",
+      "rows_with_suppression": 0,
+      "slice": "pos_injecagent",
+      "span": null,
+      "span_by_carrier": {},
+      "span_by_position": {},
+      "suppression_by_position": {},
+      "total": {
+        "hits": 442,
+        "n": 1054,
+        "permille": 419
+      }
+    },
+    {
+      "by_carrier": {},
+      "by_context": {},
+      "by_difficulty": {},
+      "by_language": {
+        "en": {
+          "hits": 11263,
+          "n": 27963,
+          "permille": 403
+        }
+      },
+      "by_payload": {},
+      "by_position": {},
+      "by_source": {
+        "LLMail-Inject": {
+          "hits": 11263,
+          "n": 27963,
+          "permille": 403
+        }
+      },
+      "by_technique": {},
+      "decode_only_hits": 69,
+      "direct_hits": 11194,
+      "incomplete": {
+        "decode_depth": 3,
+        "decode_failed": 1,
+        "max_matches_per_rule": 151,
+        "max_observations": 1
+      },
+      "incomplete_rows": 154,
+      "kind": "positive",
+      "label": "LLMail-Inject \u2014 adaptive email-borne indirect attacks",
+      "rows_with_suppression": 0,
+      "slice": "pos_llmail",
+      "span": null,
+      "span_by_carrier": {},
+      "span_by_position": {},
+      "suppression_by_position": {},
+      "total": {
+        "hits": 11263,
+        "n": 27963,
+        "permille": 403
+      }
+    },
+    {
+      "by_carrier": {},
+      "by_context": {},
+      "by_difficulty": {},
+      "by_language": {
+        "en": {
+          "hits": 0,
+          "n": 3000,
+          "permille": 0
+        }
+      },
+      "by_payload": {},
+      "by_position": {},
+      "by_source": {
+        "OR-Bench": {
+          "hits": 0,
+          "n": 3000,
+          "permille": 0
+        }
+      },
+      "by_technique": {},
+      "decode_only_hits": 0,
+      "direct_hits": 0,
+      "incomplete": {},
+      "incomplete_rows": 0,
+      "kind": "hard_negative",
+      "label": "OR-Bench \u2014 purpose-built over-refusal control set",
+      "rows_with_suppression": 0,
+      "slice": "neg_orbench",
+      "span": null,
+      "span_by_carrier": {},
+      "span_by_position": {},
+      "suppression_by_position": {},
+      "total": {
+        "hits": 0,
+        "n": 3000,
+        "permille": 0
+      }
+    }
+  ],
+  "measurement_record": {
+    "run": "hf-product-high-20260914-01",
+    "recorded_at_utc": "2026-09-15T00:20:09.354342+00:00",
+    "base_commit": "90f56768e40de330bb0dbb5e598984d650de1260",
+    "source_note": "Benchmark scanner and rules match base_commit. Uncommitted changes implement reporting; source.patch and new presentation sources preserve the report implementation.",
+    "dataset": "hf://datasets/Necent/llm-jailbreak-prompt-injection-dataset@4edfb5aeaafe58c9bf489a478a42188f239d7c1e/**/*.parquet",
+    "input_verification": "All three caches verified against committed input manifests before scanning and again after recording.",
+    "input_files": {
+      "/home/jg/git/bee-swarm/crates/eval/manifests/pos_injecagent.jsonl": "9d14feb2f71909f74e60166bbc8a5170a3a2d2d5d47e3db51fcf1522d33270da",
+      "/home/jg/.cache/please-eval/slices/pos_injecagent.jsonl": "ef9980e52ba3ff861739ce9ffe4a72dc3b3a5ab59c05be93eafc113fc1210d08",
+      "/home/jg/git/bee-swarm/crates/eval/manifests/pos_llmail.jsonl": "f2c5a0ed82b274e1ae09f34bd55c5f04eab9ed1258c0b6a8fe848af9d84842b4",
+      "/home/jg/.cache/please-eval/slices/pos_llmail.jsonl": "71381d7d0f2318af75c9d990f0e9ecd1590e9c75dd4001e89f16ce9da138a8ed",
+      "/home/jg/git/bee-swarm/crates/eval/manifests/neg_orbench.jsonl": "b3acdef269c2bf89e0c1378c18c3c2da6926fa33adf6eb57264cef9096d95b47",
+      "/home/jg/.cache/please-eval/slices/neg_orbench.jsonl": "4105ab8982b3e1abf2fee4f68e69ed669c6fdd5e047e5c99e369387800c40142"
+    },
+    "default_gate_exit_code": 2,
+    "coverage_note": "LLMail has 154 distinct incomplete rows and 156 cause entries, including 25 rows that still recorded detections.",
+    "run_manifest_sha256": "3fd08954cf592143fdbb8f8446ef01f5cf656808b8e57090336739405ad62d61",
+    "result_files": {
+      "neg_orbench.jsonl": "2f44cbe629d68067bfac6c73a02bf658a43a29e249c3bbd38afe056cb89048cf",
+      "pos_injecagent.jsonl": "7107650d84e4d6c123e5ff57c3b9822543b03125d0ee949d097453b3688b0944",
+      "pos_llmail.jsonl": "e5de7a1b3eed57c1bb0dbba4055c9635c4ecd2464c889452726ef782dd02ecbd"
+    },
+    "source_patch_sha256": "fcd7e84e5c8f8ff47a45b9bbd425f12fe1cf6c32d56348b03ce570200f1bd94b",
+    "report_files": {
+      "report.md": "4270ddef4b9ffe9e24664e989bddafd08deaa492ce0417a7558f42a5c8e6e3c7",
+      "report.json": "31cb8725463b42c73b8434ccb8ede181a4d35cafd97366a318dd7f50ee353d6c",
+      "report.html": "90a93cff0d4fe0c27efdd165fc0710f0729a075196f50b00bd64dd9380f8318e"
+    },
+    "new_sources": {
+      "presentation.rs": "e43d317243fd9bde34a343d0ce445837bda7e0774cab7d3fb01d0a55d1d8a7e5",
+      "corpus_presentation.rs": "6d32f58f8df44c3dc0925bdebe2122231b0e28a847fa42ca1a918e8cf8e70709"
+    }
+  }
+}

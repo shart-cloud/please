@@ -128,3 +128,44 @@ someone's intuition — is exactly what a reviewer needs in order to trust or ch
 The 200-example hard-negative set (T043) deserves specific attention here. Positives are easy to
 collect; the negatives that keep a firewall switched on are the hard part, and whoever assembles them
 is making judgement calls about what "benign" means.
+
+## Benchmark presentation (2026-09-14)
+
+Codex implemented the evaluator's shared terminal/HTML results presentation, Ratatui saved-run browser,
+CLI integration, documentation, and presentation tests at Jared Gore's request. This adds presentation
+of existing verified metrics; it does not change detection rules or benchmark labels.
+
+Codex also connected corpus evaluations to HTML/TUI presentation and recorded the September 14
+InjecAgent, LLMail-Inject, and OR-Bench product-mode measurement at Jared Gore's request.
+
+## Detection improvement experiments (2026-09-14)
+
+Codex authored the named-data email transmission rules, their positive/benign/property tests,
+the evaluator-only frozen-input runner and reproduction scripts, and the
+[measured experiment record](research/detection-improvement-2026-09-14.md) at Jared Gore's request.
+Public corpus labels and bytes were preserved; generated test cases are first-party engineering
+fixtures. The record distinguishes rejected experiments, exposed development data, and final
+within-source validation. Existing uncommitted presentation work was preserved.
+
+## Detection review response (2026-09-14)
+
+At the user's review request, Codex withdrew the two email rules from built-in defaults,
+preserved their historical evidence, and authored the
+[review response](research/detection-review-response-2026-09-14.md) and separate
+[role-marker follow-up](research/role-marker-prefilter-follow-up-2026-09-14.md).
+The ten supplied controls retain reviewer-authored labels; the reviewer's identity
+and any independent label review are unspecified. Codex authored and self-reviewed
+the new paired task scenarios; no independent review of those labels is claimed.
+They are exposed development checks, not an unseen-family effectiveness estimate.
+
+## Matching consistency and prefilter cost (2026-09-15)
+
+Codex authored the literal-admission audit, generated syntax controls, five-rule paired checks,
+performance attribution, and freeze-first within-source validation at the user's request.
+The [matching audit](research/matching-consistency-2026-09-15.md) and
+[performance follow-up](research/prefilter-cost-2026-09-15.md) retain their separate detector identities,
+authorship limits, rejected candidates, and exposure records. The current literal compaction preserves
+the accepted matching coverage. No independent label review is claimed.
+
+On resumption, Codex verified all 51 retained native runs, restored the performance report's missing
+JSON/HTML and rule snapshots, connected the Python report regressions to CI, and updated the handoff.

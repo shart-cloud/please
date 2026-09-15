@@ -1,0 +1,43 @@
+# Historical rejected experiment only. These transmission signals do not establish injection.
+# High severity and default applicability were rejected in the 2026-09-14 review.
+[ruleset]
+name = "please.experiment.withdrawn-email"
+version = "0.1.0"
+
+# Score → risk band boundaries.
+#
+# THESE VALUES ARE PROVISIONAL AND UNCALIBRATED.
+#
+# They are chosen, not derived. The default threshold is `high`, so every block/allow decision a caller
+# makes rests on the number below — and it will move once the evaluation harness measures per-source
+# metrics against a real corpus. Fixture-era values are recorded alongside the metrics they produced so a
+# recalibration reads as a visible diff rather than a number that quietly changed meaning.
+#
+# See docs/limits.md. Do not cite a false-positive rate measured at these bands as though the bands were
+# calibrated.
+[bands]
+low = 20
+medium = 45
+high = 70
+critical = 90
+
+# Email as a transmission verb needs an explicit destination: the noun in
+# "Email account settings" must not become an actionable disclosure. Require a
+# named data object; resolving bare pronouns would need task context. Keep the
+# structural/lexical split used above and the same bounded sentence gap.
+[[rule]]
+id = "solicitation.email_transmission"
+class = "solicitation"
+severity = 75
+anchor = "frame"
+literals = ["email"]
+pattern = '(?i)email\s+(?:(?:the|this|that|these|those|my|your|our)\s+)?(?:[a-z0-9_-]+\s+){0,3}(?:files?|data|information|details|records?|documents?|attachments?|archives?|logs?|results?|credentials?|passwords?|tokens?)\b(?:[^.\n]|\.[^\s\n]){0,80}\bto\s+[\x27"]?[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+description = "Directs the reader to transmit explicitly named data by email to an explicit external address."
+
+[[rule]]
+id = "solicitation.email_transmission_introduced"
+class = "solicitation"
+severity = 75
+literals = ["email"]
+pattern = '(?i)\b(?:please\s+|and\s+(?:then\s+)?|then\s+|you\s+(?:must|should|need\s+to|have\s+to|are\s+required\s+to)\s+)email\s+(?:(?:the|this|that|these|those|my|your|our)\s+)?(?:[a-z0-9_-]+\s+){0,3}(?:files?|data|information|details|records?|documents?|attachments?|archives?|logs?|results?|credentials?|passwords?|tokens?)\b(?:[^.\n]|\.[^\s\n]){0,80}\bto\s+[\x27"]?[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'
+description = "Directs the reader to transmit explicitly named data by email to an explicit external address, introduced by a directive word."

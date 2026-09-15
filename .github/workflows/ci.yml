@@ -111,6 +111,7 @@ jobs:
       - run: cargo test --manifest-path crates/eval/Cargo.toml
       - run: cargo test --manifest-path crates/eval/Cargo.toml --features shipping-judge,shipping-ml --test product --test boundary
       - run: python3 -B crates/eval/scripts/test_prepare_dataset_holdout.py
+      - run: python3 -B -m unittest discover -s crates/eval/scripts/detection_experiment -p 'test_*.py'
       # `corpus/generated.jsonl` is a committed derived artifact, which is only safe if regenerating it
       # is byte-identical. This is that assertion: a diff means an input changed without the corpus being
       # regenerated, or the generator stopped being deterministic. Either way a human looks.
