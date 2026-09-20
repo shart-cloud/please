@@ -1,0 +1,22 @@
+{
+  "schema_version": "please-bench-experiment/v1",
+  "experiment_id": "plz-jev-contextual-pilot-v1",
+  "version": "1",
+  "pack_path": "../corpus/bench/contextual-pilot/pack.json",
+  "system_paths": [
+    "jev.system.json"
+  ],
+  "exposure_paths": [],
+  "repetitions": 1,
+  "execution_mode": "network_allowed",
+  "limits": {
+    "max_input_bytes": 16384,
+    "max_request_bytes": 131072,
+    "max_stdout_bytes": 1048576,
+    "max_stderr_bytes": 65536,
+    "startup_timeout_ms": 5000,
+    "case_timeout_ms": 30000,
+    "max_restarts": 0,
+    "max_in_flight": 1
+  }
+}

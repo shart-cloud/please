@@ -37,12 +37,18 @@ path = "src/main.rs"
 name = "please-eval-bench-fixture"
 path = "src/bin/please-eval-bench-fixture.rs"
 
+[[bin]]
+name = "please-eval-gliner2"
+path = "src/bin/please-eval-gliner2.rs"
+required-features = ["ml"]
+
 [dependencies]
 # Presentation stays inside the excluded evaluator.
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 crossterm = "0.29"
 please-scan = { path = "../scan" }
 please-ml = { path = "../ml", optional = true }
+please-judge = { path = "../judge", optional = true }
 # The engine under measurement, by path. An instrument that measured a *published* version of the
 # thing would report on a different artifact than the one in the tree, which is the whole point of
 # having it here.
@@ -90,8 +96,10 @@ candle-nn = { version = "0.11", optional = true }
 candle-transformers = { version = "0.11", optional = true }
 # Match candle-transformers' tokenizer line so this experiment does not resolve two copies.
 tokenizers = { version = "0.22.2", default-features = false, features = ["onig"], optional = true }
+regex = { version = "1", optional = true }
 
 [features]
+jev = ["dep:please-judge"]
 boundary = ["dep:please-ml"]
 shipping-ml = ["boundary", "please-scan/ml-candle"]
 shipping-judge = ["please-scan/judge"]
@@ -101,6 +109,7 @@ ml = [
     "dep:candle-nn",
     "dep:candle-transformers",
     "dep:tokenizers",
+    "dep:regex",
 ]
 
 # NB: no HTTP client and no parquet reader. Corpus access shells out to the `hf` CLI, which is the

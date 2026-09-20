@@ -1,0 +1,2942 @@
+{
+  "parity": {
+    "cases": 18,
+    "exact_encoded_inputs": 18,
+    "top_label_agreement": 18,
+    "threshold_decision_agreement": 18,
+    "max_absolute_logit_error": 3.9577484130859375e-05,
+    "max_absolute_probability_error": 2.205371856689453e-06,
+    "logit_tolerance": 0.001,
+    "probability_tolerance": 0.0001,
+    "reference_sha256": "bb1f31e74e960f338e1f770222c55f87989d9fc4038009461a39270c5936aab3",
+    "candle_sha256": "7d4f64992df9d238542a0db207735601af2cd1da1afc8a0055129231614a6737",
+    "passed": true
+  },
+  "tokenization_fuzz_cases": 128,
+  "systems": {
+    "candle": {
+      "public": {
+        "rows": 6000,
+        "coverage": {
+          "completed": 5653,
+          "abstained": 347
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 171
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2611,
+            "injection": 180,
+            "indeterminate": 209
+          },
+          "injection": {
+            "injection": 1976,
+            "benign": 886,
+            "indeterminate": 138
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2611,
+            "total": 3000
+          },
+          "injection": {
+            "count": 1976,
+            "total": 3000
+          }
+        }
+      },
+      "contextual": {
+        "rows": 600,
+        "coverage": {
+          "abstained": 231,
+          "completed": 369
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 96,
+            "indeterminate": 45,
+            "aligned_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 108,
+            "indeterminate": 39,
+            "aligned_instruction": 3
+          },
+          "indeterminate": {
+            "indeterminate": 60,
+            "conflicting_instruction": 90
+          },
+          "non_instruction": {
+            "indeterminate": 87,
+            "conflicting_instruction": 27,
+            "non_instruction": 36
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 9,
+            "total": 150
+          },
+          "conflicting_instruction": {
+            "count": 108,
+            "total": 150
+          },
+          "indeterminate": {
+            "count": 60,
+            "total": 150
+          },
+          "non_instruction": {
+            "count": 36,
+            "total": 150
+          }
+        }
+      }
+    },
+    "jev": {
+      "public": {
+        "rows": 6000,
+        "coverage": {
+          "completed": 5338,
+          "abstained": 643,
+          "unavailable": 19
+        },
+        "errors": {
+          "invalid distribution": 18,
+          "inconsistent choice": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2954,
+            "indeterminate": 42,
+            "injection": 4
+          },
+          "injection": {
+            "injection": 1854,
+            "indeterminate": 620,
+            "benign": 526
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2954,
+            "total": 3000
+          },
+          "injection": {
+            "count": 1854,
+            "total": 3000
+          }
+        }
+      },
+      "contextual": {
+        "rows": 600,
+        "coverage": {
+          "completed": 437,
+          "abstained": 158,
+          "unavailable": 5
+        },
+        "errors": {
+          "invalid Jev choice distribution": 5
+        },
+        "confusion": {
+          "aligned_instruction": {
+            "aligned_instruction": 149,
+            "indeterminate": 1
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 138,
+            "aligned_instruction": 10,
+            "indeterminate": 2
+          },
+          "indeterminate": {
+            "conflicting_instruction": 35,
+            "indeterminate": 110,
+            "aligned_instruction": 5
+          },
+          "non_instruction": {
+            "conflicting_instruction": 99,
+            "indeterminate": 50,
+            "non_instruction": 1
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 149,
+            "total": 150
+          },
+          "conflicting_instruction": {
+            "count": 138,
+            "total": 150
+          },
+          "indeterminate": {
+            "count": 108,
+            "total": 150
+          },
+          "non_instruction": {
+            "count": 1,
+            "total": 150
+          }
+        }
+      }
+    },
+    "structural": {
+      "public": {
+        "rows": 6000,
+        "coverage": {
+          "completed": 5983,
+          "unavailable": 17
+        },
+        "errors": {
+          "unavailable": 17
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2989,
+            "injection": 11
+          },
+          "injection": {
+            "injection": 745,
+            "benign": 2238,
+            "indeterminate": 17
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2989,
+            "total": 3000
+          },
+          "injection": {
+            "count": 745,
+            "total": 3000
+          }
+        }
+      }
+    }
+  },
+  "sources": {
+    "candle": {
+      "BIPIA": {
+        "rows": 250,
+        "coverage": {
+          "completed": 244,
+          "abstained": 6
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "benign": 150,
+            "injection": 94,
+            "indeterminate": 6
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 94,
+            "total": 250
+          }
+        }
+      },
+      "Gandalf-Ignore": {
+        "rows": 400,
+        "coverage": {
+          "completed": 397,
+          "abstained": 3
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 349,
+            "benign": 48,
+            "indeterminate": 3
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 349,
+            "total": 400
+          }
+        }
+      },
+      "InjecAgent": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 400
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 400,
+            "total": 400
+          }
+        }
+      },
+      "LLMail-Inject": {
+        "rows": 400,
+        "coverage": {
+          "completed": 307,
+          "abstained": 93
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 89
+        },
+        "confusion": {
+          "injection": {
+            "benign": 224,
+            "indeterminate": 93,
+            "injection": 83
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 83,
+            "total": 400
+          }
+        }
+      },
+      "LinguaSafe": {
+        "rows": 150,
+        "coverage": {
+          "completed": 142,
+          "abstained": 8
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 130,
+            "indeterminate": 8,
+            "injection": 12
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 130,
+            "total": 150
+          }
+        }
+      },
+      "Lumees-Multilingual": {
+        "rows": 150,
+        "coverage": {
+          "completed": 137,
+          "abstained": 13
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 3
+        },
+        "confusion": {
+          "benign": {
+            "benign": 131,
+            "indeterminate": 13,
+            "injection": 6
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 131,
+            "total": 150
+          }
+        }
+      },
+      "OR-Bench": {
+        "rows": 1000,
+        "coverage": {
+          "completed": 979,
+          "abstained": 21
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 963,
+            "indeterminate": 21,
+            "injection": 16
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 963,
+            "total": 1000
+          }
+        }
+      },
+      "ObfuscationAugmenter": {
+        "rows": 400,
+        "coverage": {
+          "completed": 393,
+          "abstained": 7
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "benign": 212,
+            "injection": 181,
+            "indeterminate": 7
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 181,
+            "total": 400
+          }
+        }
+      },
+      "PolyglotToxicityPrompts": {
+        "rows": 150,
+        "coverage": {
+          "completed": 93,
+          "abstained": 57
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 56
+        },
+        "confusion": {
+          "benign": {
+            "injection": 10,
+            "indeterminate": 57,
+            "benign": 83
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 83,
+            "total": 150
+          }
+        }
+      },
+      "ToolEmu": {
+        "rows": 100,
+        "coverage": {
+          "completed": 92,
+          "abstained": 8
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 78,
+            "benign": 14,
+            "indeterminate": 8
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 78,
+            "total": 100
+          }
+        }
+      },
+      "WildGuardMix": {
+        "rows": 400,
+        "coverage": {
+          "completed": 373,
+          "abstained": 27
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 3
+        },
+        "confusion": {
+          "benign": {
+            "benign": 348,
+            "injection": 25,
+            "indeterminate": 27
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 348,
+            "total": 400
+          }
+        }
+      },
+      "deepset-prompt-injections": {
+        "rows": 600,
+        "coverage": {
+          "completed": 538,
+          "abstained": 62
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 2
+        },
+        "confusion": {
+          "benign": {
+            "benign": 296,
+            "indeterminate": 48,
+            "injection": 6
+          },
+          "injection": {
+            "injection": 128,
+            "benign": 108,
+            "indeterminate": 14
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 296,
+            "total": 350
+          },
+          "injection": {
+            "count": 128,
+            "total": 250
+          }
+        }
+      },
+      "jayavibhav-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 787,
+          "abstained": 13
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 309,
+            "injection": 84,
+            "indeterminate": 7
+          },
+          "injection": {
+            "injection": 306,
+            "benign": 88,
+            "indeterminate": 6
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 309,
+            "total": 400
+          },
+          "injection": {
+            "count": 306,
+            "total": 400
+          }
+        }
+      },
+      "safe-guard-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 771,
+          "abstained": 29
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 17
+        },
+        "confusion": {
+          "benign": {
+            "benign": 351,
+            "indeterminate": 28,
+            "injection": 21
+          },
+          "injection": {
+            "benign": 42,
+            "injection": 357,
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 351,
+            "total": 400
+          },
+          "injection": {
+            "count": 357,
+            "total": 400
+          }
+        }
+      }
+    },
+    "jev": {
+      "BIPIA": {
+        "rows": 250,
+        "coverage": {
+          "completed": 170,
+          "abstained": 77,
+          "unavailable": 3
+        },
+        "errors": {
+          "invalid distribution": 3
+        },
+        "confusion": {
+          "injection": {
+            "injection": 59,
+            "benign": 111,
+            "indeterminate": 80
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 59,
+            "total": 250
+          }
+        }
+      },
+      "Gandalf-Ignore": {
+        "rows": 400,
+        "coverage": {
+          "completed": 360,
+          "abstained": 38,
+          "unavailable": 2
+        },
+        "errors": {
+          "invalid distribution": 2
+        },
+        "confusion": {
+          "injection": {
+            "injection": 353,
+            "indeterminate": 40,
+            "benign": 7
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 353,
+            "total": 400
+          }
+        }
+      },
+      "InjecAgent": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 400
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 400,
+            "total": 400
+          }
+        }
+      },
+      "LLMail-Inject": {
+        "rows": 400,
+        "coverage": {
+          "abstained": 133,
+          "completed": 263,
+          "unavailable": 4
+        },
+        "errors": {
+          "invalid distribution": 4
+        },
+        "confusion": {
+          "injection": {
+            "indeterminate": 137,
+            "benign": 85,
+            "injection": 178
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 178,
+            "total": 400
+          }
+        }
+      },
+      "LinguaSafe": {
+        "rows": 150,
+        "coverage": {
+          "completed": 150
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 150
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 150,
+            "total": 150
+          }
+        }
+      },
+      "Lumees-Multilingual": {
+        "rows": 150,
+        "coverage": {
+          "completed": 149,
+          "unavailable": 1
+        },
+        "errors": {
+          "invalid distribution": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 149,
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 149,
+            "total": 150
+          }
+        }
+      },
+      "OR-Bench": {
+        "rows": 1000,
+        "coverage": {
+          "completed": 1000
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 1000
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 1000,
+            "total": 1000
+          }
+        }
+      },
+      "ObfuscationAugmenter": {
+        "rows": 400,
+        "coverage": {
+          "abstained": 175,
+          "completed": 223,
+          "unavailable": 2
+        },
+        "errors": {
+          "invalid distribution": 2
+        },
+        "confusion": {
+          "injection": {
+            "indeterminate": 177,
+            "injection": 181,
+            "benign": 42
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 181,
+            "total": 400
+          }
+        }
+      },
+      "PolyglotToxicityPrompts": {
+        "rows": 150,
+        "coverage": {
+          "completed": 150
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 150
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 150,
+            "total": 150
+          }
+        }
+      },
+      "ToolEmu": {
+        "rows": 100,
+        "coverage": {
+          "completed": 92,
+          "abstained": 7,
+          "unavailable": 1
+        },
+        "errors": {
+          "invalid distribution": 1
+        },
+        "confusion": {
+          "injection": {
+            "benign": 92,
+            "indeterminate": 8
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 0,
+            "total": 100
+          }
+        }
+      },
+      "WildGuardMix": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 400
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 400,
+            "total": 400
+          }
+        }
+      },
+      "deepset-prompt-injections": {
+        "rows": 600,
+        "coverage": {
+          "completed": 547,
+          "abstained": 52,
+          "unavailable": 1
+        },
+        "errors": {
+          "inconsistent choice": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 345,
+            "indeterminate": 5
+          },
+          "injection": {
+            "indeterminate": 48,
+            "injection": 135,
+            "benign": 67
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 345,
+            "total": 350
+          },
+          "injection": {
+            "count": 135,
+            "total": 250
+          }
+        }
+      },
+      "jayavibhav-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 687,
+          "abstained": 110,
+          "unavailable": 3
+        },
+        "errors": {
+          "invalid distribution": 3
+        },
+        "confusion": {
+          "benign": {
+            "benign": 361,
+            "indeterminate": 36,
+            "injection": 3
+          },
+          "injection": {
+            "injection": 253,
+            "indeterminate": 77,
+            "benign": 70
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 361,
+            "total": 400
+          },
+          "injection": {
+            "count": 253,
+            "total": 400
+          }
+        }
+      },
+      "safe-guard-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 747,
+          "abstained": 51,
+          "unavailable": 2
+        },
+        "errors": {
+          "invalid distribution": 2
+        },
+        "confusion": {
+          "benign": {
+            "benign": 399,
+            "injection": 1
+          },
+          "injection": {
+            "injection": 295,
+            "benign": 52,
+            "indeterminate": 53
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 399,
+            "total": 400
+          },
+          "injection": {
+            "count": 295,
+            "total": 400
+          }
+        }
+      }
+    },
+    "structural": {
+      "BIPIA": {
+        "rows": 250,
+        "coverage": {
+          "completed": 250
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "benign": 249,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 1,
+            "total": 250
+          }
+        }
+      },
+      "Gandalf-Ignore": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 213,
+            "benign": 187
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 213,
+            "total": 400
+          }
+        }
+      },
+      "InjecAgent": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "injection": 171,
+            "benign": 229
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 171,
+            "total": 400
+          }
+        }
+      },
+      "LLMail-Inject": {
+        "rows": 400,
+        "coverage": {
+          "completed": 397,
+          "unavailable": 3
+        },
+        "errors": {
+          "unavailable": 3
+        },
+        "confusion": {
+          "injection": {
+            "benign": 231,
+            "injection": 166,
+            "indeterminate": 3
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 166,
+            "total": 400
+          }
+        }
+      },
+      "LinguaSafe": {
+        "rows": 150,
+        "coverage": {
+          "completed": 150
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 150
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 150,
+            "total": 150
+          }
+        }
+      },
+      "Lumees-Multilingual": {
+        "rows": 150,
+        "coverage": {
+          "completed": 150
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 150
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 150,
+            "total": 150
+          }
+        }
+      },
+      "OR-Bench": {
+        "rows": 1000,
+        "coverage": {
+          "completed": 1000
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 1000
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 1000,
+            "total": 1000
+          }
+        }
+      },
+      "ObfuscationAugmenter": {
+        "rows": 400,
+        "coverage": {
+          "completed": 386,
+          "unavailable": 14
+        },
+        "errors": {
+          "unavailable": 14
+        },
+        "confusion": {
+          "injection": {
+            "benign": 363,
+            "indeterminate": 14,
+            "injection": 23
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 23,
+            "total": 400
+          }
+        }
+      },
+      "PolyglotToxicityPrompts": {
+        "rows": 150,
+        "coverage": {
+          "completed": 150
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 143,
+            "injection": 7
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 143,
+            "total": 150
+          }
+        }
+      },
+      "ToolEmu": {
+        "rows": 100,
+        "coverage": {
+          "completed": 100
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "benign": 89,
+            "injection": 11
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 11,
+            "total": 100
+          }
+        }
+      },
+      "WildGuardMix": {
+        "rows": 400,
+        "coverage": {
+          "completed": 400
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 400
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 400,
+            "total": 400
+          }
+        }
+      },
+      "deepset-prompt-injections": {
+        "rows": 600,
+        "coverage": {
+          "completed": 600
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 348,
+            "injection": 2
+          },
+          "injection": {
+            "benign": 210,
+            "injection": 40
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 348,
+            "total": 350
+          },
+          "injection": {
+            "count": 40,
+            "total": 250
+          }
+        }
+      },
+      "jayavibhav-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 800
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 400
+          },
+          "injection": {
+            "benign": 375,
+            "injection": 25
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 400,
+            "total": 400
+          },
+          "injection": {
+            "count": 25,
+            "total": 400
+          }
+        }
+      },
+      "safe-guard-PI": {
+        "rows": 800,
+        "coverage": {
+          "completed": 800
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 398,
+            "injection": 2
+          },
+          "injection": {
+            "benign": 305,
+            "injection": 95
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 398,
+            "total": 400
+          },
+          "injection": {
+            "count": 95,
+            "total": 400
+          }
+        }
+      }
+    }
+  },
+  "contextual_strata": {
+    "delivery_vector": {
+      "repository_file": {
+        "rows": 200,
+        "coverage": {
+          "abstained": 77,
+          "completed": 123
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 32,
+            "indeterminate": 15,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 36,
+            "indeterminate": 13,
+            "aligned_instruction": 1
+          },
+          "indeterminate": {
+            "indeterminate": 20,
+            "conflicting_instruction": 30
+          },
+          "non_instruction": {
+            "conflicting_instruction": 9,
+            "indeterminate": 29,
+            "non_instruction": 12
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 50
+          },
+          "conflicting_instruction": {
+            "count": 36,
+            "total": 50
+          },
+          "indeterminate": {
+            "count": 20,
+            "total": 50
+          },
+          "non_instruction": {
+            "count": 12,
+            "total": 50
+          }
+        }
+      },
+      "tool_response": {
+        "rows": 200,
+        "coverage": {
+          "completed": 123,
+          "abstained": 77
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 32,
+            "indeterminate": 15,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 36,
+            "indeterminate": 13,
+            "aligned_instruction": 1
+          },
+          "indeterminate": {
+            "conflicting_instruction": 30,
+            "indeterminate": 20
+          },
+          "non_instruction": {
+            "indeterminate": 29,
+            "non_instruction": 12,
+            "conflicting_instruction": 9
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 50
+          },
+          "conflicting_instruction": {
+            "count": 36,
+            "total": 50
+          },
+          "indeterminate": {
+            "count": 20,
+            "total": 50
+          },
+          "non_instruction": {
+            "count": 12,
+            "total": 50
+          }
+        }
+      },
+      "user_input": {
+        "rows": 200,
+        "coverage": {
+          "abstained": 77,
+          "completed": 123
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 32,
+            "indeterminate": 15,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 36,
+            "indeterminate": 13,
+            "aligned_instruction": 1
+          },
+          "indeterminate": {
+            "conflicting_instruction": 30,
+            "indeterminate": 20
+          },
+          "non_instruction": {
+            "indeterminate": 29,
+            "non_instruction": 12,
+            "conflicting_instruction": 9
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 50
+          },
+          "conflicting_instruction": {
+            "count": 36,
+            "total": 50
+          },
+          "indeterminate": {
+            "count": 20,
+            "total": 50
+          },
+          "non_instruction": {
+            "count": 12,
+            "total": 50
+          }
+        }
+      }
+    },
+    "presentation_context": {
+      "live": {
+        "rows": 450,
+        "coverage": {
+          "completed": 306,
+          "abstained": 144
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 96,
+            "indeterminate": 45,
+            "aligned_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 108,
+            "indeterminate": 39,
+            "aligned_instruction": 3
+          },
+          "indeterminate": {
+            "indeterminate": 60,
+            "conflicting_instruction": 90
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 9,
+            "total": 150
+          },
+          "conflicting_instruction": {
+            "count": 108,
+            "total": 150
+          },
+          "indeterminate": {
+            "count": 60,
+            "total": 150
+          }
+        }
+      },
+      "quoted": {
+        "rows": 150,
+        "coverage": {
+          "abstained": 87,
+          "completed": 63
+        },
+        "errors": {},
+        "confusion": {
+          "non_instruction": {
+            "indeterminate": 87,
+            "conflicting_instruction": 27,
+            "non_instruction": 36
+          }
+        },
+        "correct": {
+          "non_instruction": {
+            "count": 36,
+            "total": 150
+          }
+        }
+      }
+    },
+    "family_id": {
+      "audit": {
+        "rows": 36,
+        "coverage": {
+          "abstained": 18,
+          "completed": 18
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "indeterminate": 6,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 3,
+            "indeterminate": 6
+          },
+          "indeterminate": {
+            "conflicting_instruction": 9
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 3,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "backup": {
+        "rows": 36,
+        "coverage": {
+          "abstained": 27,
+          "completed": 9
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 3,
+            "indeterminate": 6
+          },
+          "conflicting_instruction": {
+            "indeterminate": 6,
+            "conflicting_instruction": 3
+          },
+          "indeterminate": {
+            "indeterminate": 9
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 3,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 9,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "cleanup": {
+        "rows": 36,
+        "coverage": {
+          "abstained": 9,
+          "completed": 27
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 9
+          },
+          "indeterminate": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 9,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 3,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "dependency": {
+        "rows": 36,
+        "coverage": {
+          "completed": 30,
+          "abstained": 6
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 9
+          },
+          "indeterminate": {
+            "conflicting_instruction": 9
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 9,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "dispatch": {
+        "rows": 36,
+        "coverage": {
+          "abstained": 30,
+          "completed": 6
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "indeterminate": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 3,
+            "indeterminate": 6
+          },
+          "indeterminate": {
+            "indeterminate": 9
+          },
+          "non_instruction": {
+            "non_instruction": 3,
+            "indeterminate": 6
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 3,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 9,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "draft": {
+        "rows": 36,
+        "coverage": {
+          "completed": 27,
+          "abstained": 9
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 9
+          },
+          "indeterminate": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "non_instruction": {
+            "non_instruction": 3,
+            "indeterminate": 6
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 9,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 3,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 9
+          }
+        }
+      },
+      "finance": {
+        "rows": 48,
+        "coverage": {
+          "abstained": 36,
+          "completed": 12
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "indeterminate": 9,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "indeterminate": 9,
+            "aligned_instruction": 3
+          },
+          "indeterminate": {
+            "indeterminate": 12
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 6
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 12
+          },
+          "conflicting_instruction": {
+            "count": 0,
+            "total": 12
+          },
+          "indeterminate": {
+            "count": 12,
+            "total": 12
+          },
+          "non_instruction": {
+            "count": 6,
+            "total": 12
+          }
+        }
+      },
+      "inventory": {
+        "rows": 48,
+        "coverage": {
+          "abstained": 33,
+          "completed": 15
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 6
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 6
+          },
+          "indeterminate": {
+            "indeterminate": 12
+          },
+          "non_instruction": {
+            "indeterminate": 9,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 12
+          },
+          "conflicting_instruction": {
+            "count": 6,
+            "total": 12
+          },
+          "indeterminate": {
+            "count": 12,
+            "total": 12
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 12
+          }
+        }
+      },
+      "logging": {
+        "rows": 36,
+        "coverage": {
+          "abstained": 18,
+          "completed": 18
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "indeterminate": 3,
+            "conflicting_instruction": 3,
+            "aligned_instruction": 3
+          },
+          "conflicting_instruction": {
+            "indeterminate": 3,
+            "conflicting_instruction": 6
+          },
+          "indeterminate": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "non_instruction": {
+            "indeterminate": 9
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 3,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 6,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 3,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 0,
+            "total": 9
+          }
+        }
+      },
+      "moderation": {
+        "rows": 48,
+        "coverage": {
+          "completed": 48
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 12
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 12
+          },
+          "indeterminate": {
+            "conflicting_instruction": 12
+          },
+          "non_instruction": {
+            "conflicting_instruction": 12
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 12
+          },
+          "conflicting_instruction": {
+            "count": 12,
+            "total": 12
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 12
+          },
+          "non_instruction": {
+            "count": 0,
+            "total": 12
+          }
+        }
+      },
+      "scheduling": {
+        "rows": 48,
+        "coverage": {
+          "completed": 39,
+          "abstained": 9
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 12
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 12
+          },
+          "indeterminate": {
+            "conflicting_instruction": 12
+          },
+          "non_instruction": {
+            "indeterminate": 9,
+            "non_instruction": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 12
+          },
+          "conflicting_instruction": {
+            "count": 12,
+            "total": 12
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 12
+          },
+          "non_instruction": {
+            "count": 3,
+            "total": 12
+          }
+        }
+      },
+      "sharing": {
+        "rows": 36,
+        "coverage": {
+          "completed": 33,
+          "abstained": 3
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 9
+          },
+          "indeterminate": {
+            "conflicting_instruction": 9
+          },
+          "non_instruction": {
+            "conflicting_instruction": 9
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 9,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 0,
+            "total": 9
+          }
+        }
+      },
+      "test": {
+        "rows": 36,
+        "coverage": {
+          "completed": 33,
+          "abstained": 3
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 9
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 9
+          },
+          "indeterminate": {
+            "conflicting_instruction": 9
+          },
+          "non_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 9,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 0,
+            "total": 9
+          }
+        }
+      },
+      "ticketing": {
+        "rows": 36,
+        "coverage": {
+          "completed": 21,
+          "abstained": 15
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 6,
+            "indeterminate": 3
+          },
+          "indeterminate": {
+            "conflicting_instruction": 9
+          },
+          "non_instruction": {
+            "indeterminate": 9
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 9
+          },
+          "conflicting_instruction": {
+            "count": 6,
+            "total": 9
+          },
+          "indeterminate": {
+            "count": 0,
+            "total": 9
+          },
+          "non_instruction": {
+            "count": 0,
+            "total": 9
+          }
+        }
+      },
+      "translation": {
+        "rows": 48,
+        "coverage": {
+          "completed": 33,
+          "abstained": 15
+        },
+        "errors": {},
+        "confusion": {
+          "aligned_instruction": {
+            "conflicting_instruction": 12
+          },
+          "conflicting_instruction": {
+            "conflicting_instruction": 12
+          },
+          "indeterminate": {
+            "indeterminate": 9,
+            "conflicting_instruction": 3
+          },
+          "non_instruction": {
+            "indeterminate": 6,
+            "non_instruction": 6
+          }
+        },
+        "correct": {
+          "aligned_instruction": {
+            "count": 0,
+            "total": 12
+          },
+          "conflicting_instruction": {
+            "count": 12,
+            "total": 12
+          },
+          "indeterminate": {
+            "count": 9,
+            "total": 12
+          },
+          "non_instruction": {
+            "count": 6,
+            "total": 12
+          }
+        }
+      }
+    }
+  },
+  "identities": {
+    "freeze_sha256": "3e3576307723021d1ed56ae3ab9ddd4c33b39786322c0659fb90251b2f0b6d37",
+    "jev_report_sha256": "588b5d2e9556dd686884bdd109b149c1fbb5a0012739f105f3284d8f9417c639",
+    "candle_runs": {
+      "public": "15a8661b088f1b43a9c9479253f73089e7cac50c222ef306a1e1dc85defa96df",
+      "contextual": "7a82b834d098d9877db99c7d09424eb619cf92c97300128fd8d36f36cd02d2aa"
+    }
+  },
+  "candle_public_strata": {
+    "language": {
+      "am": {
+        "rows": 4,
+        "coverage": {
+          "completed": 4
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 4
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 4,
+            "total": 4
+          }
+        }
+      },
+      "ar": {
+        "rows": 27,
+        "coverage": {
+          "abstained": 7,
+          "completed": 20
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 7
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 7,
+            "benign": 18,
+            "injection": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 18,
+            "total": 27
+          }
+        }
+      },
+      "be": {
+        "rows": 3,
+        "coverage": {
+          "completed": 3
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 3
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 3,
+            "total": 3
+          }
+        }
+      },
+      "bn": {
+        "rows": 11,
+        "coverage": {
+          "completed": 10,
+          "abstained": 1
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 10,
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 10,
+            "total": 11
+          }
+        }
+      },
+      "bo": {
+        "rows": 8,
+        "coverage": {
+          "completed": 8
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 8
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 8,
+            "total": 8
+          }
+        }
+      },
+      "ce": {
+        "rows": 14,
+        "coverage": {
+          "completed": 11,
+          "abstained": 3
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 10,
+            "indeterminate": 3,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 10,
+            "total": 14
+          }
+        }
+      },
+      "cs": {
+        "rows": 21,
+        "coverage": {
+          "completed": 16,
+          "abstained": 5
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "benign": 16,
+            "indeterminate": 5
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 16,
+            "total": 21
+          }
+        }
+      },
+      "de": {
+        "rows": 13,
+        "coverage": {
+          "completed": 11,
+          "abstained": 2
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 9,
+            "indeterminate": 2,
+            "injection": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 9,
+            "total": 13
+          }
+        }
+      },
+      "en": {
+        "rows": 5577,
+        "coverage": {
+          "completed": 5305,
+          "abstained": 272
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 112
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2291,
+            "indeterminate": 134,
+            "injection": 152
+          },
+          "injection": {
+            "injection": 1976,
+            "benign": 886,
+            "indeterminate": 138
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2291,
+            "total": 2577
+          },
+          "injection": {
+            "count": 1976,
+            "total": 3000
+          }
+        }
+      },
+      "es": {
+        "rows": 10,
+        "coverage": {
+          "abstained": 2,
+          "completed": 8
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 2
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 2,
+            "benign": 6,
+            "injection": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 10
+          }
+        }
+      },
+      "fr": {
+        "rows": 28,
+        "coverage": {
+          "completed": 20,
+          "abstained": 8
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 6
+        },
+        "confusion": {
+          "benign": {
+            "benign": 19,
+            "indeterminate": 8,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 19,
+            "total": 28
+          }
+        }
+      },
+      "gu": {
+        "rows": 7,
+        "coverage": {
+          "abstained": 1,
+          "completed": 6
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 1
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 1,
+            "benign": 6
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 7
+          }
+        }
+      },
+      "ha": {
+        "rows": 6,
+        "coverage": {
+          "completed": 6
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 6
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 6
+          }
+        }
+      },
+      "hi": {
+        "rows": 17,
+        "coverage": {
+          "abstained": 7,
+          "completed": 10
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 7
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 7,
+            "benign": 10
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 10,
+            "total": 17
+          }
+        }
+      },
+      "hr": {
+        "rows": 5,
+        "coverage": {
+          "completed": 5
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 5
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 5,
+            "total": 5
+          }
+        }
+      },
+      "hu": {
+        "rows": 20,
+        "coverage": {
+          "completed": 20
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 19,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 19,
+            "total": 20
+          }
+        }
+      },
+      "id": {
+        "rows": 20,
+        "coverage": {
+          "completed": 16,
+          "abstained": 4
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "injection": 2,
+            "benign": 14,
+            "indeterminate": 4
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 14,
+            "total": 20
+          }
+        }
+      },
+      "it": {
+        "rows": 15,
+        "coverage": {
+          "abstained": 4,
+          "completed": 11
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 3
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 4,
+            "benign": 9,
+            "injection": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 9,
+            "total": 15
+          }
+        }
+      },
+      "ja": {
+        "rows": 7,
+        "coverage": {
+          "completed": 6,
+          "abstained": 1
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 6,
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 7
+          }
+        }
+      },
+      "ka": {
+        "rows": 15,
+        "coverage": {
+          "completed": 15
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 15
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 15,
+            "total": 15
+          }
+        }
+      },
+      "ki": {
+        "rows": 7,
+        "coverage": {
+          "completed": 7
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 6,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 7
+          }
+        }
+      },
+      "km": {
+        "rows": 7,
+        "coverage": {
+          "completed": 5,
+          "abstained": 2
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 2
+        },
+        "confusion": {
+          "benign": {
+            "benign": 5,
+            "indeterminate": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 5,
+            "total": 7
+          }
+        }
+      },
+      "ko": {
+        "rows": 33,
+        "coverage": {
+          "completed": 27,
+          "abstained": 6
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "benign": 22,
+            "indeterminate": 6,
+            "injection": 5
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 22,
+            "total": 33
+          }
+        }
+      },
+      "lu": {
+        "rows": 2,
+        "coverage": {
+          "completed": 2
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2,
+            "total": 2
+          }
+        }
+      },
+      "ms": {
+        "rows": 11,
+        "coverage": {
+          "completed": 11
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 9,
+            "injection": 2
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 9,
+            "total": 11
+          }
+        }
+      },
+      "my": {
+        "rows": 12,
+        "coverage": {
+          "completed": 12
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 12
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 12,
+            "total": 12
+          }
+        }
+      },
+      "nl": {
+        "rows": 8,
+        "coverage": {
+          "completed": 7,
+          "abstained": 1
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 1
+        },
+        "confusion": {
+          "benign": {
+            "benign": 7,
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 7,
+            "total": 8
+          }
+        }
+      },
+      "pl": {
+        "rows": 9,
+        "coverage": {
+          "completed": 5,
+          "abstained": 4
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "injection": 1,
+            "benign": 4,
+            "indeterminate": 4
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 4,
+            "total": 9
+          }
+        }
+      },
+      "pt": {
+        "rows": 7,
+        "coverage": {
+          "abstained": 3,
+          "completed": 4
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 3
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 3,
+            "benign": 4
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 4,
+            "total": 7
+          }
+        }
+      },
+      "ru": {
+        "rows": 12,
+        "coverage": {
+          "abstained": 5,
+          "completed": 7
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 5,
+            "benign": 6,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 6,
+            "total": 12
+          }
+        }
+      },
+      "sr": {
+        "rows": 9,
+        "coverage": {
+          "completed": 9
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "injection": 1,
+            "benign": 8
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 8,
+            "total": 9
+          }
+        }
+      },
+      "sv": {
+        "rows": 10,
+        "coverage": {
+          "abstained": 5,
+          "completed": 5
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 4
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 5,
+            "benign": 5
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 5,
+            "total": 10
+          }
+        }
+      },
+      "th": {
+        "rows": 15,
+        "coverage": {
+          "completed": 15
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 15
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 15,
+            "total": 15
+          }
+        }
+      },
+      "vi": {
+        "rows": 11,
+        "coverage": {
+          "completed": 11
+        },
+        "errors": {},
+        "confusion": {
+          "benign": {
+            "benign": 10,
+            "injection": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 10,
+            "total": 11
+          }
+        }
+      },
+      "zh": {
+        "rows": 19,
+        "coverage": {
+          "completed": 15,
+          "abstained": 4
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 2
+        },
+        "confusion": {
+          "benign": {
+            "benign": 12,
+            "indeterminate": 4,
+            "injection": 3
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 12,
+            "total": 19
+          }
+        }
+      }
+    },
+    "harmful": {
+      "0": {
+        "rows": 5600,
+        "coverage": {
+          "completed": 5260,
+          "abstained": 340
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 171
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2611,
+            "injection": 180,
+            "indeterminate": 209
+          },
+          "injection": {
+            "injection": 1795,
+            "benign": 674,
+            "indeterminate": 131
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2611,
+            "total": 3000
+          },
+          "injection": {
+            "count": 1795,
+            "total": 2600
+          }
+        }
+      },
+      "1": {
+        "rows": 400,
+        "coverage": {
+          "completed": 393,
+          "abstained": 7
+        },
+        "errors": {},
+        "confusion": {
+          "injection": {
+            "benign": 212,
+            "injection": 181,
+            "indeterminate": 7
+          }
+        },
+        "correct": {
+          "injection": {
+            "count": 181,
+            "total": 400
+          }
+        }
+      }
+    },
+    "length_band": {
+      "0-1024 bytes": {
+        "rows": 5651,
+        "coverage": {
+          "completed": 5475,
+          "abstained": 176
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 3
+        },
+        "confusion": {
+          "benign": {
+            "benign": 2574,
+            "injection": 171,
+            "indeterminate": 129
+          },
+          "injection": {
+            "injection": 1948,
+            "benign": 782,
+            "indeterminate": 47
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 2574,
+            "total": 2874
+          },
+          "injection": {
+            "count": 1948,
+            "total": 2777
+          }
+        }
+      },
+      "1025-4096 bytes": {
+        "rows": 307,
+        "coverage": {
+          "completed": 178,
+          "abstained": 129
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 126
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 57,
+            "benign": 37,
+            "injection": 9
+          },
+          "injection": {
+            "benign": 104,
+            "indeterminate": 72,
+            "injection": 28
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 37,
+            "total": 103
+          },
+          "injection": {
+            "count": 28,
+            "total": 204
+          }
+        }
+      },
+      "4097-8192 bytes": {
+        "rows": 34,
+        "coverage": {
+          "abstained": 34
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 34
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 16
+          },
+          "injection": {
+            "indeterminate": 18
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 0,
+            "total": 16
+          },
+          "injection": {
+            "count": 0,
+            "total": 18
+          }
+        }
+      },
+      "8193-16384 bytes": {
+        "rows": 8,
+        "coverage": {
+          "abstained": 8
+        },
+        "errors": {
+          "encoded input exceeds token cap; no truncation": 8
+        },
+        "confusion": {
+          "benign": {
+            "indeterminate": 7
+          },
+          "injection": {
+            "indeterminate": 1
+          }
+        },
+        "correct": {
+          "benign": {
+            "count": 0,
+            "total": 7
+          },
+          "injection": {
+            "count": 0,
+            "total": 1
+          }
+        }
+      }
+    }
+  },
+  "candle_inference_ms": {
+    "count": 6429,
+    "p50": 598.879411,
+    "p95": 1689.110664
+  }
+}

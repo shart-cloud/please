@@ -1,0 +1,219 @@
+{
+  "date": "2026-09-16",
+  "status": "research and proposed plan; no phase-2 model runs",
+  "models": [
+    {
+      "model_id": "MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
+      "revision_observed": "6f5cf0a2b59cabb106aca4c287eed12e357e90eb",
+      "model_card_url": "https://huggingface.co/MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli",
+      "license_declared": "mit",
+      "safetensors_metadata": {
+        "parameters": {
+          "I64": 512,
+          "F16": 184424451
+        },
+        "total": 184424963
+      },
+      "configuration": {
+        "architectures": [
+          "DebertaV2ForSequenceClassification"
+        ],
+        "model_type": "deberta-v2",
+        "id2label": {
+          "0": "entailment",
+          "1": "neutral",
+          "2": "contradiction"
+        },
+        "max_position_embeddings": 512,
+        "auto_map": null
+      },
+      "metadata_assets": {
+        "config.json": {
+          "url": "https://huggingface.co/MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli/resolve/6f5cf0a2b59cabb106aca4c287eed12e357e90eb/config.json",
+          "sha256": "a6c616d6dabeacf90fd0e776c741d3f0f30a05533ccf0bd3b5b62e94cfaa8d57",
+          "bytes": 1090
+        },
+        "README.md": {
+          "url": "https://huggingface.co/MoritzLaurer/DeBERTa-v3-base-mnli-fever-anli/resolve/6f5cf0a2b59cabb106aca4c287eed12e357e90eb/README.md",
+          "sha256": "4ffce2b113463476777ccc8efd1f0ea0571510a96a2c84f2d2aab152951b13ca",
+          "bytes": 23571
+        }
+      },
+      "weights_downloaded_for_phase_2": false,
+      "evaluated_for_phase_2": false
+    },
+    {
+      "model_id": "MoritzLaurer/ModernBERT-base-zeroshot-v2.0",
+      "revision_observed": "d421c4545a438fd006fb43f8b981c5d908faa1e1",
+      "model_card_url": "https://huggingface.co/MoritzLaurer/ModernBERT-base-zeroshot-v2.0",
+      "license_declared": "apache-2.0",
+      "safetensors_metadata": {
+        "parameters": {
+          "BF16": 149606402
+        },
+        "total": 149606402
+      },
+      "configuration": {
+        "architectures": [
+          "ModernBertForSequenceClassification"
+        ],
+        "model_type": "modernbert",
+        "id2label": {
+          "0": "entailment",
+          "1": "not_entailment"
+        },
+        "max_position_embeddings": 8192,
+        "auto_map": null
+      },
+      "metadata_assets": {
+        "config.json": {
+          "url": "https://huggingface.co/MoritzLaurer/ModernBERT-base-zeroshot-v2.0/resolve/d421c4545a438fd006fb43f8b981c5d908faa1e1/config.json",
+          "sha256": "d5c53ad1e5a23066144e958db475b1f8df7e8e45bf0ef6aba8a842c7f6450be1",
+          "bytes": 1469
+        },
+        "README.md": {
+          "url": "https://huggingface.co/MoritzLaurer/ModernBERT-base-zeroshot-v2.0/resolve/d421c4545a438fd006fb43f8b981c5d908faa1e1/README.md",
+          "sha256": "61818c282758d402513c102a570aacd8f446a74370e1baf3ace9692d3742e736",
+          "bytes": 3238
+        }
+      },
+      "weights_downloaded_for_phase_2": false,
+      "evaluated_for_phase_2": false
+    },
+    {
+      "model_id": "leolee99/PIGuard",
+      "revision_observed": "dd78b24e330193a22d2293ac66922dd4f982f563",
+      "model_card_url": "https://huggingface.co/leolee99/PIGuard",
+      "license_declared": "mit",
+      "safetensors_metadata": {
+        "parameters": {
+          "F32": 184423682
+        },
+        "total": 184423682
+      },
+      "configuration": {
+        "architectures": [
+          "PIGuard"
+        ],
+        "model_type": "piguard",
+        "id2label": {
+          "0": "benign",
+          "1": "injection"
+        },
+        "max_position_embeddings": 512,
+        "auto_map": {
+          "AutoConfig": "modeling_piguard.PIGuardConfig",
+          "AutoModelForSequenceClassification": "modeling_piguard.PIGuard"
+        }
+      },
+      "metadata_assets": {
+        "config.json": {
+          "url": "https://huggingface.co/leolee99/PIGuard/resolve/dd78b24e330193a22d2293ac66922dd4f982f563/config.json",
+          "sha256": "f7ab538357be6b11364e4ad225595fe2a96b64f69506387a04e3cae699bac1d0",
+          "bytes": 1062
+        },
+        "README.md": {
+          "url": "https://huggingface.co/leolee99/PIGuard/resolve/dd78b24e330193a22d2293ac66922dd4f982f563/README.md",
+          "sha256": "edd81d29d8e2b8f1225afc3602e8be5201903e5c184c65d365534471c82811d0",
+          "bytes": 3123
+        }
+      },
+      "weights_downloaded_for_phase_2": false,
+      "evaluated_for_phase_2": false
+    }
+  ],
+  "development_diagnostic": {
+    "run_id": "d645302acfd5cacfae3fdba0f08c5b0125059e5c9553fb8adb1299a89f8e61ca",
+    "results_relative_path": ".cache/decision-poc-20260916/run-cuda0-v2/results.jsonl",
+    "results_sha256": "50de7044d1820673d45c4db403539d360ee02f80e52b9fea6fb1ac79f9fa18c0",
+    "system_id": "gliclass-decomposed-cuda0",
+    "threshold": 0.7,
+    "priority": [
+      "reference",
+      "conflict",
+      "authorized"
+    ],
+    "score_summary": {
+      "aligned_instruction": {
+        "n": 30,
+        "scores": {
+          "authorized": {
+            "min": 0.9999932050704956,
+            "median": 0.9999951124191284,
+            "max": 0.9999964237213135
+          },
+          "conflict": {
+            "min": 0.993740975856781,
+            "median": 0.9958689510822296,
+            "max": 0.9973706007003784
+          },
+          "reference": {
+            "min": 0.9996252059936523,
+            "median": 0.9997839331626892,
+            "max": 0.9998757839202881
+          }
+        },
+        "argmax_counts": {
+          "authorized": 30
+        }
+      },
+      "conflicting_instruction": {
+        "n": 30,
+        "scores": {
+          "authorized": {
+            "min": 0.9999291896820068,
+            "median": 0.9999499320983887,
+            "max": 0.9999792575836182
+          },
+          "conflict": {
+            "min": 0.9990895986557007,
+            "median": 0.9994630217552185,
+            "max": 0.999693751335144
+          },
+          "reference": {
+            "min": 0.9997643828392029,
+            "median": 0.9998322129249573,
+            "max": 0.9999070167541504
+          }
+        },
+        "argmax_counts": {
+          "authorized": 30
+        }
+      },
+      "non_instruction": {
+        "n": 30,
+        "scores": {
+          "authorized": {
+            "min": 0.9999239444732666,
+            "median": 0.9999558329582214,
+            "max": 0.9999808073043823
+          },
+          "conflict": {
+            "min": 0.9957028031349182,
+            "median": 0.9972049295902252,
+            "max": 0.9981775283813477
+          },
+          "reference": {
+            "min": 0.9999598264694214,
+            "median": 0.9999706149101257,
+            "max": 0.9999810457229614
+          }
+        },
+        "argmax_counts": {
+          "reference": 23,
+          "authorized": 7
+        }
+      }
+    },
+    "interpretation": "All three scores saturate above threshold; priority masks score differences. Conflict score ranges separate on these exposed templates. No new threshold selected; no generalization or calibrated-probability claim."
+  },
+  "training_environment": {
+    "provider": "Google Colab Pro",
+    "availability": "User reports access; account, compute balance and allocated hardware not inspected",
+    "role": "Conditional fine-tuning; deployment benchmarks remain local CPU and RTX 3050",
+    "official_limits_source": "https://research.google.com/colaboratory/faq.html",
+    "source_checked": "2026-09-16",
+    "cloud_execution_started": false,
+    "data_uploaded": false
+  }
+}

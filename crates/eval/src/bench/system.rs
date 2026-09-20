@@ -101,6 +101,29 @@ pub fn check(path: &Path, execution_mode: ExecutionMode) -> Result<VerifiedSyste
     let mut resolved_program = None;
     let mut resolved_rules = Vec::new();
     match &manifest.adapter {
+        AdapterManifest::Jev {
+            model,
+            max_requests,
+            max_errors,
+        } => {
+            crate::bench::jev::check_configuration(model, *max_requests, *max_errors)?;
+            if execution_mode == ExecutionMode::Offline {
+                return Err("Jev requires a network_allowed experiment".into());
+            }
+            if surfaces != BTreeSet::from([Surface::ContextualAlignment])
+                || !manifest.requires_trusted_context
+                || manifest.deterministic
+                || manifest.review_authority != "none"
+                || manifest.adapter_version != "please-jev-in-process/v1"
+                || !manifest.normalizers.iter().all(|n| {
+                    matches!(&n.mapping,
+                    NormalizerKind::NativeV1 { positive_labels, negative_labels }
+                    if positive_labels.is_empty() && negative_labels.is_empty())
+                })
+            {
+                return Err("Jev requires advisory, nondeterministic contextual_alignment with trusted context and native_v1 normalization".into());
+            }
+        }
         AdapterManifest::Please {
             profile,
             threshold,

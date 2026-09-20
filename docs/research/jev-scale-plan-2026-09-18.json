@@ -1,0 +1,123 @@
+{
+  "run": "jev-scale-20260918",
+  "status": "complete; all 6600 attempts captured and native replays verified",
+  "frozen_before_inference": true,
+  "freeze_sha256": "5ec37e1049cf335edef44512619a7bf055e7fd5041668bd09be9cbbe59afed9b",
+  "recipe": {
+    "endpoint": "https://api.typesafe.ai/v1/systemone",
+    "model": "jev-latest",
+    "threshold": 0.7,
+    "margin": 0.15,
+    "confidence": 0.5,
+    "max_attempts": 6600,
+    "max_elapsed_seconds": 7200,
+    "request_deadline_seconds": 35,
+    "retries": 0,
+    "consecutive_errors": 3,
+    "total_errors": 30,
+    "price": null,
+    "promotion_gate": false,
+    "public_recipe": "Unchanged September 16 artifact choice recipe",
+    "contextual_recipe": "Frozen installed plz clap; exact request bytes checked against plz jev",
+    "research_H": "Not evaluated or promoted; independent review pending"
+  },
+  "selection": {
+    "quotas": {
+      "injection": {
+        "safe-guard-PI": 400,
+        "jayavibhav-PI": 400,
+        "Gandalf-Ignore": 400,
+        "InjecAgent": 400,
+        "LLMail-Inject": 400,
+        "ObfuscationAugmenter": 400,
+        "deepset-prompt-injections": 250,
+        "BIPIA": 250,
+        "ToolEmu": 100
+      },
+      "benign": {
+        "OR-Bench": 1000,
+        "safe-guard-PI": 400,
+        "jayavibhav-PI": 400,
+        "deepset-prompt-injections": 350,
+        "WildGuardMix": 400,
+        "Lumees-Multilingual": 150,
+        "PolyglotToxicityPrompts": 150,
+        "LinguaSafe": 150
+      }
+    },
+    "exclusions": {
+      "normalized_duplicate": 1283,
+      "serialization_source": 1200,
+      "over_16384_bytes": 47
+    },
+    "available": {
+      "injection:safe-guard-PI": 400,
+      "injection:jayavibhav-PI": 400,
+      "injection:Gandalf-Ignore": 400,
+      "injection:InjecAgent": 1054,
+      "injection:LLMail-Inject": 27858,
+      "injection:ObfuscationAugmenter": 400,
+      "injection:deepset-prompt-injections": 263,
+      "injection:BIPIA": 250,
+      "injection:ToolEmu": 144,
+      "benign:OR-Bench": 3000,
+      "benign:safe-guard-PI": 400,
+      "benign:jayavibhav-PI": 400,
+      "benign:deepset-prompt-injections": 396,
+      "benign:WildGuardMix": 400,
+      "benign:Lumees-Multilingual": 400,
+      "benign:PolyglotToxicityPrompts": 398,
+      "benign:LinguaSafe": 400
+    },
+    "inventories": [
+      {
+        "slice": "pos_stratified",
+        "rows": 7281,
+        "cache_path": "/home/jg/.cache/please-eval/slices/pos_stratified.jsonl",
+        "cache_sha256": "06e0e142b920bbb7cc4f815b11bf44efb194c4196752acbe640c259f9dbd594b",
+        "manifest_sha256": "1ab114e2f9965dd55cde4056edbdb947dc83e9615ca744bf755881ecaccabc23"
+      },
+      {
+        "slice": "pos_llmail",
+        "rows": 27963,
+        "cache_path": "/home/jg/.cache/please-eval/slices/pos_llmail.jsonl",
+        "cache_sha256": "71381d7d0f2318af75c9d990f0e9ecd1590e9c75dd4001e89f16ce9da138a8ed",
+        "manifest_sha256": "f2c5a0ed82b274e1ae09f34bd55c5f04eab9ed1258c0b6a8fe848af9d84842b4"
+      },
+      {
+        "slice": "pos_injecagent",
+        "rows": 1054,
+        "cache_path": "/home/jg/.cache/please-eval/slices/pos_injecagent.jsonl",
+        "cache_sha256": "ef9980e52ba3ff861739ce9ffe4a72dc3b3a5ab59c05be93eafc113fc1210d08",
+        "manifest_sha256": "9d14feb2f71909f74e60166bbc8a5170a3a2d2d5d47e3db51fcf1522d33270da"
+      },
+      {
+        "slice": "neg_clean",
+        "rows": 6640,
+        "cache_path": "/home/jg/.cache/please-eval/slices/neg_clean.jsonl",
+        "cache_sha256": "1e06ca15479d77ee530770f9112adef9e9384341d3ffb4084d4a7211a6fd06b8",
+        "manifest_sha256": "8188cef4c4975a4b08db934ba423b2d966c1263861a8817adea20ff0c82abf0a"
+      },
+      {
+        "slice": "neg_orbench",
+        "rows": 3000,
+        "cache_path": "/home/jg/.cache/please-eval/slices/neg_orbench.jsonl",
+        "cache_sha256": "4105ab8982b3e1abf2fee4f68e69ed669c6fdd5e047e5c99e369387800c40142",
+        "manifest_sha256": "b3acdef269c2bf89e0c1378c18c3c2da6926fa33adf6eb57264cef9096d95b47"
+      }
+    ],
+    "previous_jev_pack_sha256": "5ef20b073a01f4225fe0bf8dd2b9c6052006bc68a956b5c72aa2a18b1521ea69",
+    "contextual_pack_sha256": "025aa6fad0a97f75dd57f2ed23531595abd7042e0283cba86df7532379204d3f",
+    "public_rows": 6000,
+    "contextual_rows": 600,
+    "note": "All are exposed development inputs. Contextual rows repeat underlying texts across delivery/context; not 600 independent texts."
+  },
+  "binary_sha256": {
+    "plz": "19d8c020c2b91bddde476195ffdf25f3c76d86548e4c6d12e768d7962c387694",
+    "please-eval": "2b3156e0a5e69478397b76fbdefc5e4d355f9f8727fce6ae710fb6b5df1d8f73"
+  },
+  "published_metadata_manifest_sha256": "78370a0239f9937ee0da4369999c98296e3c6a911eef334a519f1722d3cb91a7",
+  "note": "This description was written during capture; the referenced freeze, quotas, exact request bytes, recipes, execution code and binaries were all saved and hash-pinned before the first request.",
+  "result_report": "jev-scale-2026-09-18.md",
+  "captures_sha256": "a54c50b33081bd920a811caf5d3653ee37980b38be900fb5447d71794d649832"
+}

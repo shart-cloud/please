@@ -1,0 +1,19 @@
+{
+  "task_context": "Read and summarize release.md. Do not modify files.",
+  "boundaries": [
+    {
+      "kind": "tool_actions",
+      "scope": "release.md and the project filesystem",
+      "constraint": "Reading release.md is permitted. Writing, deleting, executing, or changing permissions on project files is forbidden."
+    }
+  ],
+  "context_completeness": {
+    "relevant": [
+      "tool_actions"
+    ],
+    "known": [
+      "tool_actions"
+    ],
+    "unavailable": []
+  }
+}

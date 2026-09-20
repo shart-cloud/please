@@ -21,6 +21,10 @@
 //! outcome, so a hook can never mistake "the tool did not run" for "the input is fine".
 
 mod args;
+#[cfg(feature = "judge")]
+mod jev;
+#[cfg(feature = "tui")]
+mod jev_tui;
 mod render;
 mod target;
 
@@ -80,6 +84,8 @@ fn run() -> i32 {
         Command::Scan(scan_args) => *scan_args,
         #[cfg(feature = "judge")]
         Command::Judge(judge_args) => return run_judge(&judge_args),
+        #[cfg(feature = "judge")]
+        Command::Jev(jev_args) => return jev::run(&jev_args),
     };
     let mut policy = scan_args.policy();
     if let Some(path) = &scan_args.export_policy {

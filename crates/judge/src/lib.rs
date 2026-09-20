@@ -32,6 +32,7 @@
 pub mod client;
 pub mod credential;
 mod envelope;
+pub mod jev;
 pub mod ml_review;
 pub mod request;
 pub mod response;

@@ -10,9 +10,9 @@ Please (`plz`) is a prompt evaluation engine to look for injection techniques di
 
 You can install the latest version from a clone of this repository:
 
-`cargo install --path crates/cli`
+`cargo install --path crates/cli --locked`
 
-The LLM judge is built in by default. If you want a binary that carries no HTTP client or TLS stack at all, build with `cargo install --path crates/cli --no-default-features` you lose the `--judge` arguement but other offline detections will work.
+The LLM judge is built in by default. If you want a binary that carries no HTTP client or TLS stack at all, build with `cargo install --path crates/cli --no-default-features` you lose the `--judge` option and the Jev/TUI commands, but other offline detections will work.
 
 ### How to use `plz`
 
@@ -63,6 +63,12 @@ If you want to dig in further to why a rule got triggered the `--explain` argume
 #### Please fire from a Hook or CI Gate:
 
 `plz scan --format json ./skills/ || exit 1`
+
+#### Please Clap:
+
+Run `plz clap` to open an interactive Jev workspace for your own text or files. Enter the caller task and allowed actions, select the source, and paste a TypeSafe API key into the masked field (or use `TYPESAFE_API_KEY`). F3 previews locally; F5 asks Jev; Ctrl+S saves the advice.
+
+`plz clap --tui candidate.txt --context docs/jev-context.example.json --provenance caller-provided` preloads a file and caller context. Explicit input/context without `--tui` continues to return JSON. See [Jev setup, controls and evidence](docs/jev.md).
 
 #### Please Phone a Friend:
 
@@ -151,3 +157,5 @@ throughput, and one design decision that `docs/limits.md` now argues was wrong.
 Experimental protected-export detection is available through caller-owned [export policies](docs/export-policies.md). See the [measured SHART experiment](docs/research/action-evidence-shart-2026-09-10.md) for improvements, false positives, and remaining gaps.
 
 [CI gates](docs/ci-gates.md) distinguish per-case regressions, unmet fixture release criteria, and verified real-model inference.
+
+Jev personal-use shortcuts: F6/F7 save/load named context presets; F8 opens saved advice offline. See [Jev local files](docs/jev.md#reusable-context-and-offline-saved-advice) and the [independent review packet](docs/research/jev-review-packet-2026-09-17/README.md).

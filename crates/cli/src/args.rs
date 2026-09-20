@@ -45,6 +45,11 @@ pub enum Command {
     /// subcommand and exits 64.
     #[cfg(feature = "judge")]
     Judge(JudgeArgs),
+
+    /// Contextual advice from TypeSafe Jev; interactive in a terminal, JSON for scripts.
+    #[cfg(feature = "judge")]
+    #[command(visible_alias = "clap")]
+    Jev(JevArgs),
 }
 
 #[cfg(feature = "judge")]
@@ -107,6 +112,40 @@ impl From<Provenance> for please_core::InputProvenance {
             Provenance::ToolResponse => Self::ToolResponse,
         }
     }
+}
+
+#[cfg(feature = "judge")]
+#[derive(Debug, Parser)]
+pub struct JevArgs {
+    /// One UTF-8 file, or - for standard input. Sent to TypeSafe unless --request-only.
+    pub input: Option<String>,
+    /// Open the interactive Jev workspace (requires terminal stdin and stdout).
+    #[cfg(feature = "tui")]
+    #[arg(long, conflicts_with_all = ["check", "request_only"])]
+    pub tui: bool,
+    /// Open the TUI with a named local caller-context preset.
+    #[cfg(feature = "tui")]
+    #[arg(long, conflicts_with_all = ["context", "provenance", "check", "request_only", "view_advice"])]
+    pub preset: Option<PathBuf>,
+    /// Open saved advice read-only, without contacting Jev (requires a terminal).
+    #[cfg(feature = "tui")]
+    #[arg(long, conflicts_with_all = ["input", "context", "provenance", "model", "check", "request_only"])]
+    pub view_advice: Option<PathBuf>,
+    /// Caller-owned task, boundaries and completeness JSON.
+    #[arg(long)]
+    pub context: Option<PathBuf>,
+    /// Input origin established by the caller.
+    #[arg(long, value_enum)]
+    pub provenance: Option<Provenance>,
+    /// Model identifier; otherwise TYPESAFE_MODEL or jev-latest.
+    #[arg(long)]
+    pub model: Option<String>,
+    /// Show configuration without reading input or making a network request.
+    #[arg(long, conflicts_with = "request_only")]
+    pub check: bool,
+    /// Print the exact request locally without reading a credential or contacting TypeSafe.
+    #[arg(long)]
+    pub request_only: bool,
 }
 
 #[derive(Debug, Parser)]

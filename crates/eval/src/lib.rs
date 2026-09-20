@@ -104,3 +104,6 @@ pub mod boundary;
 
 /// Human-readable views of saved corpus evaluations.
 pub mod corpus_presentation;
+
+#[cfg(feature = "ml")]
+pub mod gliner2;

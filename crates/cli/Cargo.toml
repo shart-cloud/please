@@ -23,7 +23,7 @@ path = "src/main.rs"
 
 # ── Features ────────────────────────────────────────────────────────────────────────────────────
 #
-# `judge` is ON by default; `ml-candle` remains opt-in at build and runtime. Judge was not, and the reversal is
+# The judge and optional tui presentation features are ON by default; `ml-candle` remains opt-in at build and runtime. Judge was not, and the reversal is
 # deliberate: a tier nobody can reach without recompiling is a tier nobody evaluates, and the second opinion
 # is the part of this tool that resolves what the structural tier provably cannot (docs/limits.md, "Displayed
 # payloads in tool output cannot be told from live ones").
@@ -41,8 +41,10 @@ path = "src/main.rs"
 # ci/check-cli-dependencies.sh checks the --no-default-features graph for known HTTP/TLS stacks.
 # CI tests that configuration separately; the default graph intentionally includes the judge client.
 [features]
-default = ["judge"]
+default = ["judge", "tui"]
 judge = ["dep:please-judge", "please-scan/judge"]
+# Terminal presentation is optional and never enters the core or evaluator dependency graph.
+tui = ["judge", "dep:ratatui", "dep:crossterm"]
 ml-candle = ["dep:please-ml", "please-ml/candle", "please-scan/ml-candle"]
 
 [dependencies]
@@ -56,6 +58,10 @@ serde_json = { workspace = true }
 # `--no-default-features` drops it entirely. What changed is that `default` now asks for it.
 please-judge = { workspace = true, optional = true }
 please-ml = { workspace = true, optional = true }
+
+# Keep the CLI compatible with its declared Rust baseline; eval uses its own newer UI stack.
+ratatui = { version = "0.29", default-features = false, features = ["crossterm"], optional = true }
+crossterm = { version = "0.28.1", optional = true }
 
 [dev-dependencies]
 # Snapshot tests for human-readable output, and a scratch tree for directory-walk tests including the

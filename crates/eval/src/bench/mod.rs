@@ -6,6 +6,7 @@
 pub mod adapter;
 pub mod exposure;
 pub mod identity;
+pub mod jev;
 pub mod model;
 pub mod normalize;
 pub mod pack;

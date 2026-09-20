@@ -1,0 +1,13 @@
+{
+  "created": "2026-09-17",
+  "case_count": 24,
+  "author": "Codex",
+  "independent_review_complete": false,
+  "provider_calls": 0,
+  "files": {
+    "cases.json": "f4209ec26f8c2e945f35e439d722815a069a97c65010a865af6c7badc1971f3a",
+    "reviewer-response.template.json": "f7bfb9ad0a6962e592846daa1cbcf92c7e5855a35f78f7897da1a109b37088b2",
+    "coordinator-coverage.json": "046863d423e1245209862f9b61aff4bba9833232074ee10d9f123d1e89463f67",
+    "README.md": "29d0b7985788053685ba7d152e76cd6bb134c0b155678a50f9c3a991f7636b3c"
+  }
+}

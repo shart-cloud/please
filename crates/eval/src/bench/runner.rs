@@ -35,6 +35,7 @@ pub struct VerifiedExperiment {
 }
 
 enum LiveAdapter {
+    Jev(Box<crate::bench::jev::JevAdapter>),
     Please(Box<PleaseAdapter>),
     #[cfg(unix)]
     Process(Box<ProcessAdapter>),
@@ -166,6 +167,7 @@ pub fn run(experiment_path: &Path, out: &Path) -> Result<RunManifest> {
         .map(|(system, runtime_identity)| PlannedSystem {
             sandbox_command: match &system.manifest.adapter {
                 AdapterManifest::Please { .. } => None,
+                AdapterManifest::Jev { .. } => None,
                 AdapterManifest::Subprocess {
                     sandbox_command, ..
                 } => Some(sandbox_command.clone()),
@@ -393,6 +395,16 @@ fn resolve_exposure_path(root: &Path, path: &Path) -> Result<PathBuf> {
 
 fn runtime_identity(system: &VerifiedSystem) -> Result<serde_json::Value> {
     match &system.manifest.adapter {
+        AdapterManifest::Jev {
+            model,
+            max_requests,
+            max_errors,
+        } => Ok(serde_json::json!({
+            "client": "please-judge::jev; shared with plz jev",
+            "model": model, "max_requests": max_requests, "max_errors": max_errors,
+            "credential_variable": "TYPESAFE_API_KEY", "credential_persisted": false,
+            "network_capable": true, "price_status": "unknown", "mapping": "bench-tool-actions/v1"
+        })),
         AdapterManifest::Please { .. } => crate::bench::please::runtime_identity(system),
         AdapterManifest::Subprocess {
             executable_sha256,
@@ -420,6 +432,9 @@ fn make_adapter(
     limits: RunLimits,
 ) -> Result<LiveAdapter> {
     match system.manifest.adapter {
+        AdapterManifest::Jev { .. } => Ok(LiveAdapter::Jev(Box::new(
+            crate::bench::jev::JevAdapter::new(system, &limits)?,
+        ))),
         AdapterManifest::Please { .. } => {
             Ok(LiveAdapter::Please(Box::new(PleaseAdapter::new(system)?)))
         }
@@ -448,6 +463,7 @@ fn execute(
     _system_digest: &str,
 ) -> NativeExecution {
     match adapter {
+        LiveAdapter::Jev(adapter) => adapter.execute(case, candidate),
         LiveAdapter::Please(adapter) => adapter.execute(&case.case_id, &case.provenance, candidate),
         #[cfg(unix)]
         LiveAdapter::Process(adapter) => adapter.execute(
@@ -467,6 +483,7 @@ fn execute(
 
 fn finish_adapter(adapter: LiveAdapter) -> Vec<ProcessTelemetry> {
     match adapter {
+        LiveAdapter::Jev(_) => Vec::new(),
         LiveAdapter::Please(_) => Vec::new(),
         #[cfg(unix)]
         LiveAdapter::Process(adapter) => adapter.finish(),

@@ -24,6 +24,12 @@ the second one is true here.
 
 ## Component breakdown
 
+The September 18, 2026 larger Jev evaluation (`crates/eval/scripts/jev_scale/`
+and its research reports/manifests) is Codex-authored and human-directed. It
+reuses upstream public labels and earlier first-party contextual labels, freezes
+source-stratified requests, and compares real Jev responses with the structural
+product. It does not add independent label review or change shipping defaults.
+
 | Component | Authorship | Notes |
 |---|---|---|
 | Project concept, scope, and goals | Human | The idea, the target integration points, and the decision to build something maintainable rather than a one-off |
@@ -177,3 +183,79 @@ moved bench aggregation under metrics, and added publication and wire-compatibil
 Existing corpus and bench manifest shapes, result bytes, metric semantics, and percentage rounding
 were preserved. Compatibility checks re-read 51 retained corpus runs and two bench runs with old and
 new readers; they did not rescan prompts or constitute new detector effectiveness evidence.
+
+## Lightweight decision-model pilot — 2026-09-16
+
+Human-directed, Codex-authored: isolated GLiClass benchmark adapter, pinned environment/model manifest, source-stratified comparison tooling, contract/parity checks, and research report. Jared proposed exploring lightweight contextual decision models against Please. No shipping detection behavior was modified.
+
+## Decision-model phase 2 planning - 2026-09-16
+
+At Jared's request, Codex researched the next lightweight-model experiment, audited the saved GLiClass score distributions, and authored the [phase 2 plan](research/decision-model-phase-2-plan-2026-09-16.md) and metadata-only research manifest. The plan and proposed gates are not new model results; no phase-2 model was run and no shipping behavior changed.
+
+After Jared confirmed Colab Pro access, Codex added a resumable cloud-training path and retained local deployment benchmarks and independent holdout separation. No cloud training or data transfer was performed.
+
+Codex authored the [next-steps handoff](research/decision-model-next-steps-handoff-2026-09-16.md) at Jared's request, documenting the current checkout, retained evidence, Phase 2A implementation order and later Colab training path.
+
+## Decision-model Phase 2A implementation - 2026-09-16
+
+At Jared's request, Codex authored the isolated G1/N1/N2 adapters, frozen recipes and asset manifests, contract/parity tests, generated development and calibration packs, self-reviewed control labels, and native-run reporting. Generated labels are same-author development evidence; independent review and a fresh holdout remain outstanding. Existing Phase 1 work and failed setup attempts were preserved. No shipping code or cloud training was changed.
+
+## TypeSafe Jev advisory integration - 2026-09-16
+
+After Jared obtained TypeSafe access, he requested Jev integration into plz. Codex authored the optional Jev client, caller-context validation, bounded HTTP transport, advisory CLI command, offline contract/property/HTTP tests and setup documentation. No release authority is granted and no live provider evaluation is claimed. At Jared's request, Codex added `plz clap` as an alias for `plz jev`, correcting the initial shell-alias interpretation.
+
+## Jev live development comparison - 2026-09-16
+
+At Jared's request, Codex used a temporary in-memory TypeSafe credential to compare the frozen Jev recipes against all 1,950 previously tested synthetic/public cases. The isolated network-enabled evaluator preserves exact inputs, native verified runs, original failures, bounded follow-up diagnostics, and source-stratified comparisons. Contextual tests invoked the captured plz clap CLI; artifact tests used a separate benchmark-only Choice prompt. No thresholds or shipping enforcement changed, and no independent holdout is claimed.
+
+## Jev contextual follow-up - 2026-09-16
+
+At Jared's request, Codex froze and ran four contextual variants on 120 existing synthetic cases and 36 new analysis-versus-redirection regressions. The isolated evaluator separates representation changes, focused questions and additional caller facts with deterministic guards. Twelve contract tests and the 624-row native capture replay verified. No variant passed screening, so the predeclared 600-case confirmation was not run. Original failures, one setup correction and one assistant-caused authentication failure remain preserved. No shipping recipe or enforcement policy changed.
+
+## Jev usage-pattern experiments - 2026-09-16
+
+At Jared's request, Codex authored and froze four API recipes and a shared-response decoder comparison, then ran 816 requests over 204 synthetic development cases. Forty-eight new rows were authored and self-reviewed before inference. Fourteen offline checks and the 1,020-row native replay passed. Caller-directed concise questions improved measured performance but no candidate passed every screening gate; confirmation was not run. The report preserves all responses, rejected components, prior data and a failed offline preflight. No shipping behavior changed; independent review and fresh holdout remain outstanding.
+
+## Interactive Jev workspace - 2026-09-16
+
+At Jared's request, Codex turned the personal-input Jev workflow into an interactive CLI feature: text/file input, caller-owned context, explicit provenance, local request preview, masked in-memory credentials, asynchronous advice, and non-overwriting JSON export. Bare terminal invocation of plz clap / plz jev opens the TUI; explicit script invocation retains JSON. The presentation feature is optional and does not link the evaluator or change the advisory recipe. Codex added UI/CLI/transport tests, credential-reflection protection, terminal dependency isolation checks and documentation. Full workspace credential-canary tests, Clippy, offline and JSON-only configurations, core/dependency/WebAssembly checks, render checks and actual terminal smoke tests passed. One synthetic live TUI request completed; credentials were absent from terminal output and the saved result. The installed binary preserves byte-identical ordinary scan output and exit status on three regression fixtures.
+
+At Jared's request, Codex authored the [Jev/TUI continuation handoff](research/jev-next-steps-handoff-2026-09-16.md), capturing the installed feature, verified evidence, uncommitted checkout, research limits and proposed next steps. The handoff does not promote a research recipe, start another experiment or create a new task.
+
+## Jev local files and review preparation - 2026-09-17
+
+Following Jared's continuation handoff, Codex authored named local context
+presets, strict bounded saved-advice parsing, offline read-only viewing,
+CLI entry points, regression/property tests and documentation. The shipping
+recipe and thresholds are unchanged. Codex also authored a model-outcome-free
+analysis/redirection review packet and blank response template. Independent
+labels remain pending; this packet is not a blind holdout. No provider
+inference, threshold tuning, commit or push was performed.
+
+The continuation passed the full workspace credential-canary suite, Clippy,
+feature/dependency/core/WebAssembly checks, offline file contracts and actual
+terminal tests. Codex installed the verified release after preserving the old
+binary; scanner output and exact Jev requests matched the prior version.
+
+## Native framework model evaluation — 2026-09-18
+
+At Jared's direction, Codex added an optional Jev test-bench adapter using the existing
+`please-judge::jev` client shared by `plz jev` / `plz clap`. Jared explicitly chose to validate a
+Candle classification implementation before benchmarking GLiNER2. Codex authored the Rust
+classification adapter, bounded protocol, model/recipe locks, synthetic parity fixtures,
+preparation tooling, and documentation. The schema compiler and Unicode word splitter follow
+Fastino's Apache-2.0 GLiNER2 implementation; model inference uses Hugging Face Candle. The
+Python GLiNER2 library is an isolated numerical reference, not the benchmark runtime. These
+changes remain in the excluded evaluator and do not promote a model into shipping detection.
+
+Upstream sources: [GLiNER2](https://github.com/fastino-ai/GLiNER2),
+[pinned model](https://huggingface.co/fastino/gliner2-base-v1/tree/79c3a777abc572b4767922f3916cf63fb5754df2),
+[Candle](https://github.com/huggingface/candle).
+
+## Laya source review — 2026-09-19
+
+At Jared's request, Codex inspected pinned Laya source and small model configuration files, compared them with the current Please benchmark and Jev contracts, and authored the [integration assessment](research/laya-integration-assessment-2026-09-19.md). This was a source review only: no weights, dependency installation, inference, shipping code or defaults changed.
+
+## Laya measured development experiment — 2026-09-19
+
+At Jared's request, Codex authored and ran an isolated local Laya evaluation: two pinned checkpoints, original Jev and compact question sets, a frozen 1,200-public/600-contextual sample, and three diagnostic controls. The 7,560 reported model/recipe rows use native benchmark verification and matched historical Jev evidence without additional Jev requests. Offline contracts, tokenizer parity, synthetic repeatability and exact token boundaries were checked. Original protocol failures and zero-response startup attempts remain retained; same-limit retries are explicitly indexed. No shipping defaults, environment packages, training or calibration were changed. All data remains exposed development evidence; independent review and a fresh holdout are outstanding.

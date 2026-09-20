@@ -1,0 +1,180 @@
+{
+  "cascade_ceiling": {
+    "attacks_gliner2_misses_at_0.7": 1024,
+    "jev_confident_misses": 526,
+    "jev_confident_misses_gliner2_flags": 181,
+    "of_those_jev_alone_would_catch": 356
+  },
+  "decision_rule_reconstruction": {
+    "excluded_no_saved_scores": {
+      "gliner2_input_cap": 171,
+      "jev_provider_contract": 19
+    },
+    "gliner2_mismatches": 0,
+    "gliner2_rows_checked": 5829,
+    "jev_mismatches": 0,
+    "jev_rows_checked": 5981,
+    "note": "Jev's gate acts on max probability, not the reported confidence field.",
+    "rule": "argmax over {injection,benign,indeterminate}; abstain if argmax==indeterminate or max<gate"
+  },
+  "error_confidence": {
+    "gliner2": {
+      "confident_misses_by_band": {
+        "[0.7,0.9)": 30,
+        "[0.9,0.99)": 50,
+        "[0.99,0.999)": 46,
+        "[0.999,1.01)": 760
+      },
+      "confident_misses_total": 886,
+      "false_alarms_by_band": {
+        "[0.7,0.9)": 13,
+        "[0.9,0.99)": 23,
+        "[0.99,0.999)": 19,
+        "[0.999,1.01)": 125
+      },
+      "false_alarms_total": 180
+    },
+    "jev": {
+      "confident_misses_by_band": {
+        "[0.7,0.9)": 220,
+        "[0.9,0.99)": 178,
+        "[0.99,0.999)": 38,
+        "[0.999,1.01)": 90
+      },
+      "confident_misses_total": 526,
+      "false_alarms_by_band": {
+        "[0.7,0.9)": 4,
+        "[0.9,0.99)": 0,
+        "[0.99,0.999)": 0,
+        "[0.999,1.01)": 0
+      },
+      "false_alarms_total": 4
+    }
+  },
+  "generated": "2026-09-19",
+  "inputs": {
+    "api_calls": 0,
+    "cases": 6000,
+    "gliner2_run": ".cache/framework-models-20260918/run-public",
+    "inference_runs": 0,
+    "jev_run": ".cache/jev-scale-20260918/run-public",
+    "paired_sha256": "fb8a0b9f1c0272781a3a3a938bffffc7f16dc0d8ad6555b8b9868d560aacfacb",
+    "shared_pack_digest": "d2979c50c09dfd5c39775a12dc013dfc4dbfb3c6ea9fca062ff20ee2fe1da579"
+  },
+  "limits": [
+    "All 6,000 cases are exposed development evidence; no holdout claim is made.",
+    "Any threshold below the shipping 0.7 gate is selected on this exposed data and is not calibrated.",
+    "Benign false-alarm counts of 4 (Jev) are too small to establish a deployment rate.",
+    "Harmful-labelled positives come from a single source; no non-English positives exist.",
+    "GLiNER2 scores are uncalibrated and saturated; probabilities are not reliability estimates."
+  ],
+  "logit_margin_addendum": {
+    "auc_scored_rows": {
+      "logit_margin": 0.8899,
+      "max_probability": 0.8204
+    },
+    "denominator": 3000,
+    "interpretation": "features carry ordering signal the softmax discards; supports calibration-aware fine-tuning, does not make GLiNER2 competitive with Jev standalone",
+    "method": "offline re-ranking of cached logits; no training, no inference",
+    "question": "does the logit margin rank better than the saturated max-probability?",
+    "recall_at_fp_budget": {
+      "logit_margin": {
+        "0": 158,
+        "100": 1774,
+        "20": 1044,
+        "4": 562,
+        "50": 1428,
+        "9": 896
+      },
+      "max_probability": {
+        "0": 0,
+        "100": 1774,
+        "20": 0,
+        "4": 0,
+        "50": 0,
+        "9": 0
+      }
+    }
+  },
+  "non_decision_taxonomy": {
+    "gliner2": {
+      "input_cap": 171,
+      "score_gate": 176
+    },
+    "jev": {
+      "provider_contract_inconsistent_choice": 1,
+      "provider_contract_invalid_distribution": 18,
+      "score_gate": 643
+    }
+  },
+  "operating_points": {
+    "AND jev@0.7 & gliner2@0.7": {
+      "attack_denominator": 3000,
+      "attack_recall": 1498,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 3
+    },
+    "OR jev@0.7 | gliner2@0.999": {
+      "attack_denominator": 3000,
+      "attack_recall": 2270,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 127
+    },
+    "SEL jev@0.5 else gliner2@0.99": {
+      "attack_denominator": 3000,
+      "attack_recall": 2172,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 11
+    },
+    "gliner2@0.7": {
+      "attack_denominator": 3000,
+      "attack_recall": 1976,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 180
+    },
+    "gliner2@0.999": {
+      "attack_denominator": 3000,
+      "attack_recall": 1868,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 125
+    },
+    "jev@0.5": {
+      "attack_denominator": 3000,
+      "attack_recall": 2121,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 9
+    },
+    "jev@0.6": {
+      "attack_denominator": 3000,
+      "attack_recall": 1988,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 8
+    },
+    "jev@0.7 (shipping gate)": {
+      "attack_denominator": 3000,
+      "attack_recall": 1854,
+      "benign_denominator": 3000,
+      "benign_false_alarms": 4
+    }
+  },
+  "paired_cells": {
+    "benign": {
+      "both_flag": 3,
+      "gliner2_only_decided": 40,
+      "gliner2_only_flag": 162,
+      "jev_only_decided": 207,
+      "jev_only_flag": 1,
+      "neither_decided": 2,
+      "neither_flags": 2585
+    },
+    "injection": {
+      "both_flag": 1498,
+      "gliner2_only_decided": 570,
+      "gliner2_only_flag": 181,
+      "jev_only_decided": 88,
+      "jev_only_flag": 302,
+      "neither_decided": 50,
+      "neither_flags": 311
+    }
+  }
+}

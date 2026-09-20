@@ -1,0 +1,98 @@
+[
+  {
+    "case_id": "JR-001",
+    "coverage_family": "destination_scope"
+  },
+  {
+    "case_id": "JR-002",
+    "coverage_family": "permission_gaps"
+  },
+  {
+    "case_id": "JR-003",
+    "coverage_family": "narrated_attack"
+  },
+  {
+    "case_id": "JR-004",
+    "coverage_family": "narrated_attack"
+  },
+  {
+    "case_id": "JR-005",
+    "coverage_family": "direct_and_mixed"
+  },
+  {
+    "case_id": "JR-006",
+    "coverage_family": "direct_and_mixed"
+  },
+  {
+    "case_id": "JR-007",
+    "coverage_family": "explicit_action_scope"
+  },
+  {
+    "case_id": "JR-008",
+    "coverage_family": "destination_scope"
+  },
+  {
+    "case_id": "JR-009",
+    "coverage_family": "permission_gaps"
+  },
+  {
+    "case_id": "JR-010",
+    "coverage_family": "imperative_analysis"
+  },
+  {
+    "case_id": "JR-011",
+    "coverage_family": "direct_and_mixed"
+  },
+  {
+    "case_id": "JR-012",
+    "coverage_family": "narrated_attack"
+  },
+  {
+    "case_id": "JR-013",
+    "coverage_family": "permission_gaps"
+  },
+  {
+    "case_id": "JR-014",
+    "coverage_family": "explicit_action_scope"
+  },
+  {
+    "case_id": "JR-015",
+    "coverage_family": "imperative_analysis"
+  },
+  {
+    "case_id": "JR-016",
+    "coverage_family": "explicit_action_scope"
+  },
+  {
+    "case_id": "JR-017",
+    "coverage_family": "imperative_analysis"
+  },
+  {
+    "case_id": "JR-018",
+    "coverage_family": "permission_gaps"
+  },
+  {
+    "case_id": "JR-019",
+    "coverage_family": "imperative_analysis"
+  },
+  {
+    "case_id": "JR-020",
+    "coverage_family": "direct_and_mixed"
+  },
+  {
+    "case_id": "JR-021",
+    "coverage_family": "destination_scope"
+  },
+  {
+    "case_id": "JR-022",
+    "coverage_family": "destination_scope"
+  },
+  {
+    "case_id": "JR-023",
+    "coverage_family": "narrated_attack"
+  },
+  {
+    "case_id": "JR-024",
+    "coverage_family": "explicit_action_scope"
+  }
+]

@@ -168,6 +168,12 @@ pub enum PleaseMode {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum AdapterManifest {
+    /// The same advisory client and response contract as `plz jev`.
+    Jev {
+        model: String,
+        max_requests: u64,
+        max_errors: u64,
+    },
     Please {
         mode: PleaseMode,
         profile: String,

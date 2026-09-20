@@ -1,0 +1,98 @@
+{
+  "model": {
+    "repo": "fastino/gliner2-base-v1",
+    "revision": "79c3a777abc572b4767922f3916cf63fb5754df2",
+    "files": {
+      "added_tokens.json": "3c274ca559be8b7b18febf616724ec05f8a8abccd428bd2744608f45f7a0b067",
+      "config.json": "33d8aa009deed4b5435d162e08b5a720b252a0084e59d30d366b37da8c0193c5",
+      "encoder_config/config.json": "9840a4db70bc007e6b65d336ebe2bddc53bc2ce210dc5757e50d5bb17122f7cd",
+      "model.safetensors": "845fc4bd93c525b86124c58ab4f56c9eacf8587953086b14c501fab25957c007",
+      "special_tokens_map.json": "84ea70143f533d7e99b393d87f20010887a9ac2cba955828ef313886e4e83f4f",
+      "spm.model": "c679fbf93643d19aab7ee10c0b99e460bdbc02fedf34b92b05af343b4af586fd",
+      "tokenizer.json": "1b7fbabfb4c690bed84c6793bfecae9b8dfe205751b04f9ffd1e76a1e7df9c16",
+      "tokenizer_config.json": "4e6c6a8d26478b670692916266438485403b0c54af31fd1a12bab8a465d062e9"
+    }
+  },
+  "reference": "gliner2==2.0.0; PyTorch CPU f32",
+  "implementation": "Candle 0.11 CPU f32; classification-only",
+  "parity": {
+    "cases": 18,
+    "exact_encoded_inputs": 18,
+    "top_label_agreement": 18,
+    "threshold_decision_agreement": 18,
+    "max_absolute_logit_error": 3.9577484130859375e-05,
+    "max_absolute_probability_error": 2.205371856689453e-06,
+    "logit_tolerance": 0.001,
+    "probability_tolerance": 0.0001,
+    "reference_sha256": "bb1f31e74e960f338e1f770222c55f87989d9fc4038009461a39270c5936aab3",
+    "candle_sha256": "7d4f64992df9d238542a0db207735601af2cd1da1afc8a0055129231614a6737",
+    "passed": true
+  },
+  "tokenization_fuzz_cases": 128,
+  "tokenization_fuzz_matches": 128,
+  "boundary_checks": [
+    {
+      "id": "reserved",
+      "diagnostic": {
+        "backend": "candle-0.11/f32/cpu",
+        "error": "reserved tokenizer marker in input",
+        "inference_ms": 0.015716,
+        "model": "fastino/gliner2-base-v1@79c3a777abc572b4767922f3916cf63fb5754df2",
+        "recipe_sha256": "7136a435c401efc5544b5e1dc0a67fea41e2a471882656f3ad68beb6a95c3ea5",
+        "remote_requests": 0,
+        "uncalibrated_scores": true
+      }
+    },
+    {
+      "id": "over-cap",
+      "diagnostic": {
+        "backend": "candle-0.11/f32/cpu",
+        "encoded_tokens": 671,
+        "error": "encoded input exceeds token cap; no truncation",
+        "inference_ms": 3.173848,
+        "model": "fastino/gliner2-base-v1@79c3a777abc572b4767922f3916cf63fb5754df2",
+        "recipe_sha256": "7136a435c401efc5544b5e1dc0a67fea41e2a471882656f3ad68beb6a95c3ea5",
+        "remote_requests": 0,
+        "uncalibrated_scores": true
+      }
+    },
+    {
+      "id": "byte-cap",
+      "diagnostic": {
+        "backend": "candle-0.11/f32/cpu",
+        "error": "candidate byte cap",
+        "inference_ms": 0.008284999999999999,
+        "model": "fastino/gliner2-base-v1@79c3a777abc572b4767922f3916cf63fb5754df2",
+        "recipe_sha256": "7136a435c401efc5544b5e1dc0a67fea41e2a471882656f3ad68beb6a95c3ea5",
+        "remote_requests": 0,
+        "uncalibrated_scores": true
+      }
+    }
+  ],
+  "frozen_files": {
+    "please-eval-gliner2": "80216a29d9f6bbe895b52a813a643a0fc759ef371aaa34cdd77f3baa6f250456",
+    "please-eval": "13ed9c8e12064f136fc87b3cc48512ac8c013e6b84345115fe150675a4a3373e",
+    "gliner2.lock.json": "4b9a53ddf06a6b9e0072b5a896d0bb99ac489b97d164a1530865b266ab71a3ff",
+    "candle.recipe.json": "7136a435c401efc5544b5e1dc0a67fea41e2a471882656f3ad68beb6a95c3ea5",
+    "candle.system.json": "dde3250dff4ad7277abcfde4d0fb4d2440453a27f4c2034474cb13dc3e343ab1",
+    "public.experiment.json": "37cfa11a168428d536bc20bd47927e241fbccbdb009ac2014e4438811a068fbc",
+    "contextual.experiment.json": "d849d22574e944c7b061751e5b15e3a871cf2b003d7dcf4fda0a42e24982af74",
+    "parity.reference.jsonl": "bb1f31e74e960f338e1f770222c55f87989d9fc4038009461a39270c5936aab3",
+    "parity.candle.final.jsonl": "7d4f64992df9d238542a0db207735601af2cd1da1afc8a0055129231614a6737",
+    "parity.result.json": "79edb824d24ff8604d51018e4157435316d3cc34412a2ef15ae5ba9a815a1dbf",
+    "fuzz.reference.jsonl": "8842918c0dd06270c4e9e3c743d31478c9f4889b7675a7225e6134508213916f",
+    "fuzz.candle.jsonl": "5090aa70712f392729b29b2f2b6bea7385e08b20636a05abc766d71d3e22ce1a",
+    "requirements.actual.txt": "c3b0422f2db1a2dadfe8ee72d05e4ca8e7d7d7c3ada1055361698ff390f6d4c7"
+  },
+  "accuracy_status": "Parity is not accuracy evidence. Benchmark completion is recorded in .cache/framework-models-20260918/completion.json; completed comparison publishes to docs/research/framework-model-comparison-2026-09-18.md.",
+  "checks": {
+    "rust_library_tests": 80,
+    "explicit_tokenizer_fixture_test": "passed with pinned local tokenizer",
+    "bench_integration_tests": 22,
+    "python_scale_and_contract_tests": 20,
+    "comparison_metric_tests": 3,
+    "comparison_reporter_integration": "passed using existing verified Jev runs in a temporary test directory",
+    "jev_clippy": "passes with -D warnings",
+    "ml_clippy": "passes with existing src/ml.rs large_enum_variant and manual_is_multiple_of lints explicitly allowed; unmodified historical code fails strict run"
+  }
+}

@@ -23,6 +23,7 @@ cd "$(dirname "$0")/.."
 AUTH_CANARY='canary-auth-tok-3f8a1c9e2b7d4056'
 OAUTH_CANARY='canary-oauth-tok-91b47e0da2c6f358'
 KEY_CANARY='sk-ant-canary-api-key-6d2f80ab4917c3e5'
+TYPESAFE_CANARY='canary-typesafe-api-key-283afc7091ed654b'
 
 out=$(mktemp)
 trap 'rm -f "$out"' EXIT
@@ -34,6 +35,7 @@ set +e
 ANTHROPIC_AUTH_TOKEN="$AUTH_CANARY" \
 CLAUDE_CODE_OAUTH_TOKEN="$OAUTH_CANARY" \
 ANTHROPIC_API_KEY="$KEY_CANARY" \
+TYPESAFE_API_KEY="$TYPESAFE_CANARY" \
 ANTHROPIC_BASE_URL="http://127.0.0.1:1" \
   cargo test --workspace --locked --no-fail-fast -- --nocapture > "$out" 2>&1
 suite_status=$?
@@ -42,7 +44,8 @@ set -e
 status=0
 for pair in "ANTHROPIC_AUTH_TOKEN:$AUTH_CANARY" \
             "CLAUDE_CODE_OAUTH_TOKEN:$OAUTH_CANARY" \
-            "ANTHROPIC_API_KEY:$KEY_CANARY"; do
+            "ANTHROPIC_API_KEY:$KEY_CANARY" \
+            "TYPESAFE_API_KEY:$TYPESAFE_CANARY"; do
   variable=${pair%%:*}
   canary=${pair#*:}
   hits=$(grep -c -- "$canary" "$out" || true)

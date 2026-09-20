@@ -110,3 +110,29 @@ as misses; contextual accuracy includes all contextual rows. False-alarm rates u
 must be read with coverage (zero false alarms with zero completed rows is not successful coverage).
 Empty denominators show N/A. Summary rows are per system and surface; technique strata may overlap.
 The shipping workspace's dependencies and detection behavior are unchanged.
+
+## Jev through the same client as `plz jev`
+
+Build with `cargo build --manifest-path crates/eval/Cargo.toml --release --features jev`.
+The `bench/jev.system.json` manifest uses `please-judge::jev`, the existing `plz jev` / `plz clap`
+client and its four-way contextual recipe. Select this manifest in a contextual experiment, set
+`execution_mode` to `network_allowed`, and set `limits.case_timeout_ms` to at least 30000.
+The manifest bounds requests and errors; exhausted budgets produce unavailable rows. Model abstentions,
+API failures, and missing credentials remain visible in coverage. This adapter is advisory only.
+
+The runner reads `TYPESAFE_API_KEY` from its own process environment. Load it from your existing local
+credential manager into that environment before launching the runner. There is no implicit `.env` loader;
+never put a key in a system/experiment manifest, subprocess environment map, or command-line argument.
+For an ephemeral interactive run without a credential manager:
+
+```bash
+read -rsp 'Temporary Typesafe key: ' TYPESAFE_API_KEY; echo
+export TYPESAFE_API_KEY
+crates/eval/target/release/please-eval bench run \
+  --experiment crates/eval/bench/jev-pilot.experiment.json --out .cache/bench/jev-run --tui
+unset TYPESAFE_API_KEY
+```
+
+The native adapter can access this key without changing the cleared-environment contract of subprocess
+adapters. Reports store the credential variable's name, never its value. Reopen the completed run with
+`please-eval bench view --run .cache/bench/jev-run`; viewing does not call the API.

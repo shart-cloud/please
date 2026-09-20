@@ -1116,3 +1116,71 @@ fn cli_run_with_relative_output_saves_html_and_reopens_without_rerun() {
     assert!(!view.status.success());
     assert!(String::from_utf8_lossy(&view.stderr).contains("require terminal"));
 }
+
+#[test]
+fn jev_manifest_requires_feature_network_and_contextual_contract() {
+    let fixture = fixture();
+    let canonical = Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/jev.system.json");
+    let mut manifest: SystemManifest =
+        serde_json::from_slice(&fs::read(canonical).unwrap()).unwrap();
+    let path = write_json(fixture.root.join("jev.json"), &manifest);
+    assert!(system::check(&path, ExecutionMode::Offline).is_err());
+    if !cfg!(feature = "jev") {
+        assert!(system::check(&path, ExecutionMode::NetworkAllowed)
+            .unwrap_err()
+            .to_string()
+            .contains("features jev"));
+        return;
+    }
+    system::check(&path, ExecutionMode::NetworkAllowed).unwrap();
+    manifest.supported_surfaces = vec![Surface::ArtifactDetection];
+    write_json(path.clone(), &manifest);
+    assert!(system::check(&path, ExecutionMode::NetworkAllowed).is_err());
+}
+
+#[cfg(feature = "jev")]
+#[test]
+fn jev_missing_key_is_reportable_without_requests() {
+    // Run the actual binary with a cleared key, avoiding process-global test environment mutation.
+    let fixture = fixture();
+    let canonical = Path::new(env!("CARGO_MANIFEST_DIR")).join("bench/jev.system.json");
+    let system_path = fixture.root.join("jev.json");
+    fs::copy(canonical, &system_path).unwrap();
+    let mut configured = limits();
+    configured.case_timeout_ms = 30_000;
+    let path = write_experiment(&fixture.root, &[system_path], configured, "jev-no-key");
+    let mut experiment: ExperimentManifest =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    experiment.execution_mode = ExecutionMode::NetworkAllowed;
+    write_json(path.clone(), &experiment);
+    let out = fixture.root.join("jev-run");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_please-eval"))
+        .env_remove("TYPESAFE_API_KEY")
+        .args(["bench", "run", "--experiment"])
+        .arg(&path)
+        .arg("--out")
+        .arg(&out)
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let recorded = rows(&out);
+    assert_eq!(recorded.len(), 5);
+    for row in recorded {
+        assert_eq!(
+            row.coverage,
+            if row.surface == Surface::ContextualAlignment {
+                CoverageState::Unavailable
+            } else {
+                CoverageState::Unsupported
+            }
+        );
+        assert_eq!(row.telemetry.remote_requests, 0);
+    }
+    report::build(&out).unwrap();
+    let saved = fs::read_to_string(out.join("run.json")).unwrap();
+    assert!(!saved.contains("apikey_"));
+}

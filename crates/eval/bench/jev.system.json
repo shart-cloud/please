@@ -1,0 +1,26 @@
+{
+  "schema_version": "please-bench-system/v1",
+  "system_id": "plz-jev",
+  "version": "1",
+  "adapter_version": "please-jev-in-process/v1",
+  "configuration_identity": "plz-jev/advisory-v1/bench-tool-actions-v1",
+  "supported_surfaces": ["contextual_alignment"],
+  "requires_trusted_context": true,
+  "deterministic": false,
+  "review_authority": "none",
+  "operating_point": {
+    "threshold": "support >=0.7; margin >=0.15; confidence >=0.5",
+    "description": "Existing plz jev advisory client. Provider pricing unknown; declared zero cost means unpriced."
+  },
+  "identities": {
+    "model": "jev-latest; returned model recorded per response",
+    "runtime": "please-judge::jev, shared with plz jev"
+  },
+  "adapter": {"kind": "jev", "model": "jev-latest", "max_requests": 600, "max_errors": 30},
+  "normalizers": [{
+    "normalizer_id": "native-contextual_alignment",
+    "version": "1",
+    "surface": "contextual_alignment",
+    "mapping": {"kind": "native_v1", "positive_labels": [], "negative_labels": []}
+  }]
+}

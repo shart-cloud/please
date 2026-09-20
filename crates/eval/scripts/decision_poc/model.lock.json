@@ -1,0 +1,39 @@
+{
+  "repo": "knowledgator/gliclass-small-v1.0",
+  "revision": "21edefaf7951f68c68c505f9139ba536d3b448f7",
+  "license": "Apache-2.0",
+  "assets": {
+    "README.md": {
+      "bytes": 7858,
+      "sha256": "0b6075fff151c59b4116bdd88fa82b12bc440fd14d331fae680beeb3ce4ce3c7"
+    },
+    "added_tokens.json": {
+      "bytes": 67,
+      "sha256": "fa9ca9bafacdabaa35949862e42d826d5dc44bc9f81fbc0d4dd02a67e9f539dd"
+    },
+    "config.json": {
+      "bytes": 3234,
+      "sha256": "14fa9139f8cdd39a25a2384c80e9c793ff958a5928c04b174f51e6cab374fdb8"
+    },
+    "model.safetensors": {
+      "bytes": 574383356,
+      "sha256": "ed3d94af3541d078e91d9518a8bfb87b090f73da488184d3cd6a1feed4511278"
+    },
+    "special_tokens_map.json": {
+      "bytes": 970,
+      "sha256": "b2f1b2f15f29a6b6d9d6ea4eca1675d2c231a71477f151d48f79cc83a625ba21"
+    },
+    "spm.model": {
+      "bytes": 2464616,
+      "sha256": "c679fbf93643d19aab7ee10c0b99e460bdbc02fedf34b92b05af343b4af586fd"
+    },
+    "tokenizer.json": {
+      "bytes": 8649234,
+      "sha256": "519648948c4c59da1af88f2cf2c8b4f84417b5c673981bc9809abf84cda1b7cc"
+    },
+    "tokenizer_config.json": {
+      "bytes": 1634,
+      "sha256": "8784d81feff2acf8959b96d6c452e8c8c6e61dcfc0ab263683b3eece86c09c69"
+    }
+  }
+}
