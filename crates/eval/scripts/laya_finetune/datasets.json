@@ -1,0 +1,74 @@
+{
+  "format_version": 1,
+  "training": [
+    {
+      "id": "Necent/llm-jailbreak-prompt-injection-dataset",
+      "revision": "4edfb5aeaafe58c9bf489a478a42188f239d7c1e",
+      "license": "mit",
+      "adapter": "necent_sql",
+      "notes": "Primary source. Query fresh rows while excluding every content hash already committed under crates/eval/manifests."
+    },
+    {
+      "id": "neuralchemy/Prompt-injection-dataset",
+      "revision": "7d70432dfcf47a821612cbf9d34e9d9e3ad20e75",
+      "license": "apache-2.0",
+      "config": "full",
+      "adapter": "binary_text",
+      "text_field": "text",
+      "label_field": "label",
+      "group_field": "group_id",
+      "category_field": "category",
+      "language": "en",
+      "train_splits": ["train"],
+      "evaluation_splits": ["validation", "test"],
+      "notes": "Group-aware upstream split. Only its train split enters optimization."
+    },
+    {
+      "id": "3nesdeniz/agentic-prompt-injection-5k",
+      "revision": "e658d94dcafc133e3a4483f9f9aa13507f3848c4",
+      "license": "cc-by-4.0",
+      "adapter": "binary_text",
+      "text_field": "text",
+      "label_field": "label",
+      "group_field": "id",
+      "category_field": "attack_family",
+      "language_field": "language",
+      "train_splits": ["train"],
+      "evaluation_splits": ["validation", "test"],
+      "notes": "Scenario-isolated paired agentic attacks and hard negatives."
+    },
+    {
+      "id": "prodnull/prompt-injection-repo-dataset",
+      "revision": "6c56b897ee4a328fb4f41f4b0d334f5d2db4482a",
+      "license": "apache-2.0",
+      "adapter": "binary_text",
+      "text_field": "text",
+      "label_field": "label",
+      "language": "en",
+      "train_splits": ["train"],
+      "evaluation_splits": [],
+      "gated": true,
+      "notes": "Repository-file specialization. Deterministically assigns 10% to calibration because upstream publishes one split."
+    }
+  ],
+  "evaluation_only": [
+    {
+      "id": "perplexity-ai/browsesafe-bench",
+      "revision": "b506fb5bc7fd4472c8738055a67a0ef6406afdc9",
+      "license": "mit",
+      "reason": "Long raw HTML and a published test split. Keep outside training for windowed browser-agent evaluation."
+    },
+    {
+      "id": "ZJUICSR/ActBench",
+      "revision": "595df032d53ef71f927c9a1d8c068dad0edebbc5",
+      "license": "mit",
+      "reason": "Rich clean/adversarial task pairs and trajectories. Reserve for contextual behavior evaluation, not binary prompt training."
+    },
+    {
+      "id": "nvidia/Nemotron-RL-Agentic-Indirect-Prompt-Injection-v1",
+      "revision": "d738d4f361cc38bb4d7a42b9066776dade5332f5",
+      "license": "cc-by-4.0",
+      "reason": "RL agent traces rather than independent binary classifier rows. Reserve for a later trace adapter."
+    }
+  ]
+}
